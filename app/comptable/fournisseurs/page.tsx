@@ -147,7 +147,7 @@ export default function FournisseursPage() {
               window.location.href = `/api/comptable/factures/export-xlsx?${p}`
             }}
             disabled={loading || filtered.length === 0}
-            title="Exporter les factures fournisseurs (toutes les sociétés ou la société filtrée) au format Excel"
+            title={t('cpta.four_export_title', locale)}
             className="gap-2"
           >
             <Download className="w-4 h-4" /> Excel
@@ -326,22 +326,22 @@ export default function FournisseursPage() {
           <div className="fixed bottom-4 right-4 z-40 rounded-xl border bg-white shadow-2xl p-4 flex items-center gap-3 min-w-[420px]">
             <div className="flex-1">
               <div className="text-sm font-medium text-[#0B0F2E]">
-                {selectedIds.size} facture{selectedIds.size > 1 ? "s" : ""} sélectionnée{selectedIds.size > 1 ? "s" : ""}
+                {selectedIds.size} {selectedIds.size > 1 ? t('cpta.four_invoices_selected', locale) : t('cpta.four_invoice_selected', locale)}
               </div>
               <div className="text-xs text-gray-600">
-                Total restant : {totalSel.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} MUR
-                {!sameSociete && <span className="text-red-600 ml-2">⚠ sociétés multiples</span>}
+                {t('cpta.four_remaining_total', locale)} {totalSel.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} MUR
+                {!sameSociete && <span className="text-red-600 ml-2">{t('cpta.four_multiple_companies', locale)}</span>}
               </div>
             </div>
-            <Button variant="outline" onClick={() => setSelectedIds(new Set())}>Désélectionner</Button>
+            <Button variant="outline" onClick={() => setSelectedIds(new Set())}>{t('cpta.four_deselect', locale)}</Button>
             <Button
               onClick={() => setReglementOpen(true)}
               disabled={!sameSociete}
               className="bg-[#0B0F2E] text-white hover:bg-[#2a3a5a]"
-              title={sameSociete ? "Régler hors banque" : "Toutes les factures doivent être de la même société"}
+              title={sameSociete ? t('cpta.four_settle_offbank', locale) : t('cpta.four_same_company_required', locale)}
             >
               <Wallet className="w-4 h-4 mr-2" />
-              Régler hors banque
+              {t('cpta.four_settle_offbank', locale)}
             </Button>
           </div>
         )
@@ -362,7 +362,7 @@ export default function FournisseursPage() {
         onSuccess={(info) => {
           setSelectedIds(new Set())
           fetchData()
-          alert(`✓ ${info.nbFactures} facture(s) réglée(s) — Lettre ${info.lettre} — ${info.montantTotal.toLocaleString("fr-FR")} MUR`)
+          alert(`✓ ${info.nbFactures} ${t('cpta.four_invoices_settled', locale)} — ${t('cpta.four_letter', locale)} ${info.lettre} — ${info.montantTotal.toLocaleString("fr-FR")} MUR`)
         }}
       />
     </div>

@@ -343,7 +343,7 @@ export default function BalancePage() {
                     <TableCell className="text-xs text-gray-500">{c.libelle_classe}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-[10px] px-1">
-                        {c.sens_normal === "D" ? "Débit" : "Crédit"}
+                        {c.sens_normal === "D" ? t('cptb.bal.side_debit', locale) : t('cptb.bal.side_credit', locale)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-xs text-right font-mono text-blue-700">

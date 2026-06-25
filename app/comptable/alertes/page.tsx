@@ -30,29 +30,29 @@ interface AlertesResponse {
 
 const SEVERITY_CONFIG = {
   critical: {
-    label: "Critique",
+    labelKey: "cab.alertes.critical",
     bg: "bg-red-100 text-red-800 border-red-200",
     dot: "bg-red-500",
     cardBorder: "border-l-4 border-l-red-500",
   },
   warning: {
-    label: "Avertissement",
+    labelKey: "cab.alertes.warning",
     bg: "bg-orange-100 text-orange-800 border-orange-200",
     dot: "bg-orange-500",
     cardBorder: "border-l-4 border-l-orange-400",
   },
   info: {
-    label: "Information",
+    labelKey: "cab.alertes.info",
     bg: "bg-blue-100 text-blue-800 border-blue-200",
     dot: "bg-blue-500",
     cardBorder: "border-l-4 border-l-blue-400",
   },
 }
 
-const TYPE_CONFIG: Record<string, { label: string; icon: typeof AlertTriangle }> = {
-  fiscal: { label: "Fiscal", icon: Calendar },
-  comptable: { label: "Comptable", icon: Shield },
-  social: { label: "Social", icon: Bell },
+const TYPE_CONFIG: Record<string, { labelKey: string; icon: typeof AlertTriangle }> = {
+  fiscal: { labelKey: "cab.alertes.fiscal", icon: Calendar },
+  comptable: { labelKey: "cab.alertes.accounting", icon: Shield },
+  social: { labelKey: "cab.alertes.social", icon: Bell },
 }
 
 function getSeverityIcon(severity: string) {
@@ -81,16 +81,16 @@ export default function ComptableAlertesPage() {
       const res = await fetch("/api/comptable/alertes")
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        throw new Error(body.error || `Erreur ${res.status}`)
+        throw new Error(body.error || `${t('cab.alertes.err_status', locale)} ${res.status}`)
       }
       const json: AlertesResponse = await res.json()
       setData(json)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur de chargement")
+      setError(err instanceof Error ? err.message : t('cab.alertes.loading_error', locale))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [locale])
 
   useEffect(() => {
     fetchAlertes()
@@ -237,34 +237,34 @@ export default function ComptableAlertesPage() {
 
             <Select value={filterType} onValueChange={setFilterType}>
               <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Type" />
+                <SelectValue placeholder={t('cab.alertes.type', locale)} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous les types</SelectItem>
-                <SelectItem value="fiscal">Fiscal</SelectItem>
-                <SelectItem value="comptable">Comptable</SelectItem>
-                <SelectItem value="social">Social</SelectItem>
+                <SelectItem value="all">{t('cab.alertes.all_types', locale)}</SelectItem>
+                <SelectItem value="fiscal">{t('cab.alertes.fiscal', locale)}</SelectItem>
+                <SelectItem value="comptable">{t('cab.alertes.accounting', locale)}</SelectItem>
+                <SelectItem value="social">{t('cab.alertes.social', locale)}</SelectItem>
               </SelectContent>
             </Select>
 
             <Select value={filterSeverity} onValueChange={setFilterSeverity}>
               <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Severite" />
+                <SelectValue placeholder={t('cab.alertes.severity', locale)} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Toutes severites</SelectItem>
-                <SelectItem value="critical">Critique</SelectItem>
-                <SelectItem value="warning">Avertissement</SelectItem>
-                <SelectItem value="info">Information</SelectItem>
+                <SelectItem value="all">{t('cab.alertes.all_severities', locale)}</SelectItem>
+                <SelectItem value="critical">{t('cab.alertes.critical', locale)}</SelectItem>
+                <SelectItem value="warning">{t('cab.alertes.warning', locale)}</SelectItem>
+                <SelectItem value="info">{t('cab.alertes.info', locale)}</SelectItem>
               </SelectContent>
             </Select>
 
             <Select value={filterClient} onValueChange={setFilterClient}>
               <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Client" />
+                <SelectValue placeholder={t('cab.alertes.client', locale)} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous les clients</SelectItem>
+                <SelectItem value="all">{t('cab.alertes.all_clients', locale)}</SelectItem>
                 {clientNames.map(name => (
                   <SelectItem key={name} value={name}>{name}</SelectItem>
                 ))}
@@ -316,7 +316,7 @@ export default function ComptableAlertesPage() {
               <Shield className="h-5 w-5" style={{ color: "#D4AF37" }} />
               {clientName}
               <Badge variant="outline" className="ml-2">
-                {alerts.length} alerte{alerts.length > 1 ? "s" : ""}
+                {alerts.length} {alerts.length > 1 ? t('cab.alertes.alertes_plural', locale) : t('cab.alertes.alerte_singular', locale)}
               </Badge>
             </CardTitle>
           </CardHeader>
@@ -336,11 +336,11 @@ export default function ComptableAlertesPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <Badge className={sevConfig.bg}>
-                          {sevConfig.label}
+                          {t(sevConfig.labelKey, locale)}
                         </Badge>
                         <Badge variant="outline" className="gap-1">
                           <TypeIcon className="h-3 w-3" />
-                          {typeConfig?.label || alert.type}
+                          {typeConfig?.labelKey ? t(typeConfig.labelKey, locale) : alert.type}
                         </Badge>
                         <span className="text-xs text-muted-foreground">
                           {alert.societe_name}
@@ -348,7 +348,7 @@ export default function ComptableAlertesPage() {
                         {alert.deadline && (
                           <span className="text-xs text-muted-foreground ml-auto flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            Echeance: {alert.deadline}
+                            {t('cab.alertes.deadline', locale)}: {alert.deadline}
                           </span>
                         )}
                       </div>
@@ -366,7 +366,7 @@ export default function ComptableAlertesPage() {
                       className="shrink-0 text-xs gap-1"
                     >
                       <CheckCircle className="h-3 w-3" />
-                      Marquer comme traite
+                      {t('cab.alertes.mark_handled', locale)}
                     </Button>
                   </div>
                 </div>
@@ -379,7 +379,7 @@ export default function ComptableAlertesPage() {
       {/* Footer info */}
       {data && filteredAlertes.length > 0 && (
         <p className="text-xs text-center text-muted-foreground">
-          Actualisation automatique toutes les 5 minutes. Derniere analyse: {new Date().toLocaleTimeString("fr-FR")}
+          {t('cab.alertes.auto_refresh', locale)} {new Date().toLocaleTimeString(locale === 'en' ? 'en-GB' : 'fr-FR')}
         </p>
       )}
     </div>

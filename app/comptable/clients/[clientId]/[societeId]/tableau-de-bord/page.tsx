@@ -127,11 +127,11 @@ export default function TableauDeBordPage() {
         ])
         if (cancelled) return
 
-        if (socRes.error) notifyError("Charger société", socRes.error.message)
+        if (socRes.error) notifyError(t('cptb.tdb.err_load_company', locale), socRes.error.message)
         setSocieteName(socRes.data?.nom || "—")
 
         if (exRes.error) {
-          notifyError("Charger exercices", exRes.error.message)
+          notifyError(t('cptb.tdb.err_load_exercises', locale), exRes.error.message)
           setExercises([])
         } else {
           const rows = (exRes.data || []) as ExerciceRow[]
@@ -183,7 +183,7 @@ export default function TableauDeBordPage() {
         setPnl(pnlData?.type === "pnl" ? (pnlData as PnlPayload) : null)
       } catch {
         if (!cancelled) {
-          notifyError("Charger états financiers")
+          notifyError(t('cptb.tdb.err_load_financials', locale))
           setBilan(null)
           setPnl(null)
         }
@@ -360,7 +360,7 @@ export default function TableauDeBordPage() {
       {!loadingFin && !bilan && !pnl && (
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            Aucune écriture comptabilisée pour cet exercice — uploadez des documents pour alimenter les KPIs.
+            {t('cptb.tdb.empty_no_entries', locale)}
           </CardContent>
         </Card>
       )}
@@ -403,7 +403,7 @@ export default function TableauDeBordPage() {
               </div>
               {tresorerieComptes.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic">
-                  Aucun compte bancaire actif rattaché à cette société.
+                  {t('cptb.tdb.no_active_bank', locale)}
                 </p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
