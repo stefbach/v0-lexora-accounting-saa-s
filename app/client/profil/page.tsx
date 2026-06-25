@@ -68,7 +68,7 @@ export default function ProfilPage() {
 
   async function handleSaveProfile() {
     if (!profile?.id) {
-      notifyError("Enregistrer profil", "Profil non chargé")
+      notifyError(t('acct.profil.save_title', locale), t('acct.profil.not_loaded', locale))
       return
     }
     setSaving(true)
@@ -79,12 +79,12 @@ export default function ProfilPage() {
         .update({ full_name: fullName || null, phone: phone || null })
         .eq("id", profile.id)
       if (error) {
-        notifyError("Enregistrer profil", error.message)
+        notifyError(t('acct.profil.save_title', locale), error.message)
       } else {
         notifySuccess(t('core.prof.save_changes', locale))
       }
     } catch (e: unknown) {
-      notifyError("Enregistrer profil", e)
+      notifyError(t('acct.profil.save_title', locale), e)
     } finally {
       setSaving(false)
     }
@@ -92,7 +92,7 @@ export default function ProfilPage() {
 
   async function handleChangePassword() {
     if (!newPwd || newPwd.length < 8) {
-      notifyError("Mot de passe", "8 caractères minimum")
+      notifyError(t('acct.profil.password_title', locale), t('acct.profil.password_min', locale))
       return
     }
     setPwdSaving(true)
@@ -100,14 +100,14 @@ export default function ProfilPage() {
       const supabase = createClient()
       const { error } = await supabase.auth.updateUser({ password: newPwd })
       if (error) {
-        notifyError("Modifier mot de passe", error.message)
+        notifyError(t('acct.profil.change_password_title', locale), error.message)
       } else {
         notifySuccess(t('core.prof.change_password', locale))
         setNewPwd("")
         setPwdOpen(false)
       }
     } catch (e: unknown) {
-      notifyError("Modifier mot de passe", e)
+      notifyError(t('acct.profil.change_password_title', locale), e)
     } finally {
       setPwdSaving(false)
     }
@@ -160,7 +160,7 @@ export default function ProfilPage() {
                 value={email}
                 readOnly
                 disabled
-                title="Pour modifier votre email, contactez votre comptable."
+                title={t('acct.profil.email_edit_hint', locale)}
               />
             </div>
             <div className="space-y-2">
@@ -338,7 +338,7 @@ export default function ProfilPage() {
                   type="password"
                   value={newPwd}
                   onChange={(e) => setNewPwd(e.target.value)}
-                  placeholder="Min. 8 caractères"
+                  placeholder={t('acct.profil.password_placeholder', locale)}
                   autoComplete="new-password"
                 />
               </div>

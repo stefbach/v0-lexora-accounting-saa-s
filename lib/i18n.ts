@@ -12,6 +12,8 @@ import { componentsChunk } from './i18n/components'
 import { invoicingExtChunk } from './i18n/invoicing_ext'
 import { mraExtChunk } from './i18n/mra_ext'
 import { salarieChunk } from './i18n/salarie'
+import { telegramChunk } from './i18n/telegram'
+import { accountChunk } from './i18n/account'
 
 export type Locale = 'fr' | 'en'
 
@@ -635,6 +637,8 @@ const translations: Record<Locale, Record<string, string>> = {
     ...invoicingExtChunk.fr,
     ...mraExtChunk.fr,
     ...salarieChunk.fr,
+    ...telegramChunk.fr,
+    ...accountChunk.fr,
   },
   en: {
     ...baseTranslations.en,
@@ -652,6 +656,8 @@ const translations: Record<Locale, Record<string, string>> = {
     ...invoicingExtChunk.en,
     ...mraExtChunk.en,
     ...salarieChunk.en,
+    ...telegramChunk.en,
+    ...accountChunk.en,
   },
 }
 
