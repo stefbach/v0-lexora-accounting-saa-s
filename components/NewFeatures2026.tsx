@@ -7,6 +7,7 @@
  */
 
 import * as React from "react"
+import { t, type Locale } from "@/lib/i18n"
 import { Reveal, StaggerGroup, StaggerItem, HoverLift, ShineSweep } from "@/components/ui/motion"
 import {
   Bot,
@@ -21,107 +22,87 @@ import {
   TrendingUp,
 } from "lucide-react"
 
-type Locale = "fr" | "en"
-
 const FEATURES = [
   {
     icon: Bot,
     badge: "AGENT IA",
-    title: "Lex Banque — Rapprochement autonome",
-    titleEn: "Lex Banque — Autonomous reconciliation",
-    body: "Agent Claude qui scanne vos transactions bancaires, identifie les fournisseurs, croise les factures et propose les écritures BNQ. Multi-stratégies, multi-factures, lettrage automatique 411/401.",
-    bodyEn: "Claude agent that scans bank transactions, identifies suppliers, cross-checks invoices and proposes BNQ entries. Multi-strategy, multi-invoice, automatic 411/401 reconciliation.",
+    titleKey: "cmkt.nf.f1.title",
+    bodyKey: "cmkt.nf.f1.body",
     color: "#4191FF",
-    metric: "8 outils",
-    metricLabel: "agent tools",
+    metricKey: "cmkt.nf.f1.metric",
+    metricLabelKey: "cmkt.nf.f1.metricLabel",
   },
   {
     icon: Banknote,
     badge: "OPEN BANKING",
-    title: "Scraping bancaire 7 banques",
-    titleEn: "Bank scraping · 7 banks",
-    body: "MCB, SBM, ABC, MauBank, MyT Money, AfrAsia, Bank One. Connexion Internet Banking sécurisée, solde et transactions synchronisés chaque nuit. Détection automatique d'anomalies de balance.",
-    bodyEn: "MCB, SBM, ABC, MauBank, MyT Money, AfrAsia, Bank One. Secure Internet Banking connection, balance & transactions synced every night. Automatic balance anomaly detection.",
+    titleKey: "cmkt.nf.f2.title",
+    bodyKey: "cmkt.nf.f2.body",
     color: "#D4AF37",
-    metric: "AES-256",
-    metricLabel: "chiffrement",
+    metricKey: "cmkt.nf.f2.metric",
+    metricLabelKey: "cmkt.nf.f2.metricLabel",
   },
   {
     icon: Globe2,
     badge: "MULTI-JURIDICTION",
-    title: "OHADA natif · 17 pays",
-    titleEn: "Native OHADA · 17 countries",
-    body: "Sénégal, Côte d'Ivoire, Mali, Burkina Faso, Cameroun, Gabon, Congo, RDC… SYSCOHADA révisé, états financiers (Bilan, CR, TAFIRE, 35 notes), fiscalité et paie locale par pays.",
-    bodyEn: "Senegal, Ivory Coast, Mali, Burkina Faso, Cameroon, Gabon, Congo, DRC… Revised SYSCOHADA, financial statements (BS, P&L, TAFIRE, 35 notes), local tax & payroll per country.",
+    titleKey: "cmkt.nf.f3.title",
+    bodyKey: "cmkt.nf.f3.body",
     color: "#2ECC8A",
-    metric: "500+",
-    metricLabel: "comptes officiels",
+    metricKey: "cmkt.nf.f3.metric",
+    metricLabelKey: "cmkt.nf.f3.metricLabel",
   },
   {
     icon: ShieldCheck,
     badge: "GBC · OFFSHORE",
-    title: "BEPS Pillar Two GloBE",
-    titleEn: "BEPS Pillar Two GloBE",
-    body: "Calcul GloBE pour les groupes mauriciens dépassant EUR 750M. ETR par juridiction, SBIE phase-in 5%/5% 2024+, top-up tax automatique. Conforme OECD Model Rules.",
-    bodyEn: "GloBE computation for Mauritian groups above EUR 750M. ETR per jurisdiction, SBIE phase-in 5%/5% 2024+, automatic top-up tax. OECD Model Rules compliant.",
+    titleKey: "cmkt.nf.f4.title",
+    bodyKey: "cmkt.nf.f4.body",
     color: "#4191FF",
-    metric: "15%",
-    metricLabel: "ETR minimum",
+    metricKey: "cmkt.nf.f4.metric",
+    metricLabelKey: "cmkt.nf.f4.metricLabel",
   },
   {
     icon: TrendingUp,
     badge: "IFRS · CREDIT",
-    title: "IFRS 9 ECL · Stages 1/2/3",
-    titleEn: "IFRS 9 ECL · Stages 1/2/3",
-    body: "Détection automatique du Significant Increase in Credit Risk (>30j → Stage 2, >90j → Stage 3). PD/LGD sectoriels, scenarios macro pondérés, disclosure IFRS 7.",
-    bodyEn: "Automatic Significant Increase in Credit Risk detection (>30d → Stage 2, >90d → Stage 3). Sector PD/LGD, weighted macro scenarios, IFRS 7 disclosure.",
+    titleKey: "cmkt.nf.f5.title",
+    bodyKey: "cmkt.nf.f5.body",
     color: "#D4AF37",
-    metric: "3 stages",
-    metricLabel: "+ SICR auto",
+    metricKey: "cmkt.nf.f5.metric",
+    metricLabelKey: "cmkt.nf.f5.metricLabel",
   },
   {
     icon: Send,
     badge: "CHIEF OF STAFF",
-    title: "Telegram · 50+ outils IA",
-    titleEn: "Telegram · 50+ AI tools",
-    body: "Voix (Whisper), photo (Claude Vision), boutons inline. Comptabilité, RH, banque, agenda, email — tout pilotable en langage naturel depuis le téléphone que vous avez déjà.",
-    bodyEn: "Voice (Whisper), photo (Claude Vision), inline buttons. Accounting, HR, banking, calendar, email — all driven in natural language from the phone you already have.",
+    titleKey: "cmkt.nf.f6.title",
+    bodyKey: "cmkt.nf.f6.body",
     color: "#2ECC8A",
-    metric: "24/7",
-    metricLabel: "FR · EN",
+    metricKey: "cmkt.nf.f6.metric",
+    metricLabelKey: "cmkt.nf.f6.metricLabel",
   },
   {
     icon: CalendarClock,
     badge: "AUTOMATION",
-    title: "25 crons orchestrés",
-    titleEn: "25 orchestrated crons",
-    body: "Alertes TVA J-1/J-5/retard, brief mensuel, relances factures, prévisionnel auto, rapport hebdo, scan compliance, db-health-check, scraping bancaire, taux de change.",
-    bodyEn: "VAT alerts D-1/D-5/late, monthly brief, invoice dunning, auto forecast, weekly report, compliance scan, db-health-check, bank scraping, FX rates.",
+    titleKey: "cmkt.nf.f7.title",
+    bodyKey: "cmkt.nf.f7.body",
     color: "#4191FF",
-    metric: "25",
-    metricLabel: "jobs auto",
+    metricKey: "cmkt.nf.f7.metric",
+    metricLabelKey: "cmkt.nf.f7.metricLabel",
   },
   {
     icon: Receipt,
     badge: "FACTURATION",
-    title: "Factures IA · Template extracteur",
-    titleEn: "AI Invoices · Template extractor",
-    body: "Uploadez une vieille facture papier — l'IA extrait votre charte (logo, mise en page, mentions légales) et la transforme en template Lexora réutilisable, conforme MRA + QR Code + IRN.",
-    bodyEn: "Upload an old paper invoice — AI extracts your style (logo, layout, legal mentions) and turns it into a reusable Lexora template, MRA-compliant + QR Code + IRN.",
+    titleKey: "cmkt.nf.f8.title",
+    bodyKey: "cmkt.nf.f8.body",
     color: "#D4AF37",
-    metric: "1 photo",
-    metricLabel: "→ template",
+    metricKey: "cmkt.nf.f8.metric",
+    metricLabelKey: "cmkt.nf.f8.metricLabel",
   },
   {
     icon: HeartPulse,
     badge: "EXCLUSIF",
-    title: "TIBOK Santé · téléconsultation",
-    titleEn: "TIBOK Health · telemedicine",
-    body: "Téléconsultation illimitée incluse dans toutes les formules. Médecins agréés Maurice, ordonnances digitales, suivi médical des salariés — aucun coût additionnel par tête.",
-    bodyEn: "Unlimited telemedicine included in every plan. Mauritius-licensed doctors, digital prescriptions, employee medical follow-up — no extra per-head cost.",
+    titleKey: "cmkt.nf.f9.title",
+    bodyKey: "cmkt.nf.f9.body",
     color: "#2ECC8A",
-    metric: "∞",
-    metricLabel: "consultations",
+    metricKey: "cmkt.nf.f9.metric",
+    metricLabelKey: "cmkt.nf.f9.metricLabel",
   },
 ]
 
@@ -168,7 +149,7 @@ export function NewFeatures2026({ locale = "fr" }: { locale?: Locale }) {
                 style={{ backgroundColor: "#D4AF37" }}
               />
             </span>
-            {locale === "fr" ? "Wave 2026 · Sorties récentes" : "2026 Wave · Recent releases"}
+            {t("cmkt.nf.eyebrow", locale)}
           </span>
           <h2
             className="mb-5 text-4xl font-bold tracking-tight md:text-6xl"
@@ -180,37 +161,18 @@ export function NewFeatures2026({ locale = "fr" }: { locale?: Locale }) {
               lineHeight: 1.05,
             }}
           >
-            {locale === "fr" ? (
-              <>
-                9 nouveautés qui vont{" "}
-                <span
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
-                    WebkitBackgroundClip: "text",
-                    backgroundClip: "text",
-                    color: "transparent",
-                  }}
-                >
-                  changer votre métier
-                </span>
-              </>
-            ) : (
-              <>
-                9 releases that will{" "}
-                <span
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
-                    WebkitBackgroundClip: "text",
-                    backgroundClip: "text",
-                    color: "transparent",
-                  }}
-                >
-                  reshape your work
-                </span>
-              </>
-            )}
+            {t("cmkt.nf.heading.pre", locale)}{" "}
+            <span
+              style={{
+                backgroundImage:
+                  "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
+                color: "transparent",
+              }}
+            >
+              {t("cmkt.nf.heading.accent", locale)}
+            </span>
           </h2>
           <p
             className="mx-auto max-w-2xl text-base md:text-lg"
@@ -221,15 +183,13 @@ export function NewFeatures2026({ locale = "fr" }: { locale?: Locale }) {
               lineHeight: 1.7,
             }}
           >
-            {locale === "fr"
-              ? "Ce que les autres ERP appellent « roadmap », c'est déjà en production chez Lexora. Voici la vague 2026."
-              : "What other ERPs call a 'roadmap', is already live in Lexora. Here's the 2026 wave."}
+            {t("cmkt.nf.subtitle", locale)}
           </p>
         </Reveal>
 
         <StaggerGroup className="grid gap-5 md:grid-cols-2 lg:grid-cols-3" staggerMs={65}>
           {FEATURES.map((f) => (
-            <StaggerItem key={f.title}>
+            <StaggerItem key={f.titleKey}>
               <HoverLift lift={8} className="h-full">
                 <article
                   className="group relative flex h-full flex-col overflow-hidden rounded-2xl p-7"
@@ -290,7 +250,7 @@ export function NewFeatures2026({ locale = "fr" }: { locale?: Locale }) {
                       letterSpacing: "-0.01em",
                     }}
                   >
-                    {locale === "fr" ? f.title : f.titleEn}
+                    {t(f.titleKey, locale)}
                   </h3>
                   <p
                     className="flex-1 text-sm"
@@ -301,7 +261,7 @@ export function NewFeatures2026({ locale = "fr" }: { locale?: Locale }) {
                       lineHeight: 1.65,
                     }}
                   >
-                    {locale === "fr" ? f.body : f.bodyEn}
+                    {t(f.bodyKey, locale)}
                   </p>
 
                   <div
@@ -318,7 +278,7 @@ export function NewFeatures2026({ locale = "fr" }: { locale?: Locale }) {
                           letterSpacing: "-0.02em",
                         }}
                       >
-                        {f.metric}
+                        {t(f.metricKey, locale)}
                       </div>
                       <div
                         className="text-[10px] font-bold uppercase tracking-widest"
@@ -327,7 +287,7 @@ export function NewFeatures2026({ locale = "fr" }: { locale?: Locale }) {
                           fontFamily: "'Poppins', sans-serif",
                         }}
                       >
-                        {f.metricLabel}
+                        {t(f.metricLabelKey, locale)}
                       </div>
                     </div>
                     <Sparkles className="h-4 w-4" style={{ color: f.color }} />

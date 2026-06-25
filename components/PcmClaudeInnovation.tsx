@@ -12,6 +12,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { t, type Locale } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
 import { Reveal, StaggerGroup, StaggerItem, FadeSlide, HoverLift } from "@/components/ui/motion"
 import {
@@ -28,60 +29,46 @@ import {
   Activity,
 } from "lucide-react"
 
-type Locale = "fr" | "en"
-
 const CAPABILITIES = [
   {
     icon: ShieldCheck,
-    title: "Audit comptable continu",
-    titleEn: "Continuous accounting audit",
-    body: "Score de santé PCM 0-100 calculé en temps réel. Claude détecte les déséquilibres par journal, les folios non équilibrés, les comptes hors plan, les écritures orphelines — avant même la clôture mensuelle.",
-    bodyEn: "Live PCM health score 0-100. Claude detects journal imbalances, unbalanced folios, off-plan accounts, orphan entries — before month-end close.",
+    titleKey: "cmkt.pcm.cap1_title",
+    bodyKey: "cmkt.pcm.cap1_body",
     color: "#4191FF",
     tag: "9 checks · live",
   },
   {
     icon: FileText,
-    title: "Rapports d'expertise rédigés",
-    titleEn: "AI-drafted expert reports",
-    body: "Claude rédige les commentaires d'expert-comptable : analyse de bilan, variation de marge, dégradation du BFR, exposition crédit IFRS 9, surveillance substance GBC. Tone professionnel, conforme normes mauriciennes.",
-    bodyEn: "Claude drafts accountant-grade commentary: balance sheet analysis, margin variance, working capital deterioration, IFRS 9 credit exposure, GBC substance monitoring. Professional tone, compliant with Mauritian standards.",
+    titleKey: "cmkt.pcm.cap2_title",
+    bodyKey: "cmkt.pcm.cap2_body",
     color: "#D4AF37",
     tag: "Bilan · P&L · Notes",
   },
   {
     icon: Brain,
-    title: "Mémoire métier persistante",
-    titleEn: "Persistent business memory",
-    body: "Claude apprend votre nomenclature client, vos abréviations fournisseurs, les patterns récurrents de votre cabinet. Plus vous l'utilisez, plus il devient précis sur votre comptabilité — sans paramétrage.",
-    bodyEn: "Claude learns your client naming, supplier abbreviations, your firm's recurring patterns. The more you use it, the sharper it gets on your books — no configuration.",
+    titleKey: "cmkt.pcm.cap3_title",
+    bodyKey: "cmkt.pcm.cap3_body",
     color: "#2ECC8A",
     tag: "RAG embeddings",
   },
   {
     icon: GitMerge,
-    title: "Conversion multi-référentiel",
-    titleEn: "Multi-standard conversion",
-    body: "Convertit instantanément vos écritures PCM → SYSCOHADA → IFRS, et inversement. Le moteur connaît les 65 mappings PCM↔SYSCOHADA, les reclassements IFRS, les ajustements GBC. Un seul prompt suffit.",
-    bodyEn: "Instantly converts your entries PCM → SYSCOHADA → IFRS, and back. The engine knows the 65 PCM↔SYSCOHADA mappings, IFRS reclassifications, GBC adjustments. One prompt is enough.",
+    titleKey: "cmkt.pcm.cap4_title",
+    bodyKey: "cmkt.pcm.cap4_body",
     color: "#4191FF",
     tag: "PCM · OHADA · IFRS",
   },
   {
     icon: Telescope,
-    title: "Anticipation prédictive",
-    titleEn: "Predictive anticipation",
-    body: "Claude alerte avant la deadline MRA (J-7), avant l'anomalie de balance, avant le découvert bancaire, avant la dégradation de stage IFRS 9 sur un client. L'expertise n'est plus réactive — elle est prospective.",
-    bodyEn: "Claude alerts before MRA deadlines (D-7), before balance anomalies, before bank overdrafts, before IFRS 9 stage downgrades on a customer. Expertise is no longer reactive — it's prospective.",
+    titleKey: "cmkt.pcm.cap5_title",
+    bodyKey: "cmkt.pcm.cap5_body",
     color: "#D4AF37",
     tag: "Alertes proactives",
   },
   {
     icon: InfinityIcon,
-    title: "Évolution à l'infini",
-    titleEn: "Infinite evolution",
-    body: "Une nouvelle norme est publiée ? Une skill Claude se greffe. IFRS 17 Insurance Contracts, IFRS 18, futures sustainability standards (ISSB), nouvelles obligations MRA — tout s'ajoute sans redéploiement. Le moteur grandit avec la régulation.",
-    bodyEn: "A new standard is published? A Claude skill is grafted. IFRS 17 Insurance Contracts, IFRS 18, upcoming sustainability standards (ISSB), new MRA obligations — everything plugs in without redeploy. The engine grows with regulation.",
+    titleKey: "cmkt.pcm.cap6_title",
+    bodyKey: "cmkt.pcm.cap6_body",
     color: "#2ECC8A",
     tag: "Skills + MCP",
   },
@@ -91,19 +78,19 @@ const ROADMAP = [
   {
     year: "2025",
     label: "Foundations",
-    items: ["PCM strict canonique", "Règles R1-R7", "SYSCOHADA 17 pays", "Lex Banque agent"],
+    items: ["cmkt.pcm.rm_2025_1", "cmkt.pcm.rm_2025_2", "cmkt.pcm.rm_2025_3", "cmkt.pcm.rm_2025_4"],
     color: "#4191FF",
   },
   {
     year: "2026",
     label: "Live now",
-    items: ["IFRS 9 ECL · Stages 1/2/3", "IFRS 16 Leases", "GBC Pillar Two GloBE", "MRA robot e-filing"],
+    items: ["cmkt.pcm.rm_2026_1", "cmkt.pcm.rm_2026_2", "cmkt.pcm.rm_2026_3", "cmkt.pcm.rm_2026_4"],
     color: "#D4AF37",
   },
   {
     year: "2027+",
     label: "On deck",
-    items: ["IFRS 17 Insurance", "IFRS 18 Presentation", "ISSB Sustainability (S1/S2)", "Open Banking PSD3 Maurice"],
+    items: ["cmkt.pcm.rm_2027_1", "cmkt.pcm.rm_2027_2", "cmkt.pcm.rm_2027_3", "cmkt.pcm.rm_2027_4"],
     color: "#2ECC8A",
   },
 ]
@@ -216,7 +203,7 @@ function LiveExpertReport({ locale }: { locale: Locale }) {
             style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}
           >
             <Wand2 className="inline h-3 w-3 mr-1.5" style={{ color: "#D4AF37" }} />
-            {locale === "fr" ? "Rapport d'expertise · live" : "Expert report · live"}
+            {t("cmkt.pcm.report_chrome_live", locale)}
           </span>
         </div>
         <div
@@ -233,7 +220,7 @@ function LiveExpertReport({ locale }: { locale: Locale }) {
               style={{ backgroundColor: done ? "#2ECC8A" : "#D4AF37" }}
             />
           </span>
-          {done ? (locale === "fr" ? "Terminé" : "Done") : (locale === "fr" ? "Génération…" : "Generating…")}
+          {done ? t("cmkt.pcm.status_done", locale) : t("cmkt.pcm.status_generating", locale)}
         </div>
       </div>
 
@@ -321,7 +308,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
               }}
             >
               <Sparkles className="h-3.5 w-3.5" />
-              {locale === "fr" ? "L'innovation au cœur de Lexora" : "The innovation at the core of Lexora"}
+              {t("cmkt.pcm.badge", locale)}
             </span>
             <h2
               className="mb-5 text-4xl font-bold tracking-tight md:text-6xl"
@@ -333,67 +320,33 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                 lineHeight: 1.05,
               }}
             >
-              {locale === "fr" ? (
-                <>
-                  Le PCM était figé.
-                  <br />
-                  Greffé à{" "}
-                  <span
-                    style={{
-                      backgroundImage:
-                        "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
-                      WebkitBackgroundClip: "text",
-                      backgroundClip: "text",
-                      color: "transparent",
-                    }}
-                  >
-                    Claude
-                  </span>
-                  , il devient{" "}
-                  <span
-                    style={{
-                      backgroundImage:
-                        "linear-gradient(90deg, #D4AF37 0%, #2ECC8A 100%)",
-                      WebkitBackgroundClip: "text",
-                      backgroundClip: "text",
-                      color: "transparent",
-                    }}
-                  >
-                    vivant
-                  </span>
-                  .
-                </>
-              ) : (
-                <>
-                  PCM used to be static.
-                  <br />
-                  Wired to{" "}
-                  <span
-                    style={{
-                      backgroundImage:
-                        "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
-                      WebkitBackgroundClip: "text",
-                      backgroundClip: "text",
-                      color: "transparent",
-                    }}
-                  >
-                    Claude
-                  </span>
-                  , it becomes{" "}
-                  <span
-                    style={{
-                      backgroundImage:
-                        "linear-gradient(90deg, #D4AF37 0%, #2ECC8A 100%)",
-                      WebkitBackgroundClip: "text",
-                      backgroundClip: "text",
-                      color: "transparent",
-                    }}
-                  >
-                    alive
-                  </span>
-                  .
-                </>
-              )}
+              {t("cmkt.pcm.title_l1", locale)}
+              <br />
+              {t("cmkt.pcm.title_grafted", locale)}{" "}
+              <span
+                style={{
+                  backgroundImage:
+                    "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
+                  WebkitBackgroundClip: "text",
+                  backgroundClip: "text",
+                  color: "transparent",
+                }}
+              >
+                Claude
+              </span>
+              {t("cmkt.pcm.title_becomes", locale)}{" "}
+              <span
+                style={{
+                  backgroundImage:
+                    "linear-gradient(90deg, #D4AF37 0%, #2ECC8A 100%)",
+                  WebkitBackgroundClip: "text",
+                  backgroundClip: "text",
+                  color: "transparent",
+                }}
+              >
+                {t("cmkt.pcm.title_word", locale)}
+              </span>
+              .
             </h2>
             <p
               className="mb-7 text-base md:text-lg"
@@ -405,17 +358,15 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                 maxWidth: "640px",
               }}
             >
-              {locale === "fr"
-                ? "Pour la première fois à Maurice, un Plan Comptable Mauricien qui s'audite seul, qui rédige ses propres rapports d'expertise, qui apprend votre métier, et qui évolue avec chaque nouvelle norme — sans redéploiement. C'est le moteur Lexora × Claude Code. Une innovation propre à Lexora."
-                : "For the first time in Mauritius, a Mauritian Chart of Accounts that audits itself, drafts its own expert reports, learns your business, and evolves with every new standard — without redeployment. This is the Lexora × Claude Code engine. A Lexora-exclusive innovation."}
+              {t("cmkt.pcm.intro", locale)}
             </p>
 
             <StaggerGroup className="grid grid-cols-2 gap-3 sm:grid-cols-4" staggerMs={60}>
               {[
-                { v: "4", l: locale === "fr" ? "skills Claude" : "Claude skills" },
-                { v: "5", l: locale === "fr" ? "outils MCP" : "MCP tools" },
-                { v: "9", l: locale === "fr" ? "checks live" : "live checks" },
-                { v: "∞", l: locale === "fr" ? "extensible" : "extensible" },
+                { v: "4", l: t("cmkt.pcm.stat_skills", locale) },
+                { v: "5", l: t("cmkt.pcm.stat_mcp", locale) },
+                { v: "9", l: t("cmkt.pcm.stat_checks", locale) },
+                { v: "∞", l: t("cmkt.pcm.stat_extensible", locale) },
               ].map((s) => (
                 <StaggerItem key={s.l}>
                   <div
@@ -454,7 +405,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                   }}
                 >
                   <Activity className="mr-2 h-5 w-5" />
-                  {locale === "fr" ? "Voir un audit PCM live" : "See a live PCM audit"}
+                  {t("cmkt.pcm.cta_audit", locale)}
                 </Button>
               </Link>
               <a href="#engine">
@@ -471,7 +422,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                     borderRadius: "8px",
                   }}
                 >
-                  {locale === "fr" ? "Explorer les 4 skills Claude" : "Explore the 4 Claude skills"}
+                  {t("cmkt.pcm.cta_skills", locale)}
                 </Button>
               </a>
             </div>
@@ -488,7 +439,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
             className="mb-4 inline-block text-[11px] font-bold uppercase tracking-[0.18em]"
             style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
           >
-            {locale === "fr" ? "6 capacités natives" : "6 native capabilities"}
+            {t("cmkt.pcm.caps_kicker", locale)}
           </span>
           <h3
             className="mb-3 text-3xl font-bold md:text-4xl"
@@ -499,15 +450,13 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
               letterSpacing: "-0.02em",
             }}
           >
-            {locale === "fr"
-              ? "Ce qu'un PCM vivant fait pour vous"
-              : "What a living PCM does for you"}
+            {t("cmkt.pcm.caps_title", locale)}
           </h3>
         </Reveal>
 
         <StaggerGroup className="grid gap-5 md:grid-cols-2 lg:grid-cols-3" staggerMs={70}>
           {CAPABILITIES.map((c) => (
-            <StaggerItem key={c.title}>
+            <StaggerItem key={c.titleKey}>
               <HoverLift lift={6} className="h-full">
                 <article
                   className="group relative h-full overflow-hidden rounded-2xl p-7"
@@ -564,7 +513,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                       letterSpacing: "-0.01em",
                     }}
                   >
-                    {locale === "fr" ? c.title : c.titleEn}
+                    {t(c.titleKey, locale)}
                   </h4>
                   <p
                     className="text-sm"
@@ -575,7 +524,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                       lineHeight: 1.7,
                     }}
                   >
-                    {locale === "fr" ? c.body : c.bodyEn}
+                    {t(c.bodyKey, locale)}
                   </p>
                 </article>
               </HoverLift>
@@ -612,7 +561,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                     className="text-[10px] font-bold uppercase tracking-widest"
                     style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
                   >
-                    {locale === "fr" ? "Évolution à l'infini" : "Infinite evolution"}
+                    {t("cmkt.pcm.roadmap_kicker", locale)}
                   </div>
                   <h3
                     className="text-2xl font-bold md:text-3xl"
@@ -623,7 +572,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                       letterSpacing: "-0.02em",
                     }}
                   >
-                    {locale === "fr" ? "Le moteur grandit avec la régulation" : "The engine grows with regulation"}
+                    {t("cmkt.pcm.roadmap_title", locale)}
                   </h3>
                 </div>
               </div>
@@ -683,7 +632,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                           className="mt-1.5 inline-block h-1 w-2 shrink-0 rounded-full"
                           style={{ backgroundColor: r.color }}
                         />
-                        {item}
+                        {t(item, locale)}
                       </li>
                     ))}
                   </ul>
@@ -702,9 +651,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
             >
               <Sparkles className="h-4 w-4" style={{ color: "#D4AF37" }} />
               <span>
-                {locale === "fr"
-                  ? "Une nouvelle norme demain ? Une nouvelle skill Claude se greffe — pas de redéploiement, pas de migration douloureuse."
-                  : "A new standard tomorrow? A new Claude skill plugs in — no redeploy, no painful migration."}
+                {t("cmkt.pcm.roadmap_footer", locale)}
               </span>
               <ArrowRight className="h-4 w-4" style={{ color: "#D4AF37" }} />
             </div>
