@@ -2989,4 +2989,400 @@ export const HELP_CONTENT_EN: Record<string, HelpEntry> = {
     ],
   },
 
+  // ========================================================================
+  // LEGAL — FULL WORKSPACE (Mauritian law firm)
+  // ========================================================================
+  '/juridique': {
+    title: "Legal workspace — Overview",
+    audience: 'all',
+    intro:
+      "Central legal cockpit of the firm: <b>matters</b> (active cases), <b>contracts</b> (drafting and lifecycle), <b>litigation</b> (disputes before Mauritian courts), <b>advisory</b> (legal opinions and HR/employment advice), <b>compliance</b> (regulatory obligations, KYC/AML) and <b>corporate secretarial</b> (company life under the Companies Act 2001). All law applicable in Mauritius lives here: Companies Act 2001, Workers Rights Act 2019, Mauritian Civil Code, FSC for GBCs.",
+    steps: [
+      { title: "1. Identify your need", body: "Managing a <b>case</b> (open matter with documents and deadlines) → <em>Matters</em>. Drafting or tracking a <b>contract</b> → <em>Contracts</em>. In a <b>dispute</b> → <em>Litigation</em>. A <b>legal question</b> → <em>Advisory</em>. Running the <b>life of a company</b> → <em>Corporate secretarial</em>." },
+      { title: "2. Dashboard", body: "The page shows <b>upcoming deadlines</b> (Annual Return, hearings, renewals), active matters by status and compliance alerts. Corporate deadlines (AGM, accounts filing) surface automatically." },
+      { title: "3. Department organisation", body: "Matters are split across legal departments (corporate, employment, litigation, advisory) with owners and access rights. See <em>Departments</em>." },
+      { title: "4. Links to other modules", body: "<b>HR advisory</b> connects to the HR module (dismissal, discipline); <b>GBC compliance</b> links to the FSC dashboard; <b>litigation provisions</b> feed the accounts (IAS 37)." },
+    ],
+    pitfalls: [
+      "Treating an employment dispute as a commercial one: the court differs (Industrial Court vs Supreme Court).",
+      "Missing a corporate deadline (Annual Return, AGM) → penalties and risk of strike-off by the Registrar.",
+      "Not documenting opinions given → loss of traceability if the firm's liability is challenged.",
+    ],
+    externalLinks: [
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Filings, Annual Return, entity search." },
+      { label: "Supreme Court of Mauritius", url: "https://supremecourt.govmu.org", description: "Commercial Division, case law." },
+      { label: "Industrial Court", url: "https://industrialcourt.govmu.org", description: "Employment litigation." },
+    ],
+    tips: [
+      "Always start by qualifying the nature of the matter (corporate / employment / commercial): it drives procedure and jurisdiction.",
+      "Enable deadline alerts: corporate secretarial work runs on strict statutory dates.",
+    ],
+  },
+
+  '/juridique/dossiers': {
+    title: "Legal matters — Opening and tracking",
+    audience: 'all',
+    intro:
+      "Central management of legal matters: opening a file, progress tracking, documents, deadlines and statuses. Each matter gathers all elements of a case (corporate, contractual, litigation or advisory) with a time-stamped history for traceability.",
+    steps: [
+      { title: "1. Open a matter", body: "<b>New matter</b> button: enter the entity/client involved, the nature (corporate / employment / commercial / advisory), the owner and the department. A unique matter number is assigned." },
+      { title: "2. Add documents", body: "Upload constitutions, contracts, correspondence, formal notices, pleadings. Each document is dated and versioned. Confidentiality is enforced by the department's access rights." },
+      { title: "3. Set deadlines", body: "Enter key dates (hearing, filing, response deadline, limitation period). Lexora generates upstream alerts. Watch the <b>limitation periods</b> under the Mauritian Civil Code." },
+      { title: "4. Track the status", body: "Statuses: <em>Open → In progress → On hold → Closed</em>. Every change is logged. A closed matter remains viewable and archived." },
+      { title: "5. Link to other modules", body: "A litigation matter can generate a provision (IAS 37); an employment matter links to the HR module; a corporate matter to company acts." },
+    ],
+    pitfalls: [
+      "Opening a matter with no owner or department → nobody tracks the deadlines.",
+      "Forgetting to record a limitation date → time-barred action, right lost.",
+      "Unversioned documents: you no longer know which contract version prevails.",
+    ],
+    tips: [
+      "Name matters consistently (entity - nature - year) to find them fast.",
+      "Close matters properly: a file left 'In progress' distorts activity statistics.",
+    ],
+  },
+
+  '/juridique/contrats': {
+    title: "Contracts — Drafting and lifecycle",
+    audience: 'all',
+    intro:
+      "Drafting, negotiating, signing and archiving contracts: <b>commercial</b>, <b>lease</b>, <b>service/consultancy</b>, <b>NDA</b>, distribution agreements, etc. Mauritian contract law rests on the <b>Mauritian Civil Code</b> (general law of obligations) supplemented by special statutes. Lexora handles the full lifecycle: template → drafting → review → signature → archiving → renewal deadlines.",
+    steps: [
+      { title: "1. Choose the type", body: "Select a template: <em>commercial contract</em>, <em>lease</em> (commercial or residential), <em>service agreement</em>, <em>NDA / confidentiality agreement</em>. Each template embeds standard Mauritian-law clauses." },
+      { title: "2. Draft the key clauses", body: "Subject matter, price/consideration, term, termination conditions, governing law and <b>jurisdiction clause</b> (often the Mauritian courts), optional arbitration clause, force majeure, confidentiality, penalties." },
+      { title: "3. Check validity", body: "Civil Code requirements: consent, capacity, certain object, lawful cause. Verify the signatory's authority (mandate, board resolution for a company)." },
+      { title: "4. Signature", body: "Handwritten or electronic signature (the Electronic Transactions Act 2000 recognises electronic signatures in Mauritius). Keep the signed original." },
+      { title: "5. Archiving and deadlines", body: "Archive the signed contract and set key dates: expiry, renewal/termination notice, price review. Lexora alerts before the deadline." },
+    ],
+    pitfalls: [
+      "Omitting the jurisdiction and governing-law clauses → uncertainty in a dispute.",
+      "Signatory without authority (no board resolution) → contract not binding on the company.",
+      "Commercial lease without registration / stamp duty → evidential and tax difficulties.",
+      "Letting an automatic renewal slip through for lack of a notice alert.",
+    ],
+    externalLinks: [
+      { label: "Registrar-General's Department", url: "https://rgd.govmu.org", description: "Registration of deeds and stamp duty." },
+      { label: "Mauritius Laws (AGO)", url: "https://attorneygeneral.govmu.org", description: "Consolidated statutes." },
+    ],
+    tips: [
+      "Keep a library of approved standard clauses (see /juridique/documents).",
+      "For recurring contracts, standardise an in-house template rather than starting from a file received by email.",
+    ],
+  },
+
+  '/juridique/contentieux': {
+    title: "Litigation & disputes — Procedure and provisions",
+    audience: 'all',
+    intro:
+      "Tracking of disputes before Mauritian courts. <b>Industrial Court</b> for employment litigation (dismissal, wages, discrimination), <b>Commercial Division of the Supreme Court</b> for commercial and corporate disputes, ordinary courts for the rest. Lexora tracks procedure, hearing deadlines and computes <b>litigation provisions (IAS 37)</b>.",
+    steps: [
+      { title: "1. Qualify the dispute", body: "Identify the subject matter: <b>employment</b> (Industrial Court) / <b>commercial</b> (Commercial Division, Supreme Court) / <b>civil</b> / <b>administrative</b>. The competent court follows." },
+      { title: "2. Open the procedural file", body: "Record the parties, the subject matter, the amount at stake, the appointed counsel (barrister/attorney). Upload plaint/defence, exhibits and submissions." },
+      { title: "3. Track deadlines", body: "Hearing dates, deadlines for filing submissions, appeal deadlines. Lexora alerts. Strictly observe <b>procedural deadlines</b> on pain of being time-barred." },
+      { title: "4. Assess the risk and provision", body: "Under <b>IAS 37</b>: if an outflow of resources is <em>probable</em> and can be estimated, recognise a <b>litigation provision</b> (Debit expense, Credit provision). If only <em>possible</em>, disclose in the notes (contingent liability)." },
+      { title: "5. Outcome and enforcement", body: "Judgment, settlement or discontinuance. Update the provision (reversal or adjustment) and enforce the decision." },
+    ],
+    pitfalls: [
+      "Filing before the wrong court (Supreme Court for a purely employment dispute that belongs to the Industrial Court).",
+      "Missing an appeal deadline (often short) → decision becomes final.",
+      "Not provisioning a probable dispute → financial statements not true and fair (IAS 37 non-compliance).",
+      "Provisioning a merely possible liability → overstatement of expenses.",
+    ],
+    externalLinks: [
+      { label: "Supreme Court — Commercial Division", url: "https://supremecourt.govmu.org", description: "Commercial and corporate disputes." },
+      { label: "Industrial Court", url: "https://industrialcourt.govmu.org", description: "Employment litigation." },
+    ],
+    tips: [
+      "Document the risk assessment (probable/possible/remote): it underpins the IAS 37 provision and the audit.",
+      "A well-priced settlement often costs less than a judgment plus fees and delays.",
+    ],
+  },
+
+  '/juridique/conseil': {
+    title: "Legal advisory — Opinion requests",
+    audience: 'all',
+    intro:
+      "Management of general legal opinion requests and the firm's knowledge base. A question comes in (from the client or internally), you <b>qualify</b> it, research the applicable law, and issue a traceable, reusable opinion. Gradually builds an internal base of precedents.",
+    steps: [
+      { title: "1. Record the request", body: "Who is asking, on which entity, the precise subject of the question, the urgency. An unwritten opinion does not exist: everything is traced." },
+      { title: "2. Qualify the question", body: "Classify by area: corporate, employment/HR, tax, commercial, compliance. If it is employment, route to <em>HR advisory</em>; if tax, to the tax modules." },
+      { title: "3. Research and draft the opinion", body: "Identify the texts (Companies Act, WRA, Civil Code, special statutes), the case law, and draft a structured opinion: facts → legal question → analysis → conclusion/recommendation." },
+      { title: "4. Issue and archive", body: "Send the opinion to the requester and archive it in the knowledge base. Index by keywords for reuse." },
+    ],
+    pitfalls: [
+      "Giving an untraced oral opinion → cannot be relied upon, liability risk.",
+      "Not dating the opinion: the law evolves, an old opinion may be obsolete.",
+      "Confusing advice with decision: the firm informs, the client decides.",
+    ],
+    tips: [
+      "Capitalise: each opinion enriches the knowledge base and speeds up the next ones.",
+      "Add a validity reservation (law in force at the date of the opinion).",
+    ],
+  },
+
+  '/juridique/conseil-rh': {
+    title: "Legal advisory — HR / employment",
+    audience: 'all',
+    intro:
+      "Advice on Mauritian employment law: <b>dismissal</b> (Workers Rights Act 2019), <b>discipline</b>, <b>harassment</b>, collective relations (Industrial Relations) and articulation with Lexora's HR module. Goal: secure employment decisions to avoid litigation before the Industrial Court.",
+    steps: [
+      { title: "1. Dismissal — ground and procedure", body: "The <b>WRA 2019</b> strictly governs termination. <b>Section 64</b> requires, where misconduct is alleged, a <b>prior disciplinary procedure</b>: written notification of the charges, the worker's right to be heard within a reasonable time, and a reasoned decision. A dismissal without valid cause or fair procedure is <em>unjustified</em>." },
+      { title: "2. Discipline", body: "Graduated warnings, hearing, the worker's right of reply. Document each step: the written record prevails before the Industrial Court." },
+      { title: "3. Harassment", body: "Handle any complaint seriously: confidential internal investigation, precautionary measures, sanction where appropriate. Harassment engages the employer's liability." },
+      { title: "4. Collective relations", body: "Collective bargaining, trade-union rights, Industrial Relations procedures. Comply with consultation obligations." },
+      { title: "5. HR module articulation", body: "The actual departure (notice calculation, s.70 severance, final settlement, PAYE Exit Statement) is run in the HR module — see /rh/depart. Legal advisory secures the ground and procedure <b>upstream</b>." },
+    ],
+    pitfalls: [
+      "Dismissing for misconduct without the s.64 disciplinary procedure → reclassified as unjustified dismissal, increased compensation.",
+      "No written record of warnings → the employer cannot prove the misconduct.",
+      "Treating a harassment complaint lightly → employer's liability engaged.",
+      "Confusing the 'advice/procedure' phase with the 'departure calculation' phase (HR module).",
+    ],
+    externalLinks: [
+      { label: "Workers Rights Act 2019", url: "https://labour.govmu.org/Documents/Legislations/WRA2019.pdf", description: "Reference text (s.64 procedure, s.70 severance)." },
+      { label: "Ministry of Labour", url: "https://labour.govmu.org", description: "Conciliation, mediation, employment texts." },
+      { label: "Industrial Court", url: "https://industrialcourt.govmu.org", description: "Employment litigation court." },
+    ],
+    tips: [
+      "Fair procedure (fair hearing) matters as much as the ground: get both right.",
+      "If the ground is doubtful, favour conciliation at the Ministry of Labour before litigation.",
+    ],
+  },
+
+  '/juridique/conformite': {
+    title: "Regulatory compliance",
+    audience: 'all',
+    intro:
+      "Management of legal and regulatory obligations by entity type: mandatory registers, <b>KYC/AML</b> (Financial Intelligence and Anti-Money Laundering Act), <b>FSC</b> obligations for GBCs, periodic filings. Goal: stay compliant at all times and be able to demonstrate it in case of inspection.",
+    steps: [
+      { title: "1. Obligations mapping", body: "Depending on the entity type (domestic company, GBC, Authorised Company, association), Lexora lists the applicable obligations: registers, filings, returns, licence renewals." },
+      { title: "2. KYC / AML", body: "Identification and verification of clients/beneficial owners (FIAMLA + AML/CFT Regulations). Keep KYC documents, monitor transactions, report suspicious transactions (STR) to the FIU where necessary." },
+      { title: "3. Mandatory registers", body: "Keep the statutory registers up to date (members, directors, charges, UBO) — see /juridique/societe/registres. Their absence is an offence." },
+      { title: "4. FSC obligations (GBC)", body: "For Global Business: FSC licence, substance (CIGA), FSC Annual Return, CRS/FATCA. See the GBC dashboard (/client/gbc-dashboard)." },
+      { title: "5. Tracking and evidence", body: "Each obligation has a status (up to date / overdue / upcoming). Keep supporting documents: compliance must be <b>demonstrable</b>." },
+    ],
+    pitfalls: [
+      "Incomplete KYC → business relationship blocked and AML risk (heavy sanctions).",
+      "UBO register not updated within deadlines → offence.",
+      "Confusing the obligations of a domestic company with those of a GBC (separate FSC regime).",
+      "Not keeping proof of compliance: being compliant is not enough, you must be able to prove it.",
+    ],
+    externalLinks: [
+      { label: "FSC Mauritius", url: "https://www.fscmauritius.org", description: "Regulator of Global Business and financial services." },
+      { label: "Financial Intelligence Unit", url: "https://fiumauritius.org", description: "Suspicious transaction reports (STR), AML/CFT." },
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Statutory registers and filings." },
+    ],
+    tips: [
+      "Treat compliance as a continuous process, not an annual chore.",
+      "A well-kept KYC/AML file is your best defence in case of inspection.",
+    ],
+  },
+
+  '/juridique/documents': {
+    title: "Legal document library",
+    audience: 'all',
+    intro:
+      "Repository of <b>templates</b> (contracts, constitutions, resolutions, minutes, letters), with <b>versioning</b>, <b>legal retention</b> and <b>confidentiality</b>. In Mauritius, accounting and employment documents are generally kept for <b>at least 10 years</b>; company registers are kept at the registered office for as long as the company exists. Centralise everything here to avoid scattered versions.",
+    steps: [
+      { title: "1. Templates", body: "Library of approved templates: standard contracts, constitutions, ordinary/special resolutions, meeting notices, minutes, formal-notice letters. Reuse rather than recreate." },
+      { title: "2. Versioning", body: "Each template/document has a dated version history. You always know which is the current version and who modified it." },
+      { title: "3. Legal retention", body: "Apply the periods: accounting and employment records <b>≥ 10 years</b>, contracts at least for their term plus the limitation period, company registers kept at the registered office for as long as the entity exists." },
+      { title: "4. Confidentiality", body: "Access rights by department/matter. Sensitive documents (litigation, M&A, individual HR) are visible only to authorised people." },
+    ],
+    pitfalls: [
+      "Obsolete templates used for lack of updating → clauses not compliant with the law in force.",
+      "Destroying a document before the end of the legal retention period.",
+      "Confidential documents accessible to everyone for lack of access rights → information leak.",
+    ],
+    tips: [
+      "Clearly mark the 'current' version of each template.",
+      "Link each document to its matter to find it by context.",
+    ],
+  },
+
+  '/juridique/departements': {
+    title: "Organisation by legal departments",
+    audience: 'all',
+    intro:
+      "Structure the firm into <b>departments</b> (corporate, employment/HR, litigation, advisory, compliance): allocation of matters, designation of <b>owners</b> and management of <b>access rights</b>. Ensures each case has a driver and that confidentiality is respected.",
+    steps: [
+      { title: "1. Create the departments", body: "Define the departments relevant to your firm and appoint an owner per department." },
+      { title: "2. Allocate matters", body: "Assign each matter to a department. Deadlines and alerts surface to the relevant owner." },
+      { title: "3. Access rights", body: "Members of a department see the matters within their scope. Sensitive matters can be further restricted. Consistent with the role hierarchy." },
+      { title: "4. Steering", body: "Workload view per department: active matters, upcoming deadlines, overdue matters." },
+    ],
+    pitfalls: [
+      "Matter not assigned to a department → nobody tracks it.",
+      "Access rights too broad: a member sees confidential matters outside their scope.",
+      "Owner not designated → deadline alerts have no recipient.",
+    ],
+    tips: [
+      "Align departments with jurisdictions/subject matter (employment→Industrial Court, corporate→ROC).",
+      "Periodically review access rights, especially after staff movements.",
+    ],
+  },
+
+  '/juridique/societe': {
+    title: "Corporate secretarial — Company life",
+    audience: 'all',
+    intro:
+      "Management of <b>corporate secretarial</b> work under the <b>Companies Act 2001</b>: company life (acts, meetings, resolutions, registers, obligations) and dealings with the <b>Registrar of Companies (ROC / CBRD)</b>. A Mauritian company must keep its registers, file its <b>Annual Return</b>, hold its <b>AGM</b> and notify changes to the Registrar.",
+    steps: [
+      { title: "1. Entity overview", body: "Legal form, directors, company secretary (mandatory for companies other than small private ones), registered office, capital, shareholding." },
+      { title: "2. Company acts", body: "Incorporation, constitutional changes, changes of directors/registered office: each gives rise to a filing with the Registrar. See /juridique/societe/actes." },
+      { title: "3. Meetings and resolutions", body: "Holding the AGM (within statutory deadlines), EGM if needed, ordinary/special resolutions. See /juridique/societe/assemblees and /resolutions." },
+      { title: "4. Registers and obligations", body: "Statutory registers kept at the registered office (members, directors, charges, UBO) and corporate deadlines (Annual Return, accounts filing). See /registres and /obligations." },
+    ],
+    pitfalls: [
+      "No company secretary where the company is required to have one → non-compliance.",
+      "Changes (director, registered office) not notified to the Registrar within the deadlines.",
+      "Registers kept somewhere other than the registered office without notifying the place of keeping.",
+    ],
+    externalLinks: [
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Filings, Annual Return, entity search." },
+      { label: "Companies Act 2001", url: "https://companies.govmu.org/Pages/Legislations.aspx", description: "Reference text of company law." },
+    ],
+    tips: [
+      "Corporate secretarial work runs on statutory dates: rely on the deadline alerts.",
+      "Keep the registers up to date continuously, not the day before the AGM.",
+    ],
+  },
+
+  '/juridique/societe/actes': {
+    title: "Company acts",
+    audience: 'all',
+    intro:
+      "Management of company-life acts under the Companies Act 2001: <b>incorporation</b>, <b>constitutional changes</b> (constitution/articles, capital, name, objects) and <b>filings with the Registrar of Companies</b>. Each significant act must be notified to the ROC within statutory deadlines.",
+    steps: [
+      { title: "1. Incorporation", body: "Incorporation of a company with the Registrar: name (prior reservation), form (private/public, limited by shares/guarantee), constitution (optional; the statutory model applies otherwise), directors, secretary, registered office, shareholding." },
+      { title: "2. Constitutional changes", body: "Change of name, of objects, increase/reduction of capital, amendment of the constitution: decided by resolution (often a <b>special</b> one) then filed with the Registrar." },
+      { title: "3. Changes to notify", body: "Appointment/resignation of a director, change of secretary or registered office: notification to the ROC via the dedicated forms, within statutory deadlines (generally short, e.g. 28 days)." },
+      { title: "4. Filing and evidence", body: "Keep the Registrar's filing acknowledgement. It is the proof of enforceability against third parties." },
+    ],
+    pitfalls: [
+      "Amending the constitution without the required resolution (ordinary vs special) → irregular act.",
+      "Not filing a change with the Registrar within the deadline → penalties and unenforceability.",
+      "Reusing a name that is not reserved/already taken.",
+    ],
+    externalLinks: [
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Incorporation, filings, forms." },
+    ],
+    tips: [
+      "Always check which majority (ordinary/special) is required before amending the constitution.",
+      "Keep the filing acknowledgement together with the minutes that decided the act.",
+    ],
+  },
+
+  '/juridique/societe/assemblees': {
+    title: "General meetings (AGM / EGM)",
+    audience: 'all',
+    intro:
+      "Organisation of shareholder meetings under the Companies Act 2001: <b>AGM</b> (annual meeting) and <b>EGM/special meeting</b> (extraordinary). The Companies Act requires the <b>AGM to be held within 6 months of the financial year-end</b> (and no more than 15 months between two AGMs). Notice, quorum, conduct and minutes are regulated.",
+    steps: [
+      { title: "1. Notice", body: "Statutory notice period to shareholders (generally <b>at least 14 days</b>), with the agenda. A written resolution may, in certain cases, replace a physical meeting." },
+      { title: "2. Quorum", body: "Check the quorum set by the constitution (failing which, the Companies Act default rule). Without quorum, decisions are void." },
+      { title: "3. AGM — statutory deadline", body: "Hold the AGM <b>within 6 months of the year-end</b>, not exceeding 15 months since the previous one. Typical agenda: accounts, report, appointment/re-election of directors and auditor, dividends." },
+      { title: "4. EGM", body: "Calling of an extraordinary meeting for specific decisions (constitutional change, exceptional transaction). May be requisitioned by shareholders holding the statutory threshold." },
+      { title: "5. Minutes", body: "Draft and keep the signed minutes: decisions, votes, attendance. To be kept in the company's registers." },
+    ],
+    pitfalls: [
+      "AGM held out of time (> 6 months after year-end) → Companies Act non-compliance.",
+      "Insufficient notice period → decisions open to challenge.",
+      "Quorum not met but decisions taken anyway → nullity.",
+      "Minutes unsigned or not kept → no proof of the decisions.",
+    ],
+    externalLinks: [
+      { label: "Companies Act 2001", url: "https://companies.govmu.org/Pages/Legislations.aspx", description: "Meeting rules, notice, quorum." },
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org" },
+    ],
+    tips: [
+      "Plan the AGM right after year-end to stay within the 6-month window.",
+      "For a small company, a written resolution avoids the logistics of a physical meeting.",
+    ],
+  },
+
+  '/juridique/societe/resolutions': {
+    title: "Resolutions — Ordinary & special",
+    audience: 'all',
+    intro:
+      "Management of shareholder/director decisions under the Companies Act 2001. Key distinction: <b>ordinary resolution</b> (simple majority, > 50%) vs <b>special resolution</b> (<b>75% majority</b>) required for important decisions (amending the constitution, change of name, reduction of capital, voluntary dissolution). <b>Special resolutions</b> must be filed with the <b>Registrar (CBRD)</b>.",
+    steps: [
+      { title: "1. Identify the required type", body: "<b>Ordinary</b> (> 50%): ordinary management. <b>Special</b> (≥ 75%): major constitutional changes, name, capital reduction, dissolution. The Companies Act/the constitution sets the requirement." },
+      { title: "2. Written resolution", body: "A written resolution signed by shareholders (to the required threshold) counts as a decision without a meeting, where the constitution allows it — handy for closely-held companies." },
+      { title: "3. Adoption", body: "At a meeting or by written resolution. Check the majority calculation on the votes cast / shares concerned." },
+      { title: "4. Filing of special resolutions", body: "<b>Special resolutions</b> are filed with the <b>Registrar of Companies (CBRD)</b> within the statutory deadline. Keep the filing acknowledgement." },
+      { title: "5. Archiving", body: "Keep all resolutions (ordinary and special) in the company's registers, signed and dated." },
+    ],
+    pitfalls: [
+      "Adopting by simple majority a decision requiring 75% → void resolution.",
+      "Forgetting to file a special resolution with the Registrar → unenforceable.",
+      "Written resolution used where the constitution does not allow it.",
+      "Wrong majority calculation (incorrect calculation base).",
+    ],
+    externalLinks: [
+      { label: "Companies Act 2001", url: "https://companies.govmu.org/Pages/Legislations.aspx", description: "Ordinary and special resolutions." },
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Filing of special resolutions." },
+    ],
+    tips: [
+      "Before any important decision, check the threshold (50% or 75%): it is the No. 1 source of error.",
+      "Number and date resolutions for a clean register.",
+    ],
+  },
+
+  '/juridique/societe/registres': {
+    title: "Mandatory statutory registers",
+    audience: 'all',
+    intro:
+      "Keeping the statutory registers required by the Companies Act 2001 (from <b>Section 190</b> onwards): <b>register of members/shareholders</b>, <b>register of directors and secretary</b>, <b>register of charges</b>, <b>register of beneficial owners (UBO)</b>. These registers are in principle <b>kept at the registered office</b> and accessible under the statutory conditions.",
+    steps: [
+      { title: "1. Register of members", body: "List of shareholders: identity, number and class of shares, dates of entry/exit, transfers. This register is the proof of shareholder status." },
+      { title: "2. Register of directors & secretary", body: "Identity, role, dates of appointment/cessation. Consistent with the filings made to the Registrar." },
+      { title: "3. Register of charges", body: "Security interests over the company's assets (pledges, mortgages). Registration of charges determines their enforceability." },
+      { title: "4. UBO register", body: "Beneficial owners (natural persons above the control threshold, typically > 25%). Prompt update after any change." },
+      { title: "5. Kept at the registered office", body: "Registers are kept at the <b>registered office</b> (or the place notified to the Registrar) for as long as the company exists, and kept up to date continuously." },
+    ],
+    pitfalls: [
+      "Registers not kept / not up to date → offence under the Companies Act.",
+      "Outdated UBO → non-compliance (and AML risk).",
+      "Unregistered charge → unenforceable against third parties and creditors.",
+      "Registers kept off-site without notifying the place of keeping.",
+    ],
+    externalLinks: [
+      { label: "Companies Act 2001", url: "https://companies.govmu.org/Pages/Legislations.aspx", description: "Section 190 onwards — registers." },
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org" },
+    ],
+    tips: [
+      "Update registers in real time: do not reconstruct them before an inspection.",
+      "The register of members prevails in a dispute over shareholder status.",
+    ],
+  },
+
+  '/juridique/societe/obligations': {
+    title: "Corporate obligations & deadlines",
+    audience: 'all',
+    intro:
+      "Dashboard of the company's periodic obligations under the Companies Act 2001: <b>Annual Return</b>, <b>accounts filing</b>, renewals (licences, registrations) and <b>deadline alerts</b>. The aim is never to miss a statutory date that would expose the company to penalties or strike-off by the Registrar.",
+    steps: [
+      { title: "1. Annual Return", body: "Annual filing with the Registrar confirming the company's information (directors, registered office, shareholding). Due date tracked automatically with an alert." },
+      { title: "2. Accounts filing", body: "Companies concerned file their financial statements (and the auditor's report where audit is required) with the Registrar within the statutory deadlines after year-end/AGM." },
+      { title: "3. AGM and other deadlines", body: "Reminder: AGM within 6 months of year-end (see /juridique/societe/assemblees). Corporate deadlines converge here in a single view." },
+      { title: "4. Renewals", body: "Licences, registrations, FSC licence for GBCs: Lexora tracks renewal dates and alerts upstream." },
+      { title: "5. Alerts and evidence", body: "Each obligation shows its status (upcoming / done / overdue). Keep filing acknowledgements as proof of compliance." },
+    ],
+    pitfalls: [
+      "Late Annual Return → penalties and, eventually, risk of strike-off by the Registrar.",
+      "Accounts not filed within deadlines → non-compliance and fines.",
+      "Forgotten licence renewal → business carried on without a valid title.",
+      "Not keeping filing acknowledgements → compliance not demonstrable.",
+    ],
+    externalLinks: [
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Annual Return, accounts filing, deadlines." },
+      { label: "FSC Mauritius", url: "https://www.fscmauritius.org", description: "GBC licence renewal." },
+    ],
+    tips: [
+      "Synchronise corporate deadlines with the accounting calendar (year-end → AGM → filing).",
+      "Anticipate: an administrative strike-off is heavy to reverse (restoration).",
+    ],
+  },
+
 }

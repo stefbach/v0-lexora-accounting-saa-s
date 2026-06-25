@@ -3030,6 +3030,402 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
     ],
   },
 
+  // ========================================================================
+  // JURIDIQUE — ESPACE COMPLET (cabinet juridique mauricien)
+  // ========================================================================
+  '/juridique': {
+    title: "Espace juridique — Vue d'ensemble",
+    audience: 'all',
+    intro:
+      "Centre de pilotage juridique du cabinet : <b>dossiers</b> (affaires en cours), <b>contrats</b> (rédaction et cycle de vie), <b>contentieux</b> (litiges devant les juridictions mauriciennes), <b>conseil</b> (avis juridiques et conseil RH/social), <b>conformité</b> (obligations réglementaires, KYC/AML) et <b>secrétariat corporate</b> (vie sociale des entités sous Companies Act 2001). Tout le droit applicable à Maurice est ici : Companies Act 2001, Workers Rights Act 2019, Code Civil mauricien, FSC pour les GBC.",
+    steps: [
+      { title: "1. Identifie ton besoin", body: "Tu gères une <b>affaire</b> (dossier ouvert avec pièces et échéances) → <em>Dossiers</em>. Tu rédiges ou suis un <b>contrat</b> → <em>Contrats</em>. Tu es en <b>litige</b> → <em>Contentieux</em>. Tu as une <b>question de droit</b> → <em>Conseil</em>. Tu pilotes la <b>vie d'une société</b> → <em>Secrétariat corporate</em>." },
+      { title: "2. Tableau de bord", body: "La page affiche les <b>échéances proches</b> (Annual Return, audiences, renouvellements), les dossiers actifs par statut et les alertes de conformité. Les deadlines corporate (AGM, dépôt comptes) remontent automatiquement." },
+      { title: "3. Organisation par départements", body: "Les dossiers sont répartis entre départements juridiques (corporate, social, contentieux, conseil) avec responsables et droits d'accès. Voir <em>Départements</em>." },
+      { title: "4. Articulation avec les autres modules", body: "Le <b>Conseil RH</b> se connecte au module RH (licenciement, discipline) ; la <b>conformité GBC</b> renvoie au dashboard FSC ; les <b>provisions pour litige</b> alimentent la comptabilité (IAS 37)." },
+    ],
+    pitfalls: [
+      "Traiter un litige social comme un litige commercial : la juridiction diffère (Industrial Court vs Supreme Court).",
+      "Laisser passer une échéance corporate (Annual Return, AGM) → pénalités et risque de radiation au Registrar.",
+      "Ne pas documenter les avis donnés → perte de traçabilité en cas de mise en cause de la responsabilité du cabinet.",
+    ],
+    externalLinks: [
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Dépôts, Annual Return, recherche d'entités." },
+      { label: "Supreme Court of Mauritius", url: "https://supremecourt.govmu.org", description: "Commercial Division, jurisprudence." },
+      { label: "Industrial Court", url: "https://industrialcourt.govmu.org", description: "Contentieux du travail." },
+    ],
+    tips: [
+      "Commence toujours par qualifier la nature de l'affaire (corporate / social / commercial) : cela conditionne procédure et juridiction.",
+      "Active les alertes d'échéances : le secrétariat corporate vit au rythme de dates légales strictes.",
+    ],
+  },
+
+  '/juridique/dossiers': {
+    title: "Dossiers juridiques — Ouverture et suivi",
+    audience: 'all',
+    intro:
+      "Gestion centralisée des affaires juridiques : ouverture d'un dossier, suivi d'avancement, pièces, échéances et statuts. Chaque dossier regroupe l'ensemble des éléments d'une affaire (corporate, contractuelle, contentieuse ou de conseil) avec son historique horodaté pour la traçabilité.",
+    steps: [
+      { title: "1. Ouvre un dossier", body: "Bouton <b>Nouveau dossier</b> : renseigne l'entité/le client concerné, la nature (corporate / social / commercial / conseil), le responsable et le département. Un numéro de dossier unique est attribué." },
+      { title: "2. Ajoute les pièces", body: "Téléverse statuts, contrats, correspondances, mises en demeure, pièces de procédure. Chaque pièce est datée et versionnée. La confidentialité est respectée par les droits d'accès du département." },
+      { title: "3. Pose les échéances", body: "Saisis les dates clés (audience, dépôt, délai de réponse, prescription). Lexora génère des alertes en amont. Attention aux délais de <b>prescription</b> du Code Civil mauricien." },
+      { title: "4. Suis le statut", body: "Statuts : <em>Ouvert → En cours → En attente → Clos</em>. Chaque changement est tracé. Un dossier clos reste consultable et archivé." },
+      { title: "5. Relie aux autres modules", body: "Un dossier de contentieux peut générer une provision (IAS 37) ; un dossier social se relie au module RH ; un dossier corporate aux actes de société." },
+    ],
+    pitfalls: [
+      "Ouvrir un dossier sans responsable ni département → personne ne suit les échéances.",
+      "Oublier d'enregistrer une date de prescription → action prescrite, droit perdu.",
+      "Pièces non versionnées : on ne sait plus quelle version du contrat fait foi.",
+    ],
+    tips: [
+      "Nomme les dossiers de façon homogène (entité - nature - année) pour les retrouver vite.",
+      "Clôture proprement : un dossier laissé 'En cours' fausse les statistiques d'activité.",
+    ],
+  },
+
+  '/juridique/contrats': {
+    title: "Contrats — Rédaction et cycle de vie",
+    audience: 'all',
+    intro:
+      "Rédaction, négociation, signature et archivage des contrats : <b>commercial</b>, <b>bail</b>, <b>contrat de prestation/service</b>, <b>NDA</b>, contrats de distribution, etc. Le droit mauricien des contrats repose sur le <b>Code Civil mauricien</b> (théorie générale des obligations) complété par les lois spéciales. Lexora gère le cycle complet : modèle → rédaction → relecture → signature → archivage → échéances de renouvellement.",
+    steps: [
+      { title: "1. Choisis le type", body: "Sélectionne un modèle : <em>contrat commercial</em>, <em>bail</em> (commercial ou d'habitation), <em>prestation de services</em>, <em>NDA / accord de confidentialité</em>. Chaque modèle intègre les clauses standard du droit mauricien." },
+      { title: "2. Rédige les clauses essentielles", body: "Objet, prix/contrepartie, durée, conditions de résiliation, loi applicable et <b>clause attributive de juridiction</b> (souvent les tribunaux mauriciens), clause d'arbitrage éventuelle, force majeure, confidentialité, pénalités." },
+      { title: "3. Vérifie la validité", body: "Conditions du Code Civil : consentement, capacité, objet certain, cause licite. Vérifie les pouvoirs du signataire (mandat, résolution du conseil pour une société)." },
+      { title: "4. Signature", body: "Signature manuscrite ou électronique (Electronic Transactions Act 2000 reconnaît la signature électronique à Maurice). Conserve l'original signé." },
+      { title: "5. Archivage et échéances", body: "Archive le contrat signé, pose les dates clés : échéance, préavis de renouvellement/résiliation, revue tarifaire. Lexora alerte avant l'échéance." },
+    ],
+    pitfalls: [
+      "Oublier la clause attributive de juridiction et de loi applicable → incertitude en cas de litige.",
+      "Signataire sans pouvoir (pas de résolution du conseil) → contrat inopposable à la société.",
+      "Bail commercial sans enregistrement / droits de timbre → difficultés de preuve et fiscales.",
+      "Laisser une tacite reconduction filer faute d'alerte de préavis.",
+    ],
+    externalLinks: [
+      { label: "Registrar-General's Department", url: "https://rgd.govmu.org", description: "Enregistrement des actes et droits de timbre." },
+      { label: "Mauritius Laws (AGO)", url: "https://attorneygeneral.govmu.org", description: "Textes de loi consolidés." },
+    ],
+    tips: [
+      "Garde une bibliothèque de clauses types validées (voir /juridique/documents).",
+      "Pour les contrats récurrents, standardise un modèle maison plutôt que repartir d'un fichier reçu par mail.",
+    ],
+  },
+
+  '/juridique/contentieux': {
+    title: "Contentieux & litiges — Procédure et provisions",
+    audience: 'all',
+    intro:
+      "Suivi des litiges devant les juridictions mauriciennes. <b>Industrial Court</b> pour le contentieux du travail (licenciement, salaires, discrimination), <b>Commercial Division de la Supreme Court</b> pour les litiges commerciaux et corporate, juridictions de droit commun pour le reste. Lexora suit la procédure, les échéances d'audience et calcule les <b>provisions pour litige (IAS 37)</b>.",
+    steps: [
+      { title: "1. Qualifie le litige", body: "Identifie la matière : <b>social</b> (Industrial Court) / <b>commercial</b> (Commercial Division, Supreme Court) / <b>civil</b> / <b>administratif</b>. La juridiction compétente en découle." },
+      { title: "2. Ouvre le dossier de procédure", body: "Renseigne les parties, l'objet, le montant en jeu, l'avocat (barrister/attorney) mandaté. Téléverse plaint/defence, pièces et conclusions." },
+      { title: "3. Suis les échéances", body: "Dates d'audience, délais de dépôt des écritures, délais d'appel. Lexora alerte. Respecte impérativement les <b>délais de procédure</b> sous peine de forclusion." },
+      { title: "4. Évalue le risque et provisionne", body: "Selon <b>IAS 37</b> : si une sortie de ressources est <em>probable</em> et estimable, comptabilise une <b>provision pour litige</b> (Débit charge, Crédit provision). Si seulement <em>possible</em>, mention en annexe (passif éventuel)." },
+      { title: "5. Issue et exécution", body: "Jugement, transaction (settlement) ou désistement. Mets à jour la provision (reprise ou ajustement) et exécute la décision." },
+    ],
+    pitfalls: [
+      "Saisir la mauvaise juridiction (Supreme Court pour un litige purement social relevant de l'Industrial Court).",
+      "Manquer un délai d'appel (souvent court) → décision définitive.",
+      "Ne pas provisionner un litige probable → états financiers non sincères (non-conformité IAS 37).",
+      "Provisionner un passif seulement éventuel → surévaluation des charges.",
+    ],
+    externalLinks: [
+      { label: "Supreme Court — Commercial Division", url: "https://supremecourt.govmu.org", description: "Litiges commerciaux et corporate." },
+      { label: "Industrial Court", url: "https://industrialcourt.govmu.org", description: "Contentieux du travail." },
+    ],
+    tips: [
+      "Documente l'évaluation du risque (probable/possible/faible) : c'est la base de la provision IAS 37 et de l'audit.",
+      "Une transaction amiable bien chiffrée coûte souvent moins qu'un jugement + frais + délais.",
+    ],
+  },
+
+  '/juridique/conseil': {
+    title: "Conseil juridique — Demandes d'avis",
+    audience: 'all',
+    intro:
+      "Gestion des demandes d'avis juridiques généraux et base de connaissances du cabinet. Une question arrive (du client ou en interne), on la <b>qualifie</b>, on recherche le droit applicable, on rend un avis tracé et réutilisable. Constitue progressivement une base de précédents internes.",
+    steps: [
+      { title: "1. Enregistre la demande", body: "Qui demande, sur quelle entité, l'objet précis de la question, le degré d'urgence. Un avis non écrit n'existe pas : tout est tracé." },
+      { title: "2. Qualifie la question", body: "Classe la question par domaine : corporate, social/RH, fiscal, commercial, conformité. Si c'est du social, oriente vers <em>Conseil RH</em> ; si c'est fiscal, vers les modules fiscaux." },
+      { title: "3. Recherche et rédige l'avis", body: "Identifie les textes (Companies Act, WRA, Code Civil, lois spéciales), la jurisprudence, et rédige un avis structuré : faits → question de droit → analyse → conclusion/recommandation." },
+      { title: "4. Diffuse et archive", body: "Communique l'avis au demandeur et archive-le dans la base de connaissances. Indexe par mots-clés pour réutilisation." },
+    ],
+    pitfalls: [
+      "Donner un avis oral non tracé → impossible à opposer, risque de responsabilité.",
+      "Ne pas dater l'avis : le droit évolue, un avis ancien peut être obsolète.",
+      "Confondre conseil et décision : le cabinet éclaire, le client décide.",
+    ],
+    tips: [
+      "Capitalise : chaque avis enrichit la base de connaissances et accélère les suivants.",
+      "Ajoute une réserve de validité (droit en vigueur à la date de l'avis).",
+    ],
+  },
+
+  '/juridique/conseil-rh': {
+    title: "Conseil juridique RH / social",
+    audience: 'all',
+    intro:
+      "Conseil sur le droit du travail mauricien : <b>licenciement</b> (Workers Rights Act 2019), <b>discipline</b>, <b>harcèlement</b>, relations collectives (Industrial Relations) et articulation avec le module RH de Lexora. Objectif : sécuriser les décisions sociales pour éviter le contentieux devant l'Industrial Court.",
+    steps: [
+      { title: "1. Licenciement — motif et procédure", body: "Le <b>WRA 2019</b> encadre strictement la rupture. La <b>Section 64</b> impose, en cas de faute alléguée, une <b>procédure disciplinaire préalable</b> : notification écrite des griefs, droit pour le salarié de se faire entendre dans un délai raisonnable, décision motivée. Un licenciement sans cause valable ni procédure équitable est <em>unjustified</em>." },
+      { title: "2. Discipline", body: "Avertissements gradués, entretien, droit de réponse du salarié. Documente chaque étape : l'écrit fait foi devant l'Industrial Court." },
+      { title: "3. Harcèlement", body: "Traite toute plainte avec sérieux : enquête interne confidentielle, mesures conservatoires, sanction le cas échéant. Le harcèlement engage la responsabilité de l'employeur." },
+      { title: "4. Relations collectives", body: "Négociation collective, droit syndical, procédures de l'Industrial Relations. Respecte les obligations de consultation." },
+      { title: "5. Articulation module RH", body: "Le départ effectif (calcul notice, severance s.70, solde de tout compte, PAYE Exit Statement) se pilote dans le module RH — voir /rh/depart. Le conseil juridique sécurise <b>en amont</b> le motif et la procédure." },
+    ],
+    pitfalls: [
+      "Licencier pour faute sans procédure disciplinaire s.64 → requalification en licenciement injustifié, indemnités majorées.",
+      "Absence de trace écrite des avertissements → l'employeur ne peut pas prouver la faute.",
+      "Traiter une plainte de harcèlement à la légère → responsabilité de l'employeur engagée.",
+      "Confondre la phase 'conseil/procédure' et la phase 'calcul du départ' (module RH).",
+    ],
+    externalLinks: [
+      { label: "Workers Rights Act 2019", url: "https://labour.govmu.org/Documents/Legislations/WRA2019.pdf", description: "Texte de référence (s.64 procédure, s.70 severance)." },
+      { label: "Ministry of Labour", url: "https://labour.govmu.org", description: "Conciliation, médiation, textes sociaux." },
+      { label: "Industrial Court", url: "https://industrialcourt.govmu.org", description: "Juridiction du contentieux social." },
+    ],
+    tips: [
+      "La procédure équitable (fair hearing) compte autant que le motif : soigne les deux.",
+      "En cas de doute sur le motif, privilégie la conciliation au Ministry of Labour avant le contentieux.",
+    ],
+  },
+
+  '/juridique/conformite': {
+    title: "Conformité réglementaire",
+    audience: 'all',
+    intro:
+      "Pilotage des obligations légales et réglementaires par type d'entité : registres obligatoires, <b>KYC/AML</b> (Financial Intelligence and Anti-Money Laundering Act), obligations <b>FSC</b> pour les GBC, déclarations périodiques. Objectif : être en règle en permanence et démontrable en cas de contrôle.",
+    steps: [
+      { title: "1. Cartographie des obligations", body: "Selon le type d'entité (société domestique, GBC, Authorised Company, association), Lexora liste les obligations applicables : registres, dépôts, déclarations, renouvellements de licence." },
+      { title: "2. KYC / AML", body: "Identification et vérification des clients/bénéficiaires (FIAMLA + AML/CFT Regulations). Conserve les pièces KYC, surveille les transactions, déclare les opérations suspectes (STR) à la FIU si nécessaire." },
+      { title: "3. Registres obligatoires", body: "Tiens à jour les registres légaux (membres, administrateurs, charges, UBO) — voir /juridique/societe/registres. Leur absence est une infraction." },
+      { title: "4. Obligations FSC (GBC)", body: "Pour les Global Business : licence FSC, substance (CIGA), Annual Return FSC, CRS/FATCA. Voir le dashboard GBC (/client/gbc-dashboard)." },
+      { title: "5. Suivi et preuve", body: "Chaque obligation a un statut (à jour / en retard / à venir). Conserve les justificatifs : la conformité doit être <b>démontrable</b>." },
+    ],
+    pitfalls: [
+      "KYC incomplet → blocage relation d'affaires et risque AML (sanctions lourdes).",
+      "Registre UBO non mis à jour dans les délais → infraction.",
+      "Confondre obligations d'une société domestique et d'un GBC (régime FSC distinct).",
+      "Ne pas conserver la preuve de conformité : être en règle ne suffit pas, il faut pouvoir le prouver.",
+    ],
+    externalLinks: [
+      { label: "FSC Mauritius", url: "https://www.fscmauritius.org", description: "Régulateur des Global Business et services financiers." },
+      { label: "Financial Intelligence Unit", url: "https://fiumauritius.org", description: "Déclarations de soupçon (STR), AML/CFT." },
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Registres et dépôts légaux." },
+    ],
+    tips: [
+      "Traite la conformité comme un processus continu, pas comme une corvée annuelle.",
+      "Un dossier KYC/AML bien tenu est ta meilleure défense en cas de contrôle.",
+    ],
+  },
+
+  '/juridique/documents': {
+    title: "Bibliothèque documentaire juridique",
+    audience: 'all',
+    intro:
+      "Référentiel des <b>modèles</b> (contrats, statuts, résolutions, PV, lettres), avec <b>versioning</b>, <b>conservation légale</b> et <b>confidentialité</b>. À Maurice, les documents comptables et sociaux se conservent généralement <b>au moins 10 ans</b> ; les registres de société sont conservés au siège tant que la société existe. Centralise tout ici pour éviter les versions éparpillées.",
+    steps: [
+      { title: "1. Modèles", body: "Bibliothèque de modèles validés : contrats types, statuts, résolutions ordinaires/spéciales, convocations d'assemblée, PV, lettres de mise en demeure. Réutilise plutôt que recréer." },
+      { title: "2. Versioning", body: "Chaque modèle/document a un historique de versions daté. On sait toujours quelle est la version en vigueur et qui l'a modifiée." },
+      { title: "3. Conservation légale", body: "Applique les durées : pièces comptables et sociales <b>≥ 10 ans</b>, contrats au moins pendant leur durée + prescription, registres de société conservés au siège tant que l'entité existe." },
+      { title: "4. Confidentialité", body: "Droits d'accès par département/dossier. Les documents sensibles (litige, M&A, RH individuel) ne sont visibles que des personnes habilitées." },
+    ],
+    pitfalls: [
+      "Modèles obsolètes utilisés faute de mise à jour → clauses non conformes au droit en vigueur.",
+      "Détruire un document avant la fin du délai légal de conservation.",
+      "Documents confidentiels accessibles à tous faute de droits → fuite d'information.",
+    ],
+    tips: [
+      "Marque clairement la version 'en vigueur' de chaque modèle.",
+      "Relie chaque document à son dossier pour le retrouver par le contexte.",
+    ],
+  },
+
+  '/juridique/departements': {
+    title: "Organisation par départements juridiques",
+    audience: 'all',
+    intro:
+      "Structure le cabinet en <b>départements</b> (corporate, social/RH, contentieux, conseil, conformité) : répartition des dossiers, désignation des <b>responsables</b> et gestion des <b>droits d'accès</b>. Garantit que chaque affaire a un pilote et que la confidentialité est respectée.",
+    steps: [
+      { title: "1. Crée les départements", body: "Définis les départements pertinents pour ton cabinet et nomme un responsable par département." },
+      { title: "2. Répartis les dossiers", body: "Affecte chaque dossier à un département. Les échéances et alertes remontent au responsable concerné." },
+      { title: "3. Droits d'accès", body: "Les membres d'un département voient les dossiers de leur périmètre. Les dossiers sensibles peuvent être restreints davantage. Cohérent avec la hiérarchie de rôles." },
+      { title: "4. Pilotage", body: "Vue de charge par département : dossiers actifs, échéances proches, dossiers en retard." },
+    ],
+    pitfalls: [
+      "Dossier non affecté à un département → personne ne le suit.",
+      "Droits trop larges : un membre voit des dossiers confidentiels hors de son périmètre.",
+      "Responsable non désigné → les alertes d'échéance n'ont pas de destinataire.",
+    ],
+    tips: [
+      "Aligne les départements sur les juridictions/matières (social→Industrial Court, corporate→ROC).",
+      "Revois périodiquement les droits d'accès, surtout après des mouvements de personnel.",
+    ],
+  },
+
+  '/juridique/societe': {
+    title: "Secrétariat corporate — Vie de la société",
+    audience: 'all',
+    intro:
+      "Pilotage du <b>secrétariat corporate</b> sous le <b>Companies Act 2001</b> : vie sociale de l'entité (actes, assemblées, résolutions, registres, obligations) et relations avec le <b>Registrar of Companies (ROC / CBRD)</b>. Une société mauricienne doit tenir ses registres, déposer son <b>Annual Return</b>, tenir son <b>AGM</b> et déclarer ses changements au Registrar.",
+    steps: [
+      { title: "1. Vue de l'entité", body: "Forme juridique, administrateurs, secrétaire de société (company secretary — obligatoire pour les sociétés autres que small private), siège social, capital, actionnariat." },
+      { title: "2. Actes de société", body: "Constitution, modifications statutaires, changements d'administrateurs/de siège : tous donnent lieu à un dépôt au Registrar. Voir /juridique/societe/actes." },
+      { title: "3. Assemblées et résolutions", body: "Tenue de l'AGM (dans les délais légaux), EGM si besoin, résolutions ordinaires/spéciales. Voir /juridique/societe/assemblees et /resolutions." },
+      { title: "4. Registres et obligations", body: "Registres légaux tenus au siège (membres, administrateurs, charges, UBO) et échéances corporate (Annual Return, dépôt des comptes). Voir /registres et /obligations." },
+    ],
+    pitfalls: [
+      "Pas de company secretary alors que la société y est tenue → non-conformité.",
+      "Changements (administrateur, siège) non déclarés au Registrar dans les délais.",
+      "Registres tenus ailleurs qu'au siège sans avoir notifié le lieu de conservation.",
+    ],
+    externalLinks: [
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Dépôts, Annual Return, recherche d'entités." },
+      { label: "Companies Act 2001", url: "https://companies.govmu.org/Pages/Legislations.aspx", description: "Texte de référence du droit des sociétés." },
+    ],
+    tips: [
+      "Le secrétariat corporate vit au rythme de dates légales : appuie-toi sur les alertes d'échéances.",
+      "Tiens les registres à jour en continu, pas la veille de l'AGM.",
+    ],
+  },
+
+  '/juridique/societe/actes': {
+    title: "Actes de société",
+    audience: 'all',
+    intro:
+      "Gestion des actes de la vie sociale sous Companies Act 2001 : <b>constitution</b> (incorporation), <b>modifications statutaires</b> (constitution/articles, capital, dénomination, objet) et <b>dépôts au Registrar of Companies</b>. Chaque acte significatif doit être déclaré au ROC dans les délais légaux.",
+    steps: [
+      { title: "1. Constitution", body: "Incorporation d'une société auprès du Registrar : nom (réservation préalable), forme (private/public, limited by shares/guarantee), constitution (optionnelle ; à défaut le modèle légal s'applique), administrateurs, secrétaire, siège, actionnariat." },
+      { title: "2. Modifications statutaires", body: "Changement de dénomination, d'objet, augmentation/réduction de capital, modification de la constitution : décidés par résolution (souvent <b>spéciale</b>) puis déposés au Registrar." },
+      { title: "3. Changements à déclarer", body: "Nomination/démission d'administrateur, changement de secrétaire ou de siège social : déclaration au ROC via les formulaires dédiés, dans les délais légaux (généralement courts, ex. 28 jours)." },
+      { title: "4. Dépôt et preuve", body: "Conserve l'accusé de dépôt du Registrar. C'est la preuve d'opposabilité aux tiers." },
+    ],
+    pitfalls: [
+      "Modifier les statuts sans la résolution requise (ordinaire vs spéciale) → acte irrégulier.",
+      "Ne pas déposer un changement au Registrar dans le délai → pénalités et inopposabilité.",
+      "Réutiliser une dénomination non réservée/déjà prise.",
+    ],
+    externalLinks: [
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Incorporation, dépôts, formulaires." },
+    ],
+    tips: [
+      "Vérifie toujours quelle majorité (ordinaire/spéciale) est requise avant de modifier les statuts.",
+      "Conserve l'accusé de dépôt avec le procès-verbal qui a décidé l'acte.",
+    ],
+  },
+
+  '/juridique/societe/assemblees': {
+    title: "Assemblées générales (AGM / EGM)",
+    audience: 'all',
+    intro:
+      "Organisation des assemblées d'actionnaires sous Companies Act 2001 : <b>AGM</b> (assemblée annuelle) et <b>EGM/special meeting</b> (extraordinaire). Le Companies Act impose de tenir l'<b>AGM dans les 6 mois suivant la clôture de l'exercice</b> (et au plus 15 mois entre deux AGM). Convocation, quorum, déroulé et procès-verbal sont encadrés.",
+    steps: [
+      { title: "1. Convocation", body: "Délai de préavis légal aux actionnaires (généralement <b>au moins 14 jours</b>), avec ordre du jour. Une written resolution peut, dans certains cas, remplacer la tenue physique." },
+      { title: "2. Quorum", body: "Vérifie le quorum prévu par la constitution (à défaut, règle supplétive du Companies Act). Sans quorum, les décisions sont nulles." },
+      { title: "3. AGM — délai légal", body: "Tiens l'AGM <b>dans les 6 mois de la clôture</b> de l'exercice, sans dépasser 15 mois depuis la précédente. Ordre du jour type : comptes, rapport, nomination/renouvellement d'administrateurs et d'auditeur, dividendes." },
+      { title: "4. EGM", body: "Convocation d'une assemblée extraordinaire pour décisions ponctuelles (modification statutaire, opération exceptionnelle). Peut être demandée par les actionnaires détenant le seuil légal." },
+      { title: "5. Procès-verbal", body: "Rédige et conserve le PV signé : décisions, votes, présences. À conserver dans les registres de la société." },
+    ],
+    pitfalls: [
+      "AGM tenue hors délai (> 6 mois après clôture) → non-conformité Companies Act.",
+      "Préavis de convocation insuffisant → décisions contestables.",
+      "Quorum non atteint mais décisions prises quand même → nullité.",
+      "PV non signé ou non conservé → absence de preuve des décisions.",
+    ],
+    externalLinks: [
+      { label: "Companies Act 2001", url: "https://companies.govmu.org/Pages/Legislations.aspx", description: "Règles d'assemblées, convocation, quorum." },
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org" },
+    ],
+    tips: [
+      "Planifie l'AGM dès la clôture pour rester dans la fenêtre des 6 mois.",
+      "Pour une petite société, la written resolution évite la logistique d'une réunion physique.",
+    ],
+  },
+
+  '/juridique/societe/resolutions': {
+    title: "Résolutions — Ordinaires & spéciales",
+    audience: 'all',
+    intro:
+      "Gestion des décisions d'actionnaires/administrateurs sous Companies Act 2001. Distinction clé : <b>résolution ordinaire</b> (majorité simple, > 50%) vs <b>résolution spéciale</b> (<b>majorité de 75%</b>) requise pour les décisions importantes (modification de la constitution, changement de nom, réduction de capital, dissolution volontaire). Les <b>special resolutions</b> doivent être déposées au <b>Registrar (CBRD)</b>.",
+    steps: [
+      { title: "1. Identifie le type requis", body: "<b>Ordinaire</b> (> 50%) : gestion courante. <b>Spéciale</b> (≥ 75%) : modifications statutaires majeures, dénomination, réduction de capital, dissolution. Le Companies Act/la constitution fixe l'exigence." },
+      { title: "2. Written resolution", body: "Une résolution écrite signée par les actionnaires (selon le seuil requis) vaut décision sans réunion, lorsque la constitution l'autorise — pratique pour les sociétés à actionnariat restreint." },
+      { title: "3. Adoption", body: "En assemblée ou par written resolution. Vérifie le calcul de la majorité sur les voix exprimées/parts concernées." },
+      { title: "4. Dépôt des special resolutions", body: "Les <b>résolutions spéciales</b> sont déposées au <b>Registrar of Companies (CBRD)</b> dans le délai légal. Conserve l'accusé de dépôt." },
+      { title: "5. Archivage", body: "Conserve toutes les résolutions (ordinaires et spéciales) dans les registres de la société, signées et datées." },
+    ],
+    pitfalls: [
+      "Adopter à la majorité simple une décision exigeant 75% → résolution nulle.",
+      "Oublier de déposer une special resolution au Registrar → inopposable.",
+      "Written resolution utilisée alors que la constitution ne l'autorise pas.",
+      "Mauvais calcul de la majorité (base de calcul erronée).",
+    ],
+    externalLinks: [
+      { label: "Companies Act 2001", url: "https://companies.govmu.org/Pages/Legislations.aspx", description: "Résolutions ordinaires et spéciales." },
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Dépôt des special resolutions." },
+    ],
+    tips: [
+      "Avant toute décision importante, vérifie le seuil (50% ou 75%) : c'est la source d'erreur n°1.",
+      "Numérote et date les résolutions pour un registre propre.",
+    ],
+  },
+
+  '/juridique/societe/registres': {
+    title: "Registres légaux obligatoires",
+    audience: 'all',
+    intro:
+      "Tenue des registres statutaires exigés par le Companies Act 2001 (à partir de la <b>Section 190</b>) : <b>registre des membres/actionnaires</b>, <b>registre des administrateurs et du secrétaire</b>, <b>registre des charges (charges/sûretés)</b>, <b>registre des bénéficiaires effectifs (UBO)</b>. Ces registres sont en principe <b>conservés au siège social</b> et accessibles dans les conditions légales.",
+    steps: [
+      { title: "1. Registre des membres", body: "Liste des actionnaires : identité, nombre et catégorie d'actions, dates d'entrée/sortie, transferts. C'est le registre qui fait foi de la qualité d'actionnaire." },
+      { title: "2. Registre des administrateurs & secrétaire", body: "Identité, fonction, dates de nomination/cessation. Cohérent avec les déclarations au Registrar." },
+      { title: "3. Registre des charges", body: "Sûretés grevant les actifs de la société (gages, hypothèques). L'enregistrement des charges conditionne leur opposabilité." },
+      { title: "4. Registre des UBO", body: "Bénéficiaires effectifs (personnes physiques au-delà du seuil de contrôle, typiquement > 25%). Mise à jour rapide après tout changement." },
+      { title: "5. Conservation au siège", body: "Les registres sont conservés au <b>siège social</b> (ou au lieu notifié au Registrar) tant que la société existe, et tenus à jour en continu." },
+    ],
+    pitfalls: [
+      "Registres non tenus / non à jour → infraction au Companies Act.",
+      "UBO périmé → non-conformité (et risque AML).",
+      "Charge non enregistrée → inopposable aux tiers et créanciers.",
+      "Registres conservés hors siège sans notification du lieu de conservation.",
+    ],
+    externalLinks: [
+      { label: "Companies Act 2001", url: "https://companies.govmu.org/Pages/Legislations.aspx", description: "Section 190 et suivantes — registres." },
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org" },
+    ],
+    tips: [
+      "Mets à jour les registres en temps réel : ne les reconstitue pas avant un contrôle.",
+      "Le registre des membres prime en cas de litige sur la qualité d'actionnaire.",
+    ],
+  },
+
+  '/juridique/societe/obligations': {
+    title: "Obligations & échéances corporate",
+    audience: 'all',
+    intro:
+      "Tableau de bord des obligations périodiques de la société sous Companies Act 2001 : <b>Annual Return</b>, <b>dépôt des comptes</b>, renouvellements (licences, enregistrements) et <b>alertes d'échéances</b>. L'objectif est de ne jamais manquer une date légale qui exposerait à des pénalités ou à la radiation par le Registrar.",
+    steps: [
+      { title: "1. Annual Return", body: "Déclaration annuelle au Registrar confirmant les informations de la société (administrateurs, siège, actionnariat). Date d'échéance suivie automatiquement avec alerte." },
+      { title: "2. Dépôt des comptes", body: "Les sociétés concernées déposent leurs états financiers (et rapport d'auditeur lorsque l'audit est requis) auprès du Registrar dans les délais légaux après la clôture/AGM." },
+      { title: "3. AGM et autres deadlines", body: "Rappel : AGM dans les 6 mois de la clôture (voir /juridique/societe/assemblees). Les échéances corporate convergent ici en une seule vue." },
+      { title: "4. Renouvellements", body: "Licences, enregistrements, licence FSC pour les GBC : Lexora suit les dates de renouvellement et alerte en amont." },
+      { title: "5. Alertes et preuve", body: "Chaque obligation affiche son statut (à venir / fait / en retard). Conserve les accusés de dépôt comme preuve de conformité." },
+    ],
+    pitfalls: [
+      "Annual Return en retard → pénalités et, à terme, risque de radiation (strike-off) par le Registrar.",
+      "Comptes non déposés dans les délais → non-conformité et amendes.",
+      "Renouvellement de licence oublié → activité exercée sans titre valide.",
+      "Ne pas conserver les accusés de dépôt → conformité non démontrable.",
+    ],
+    externalLinks: [
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Annual Return, dépôt des comptes, échéances." },
+      { label: "FSC Mauritius", url: "https://www.fscmauritius.org", description: "Renouvellement de licence GBC." },
+    ],
+    tips: [
+      "Synchronise les échéances corporate avec le calendrier comptable (clôture → AGM → dépôt).",
+      "Anticipe : une radiation administrative est lourde à faire annuler (restoration).",
+    ],
+  },
+
 }
 
 /**
