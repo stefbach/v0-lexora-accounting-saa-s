@@ -183,14 +183,14 @@ export default function ExitStatementsPage() {
 
   if (authorized === null) {
     return <ClientPageShell><div className="flex items-center gap-2 text-slate-500 p-6">
-      <Loader2 className="h-4 w-4 animate-spin" /> {t('rha.b.exit.loading', locale)}
+      <Loader2 className="h-4 w-4 animate-spin" /> {t('rhdiv.exit.loading', locale)}
     </div></ClientPageShell>
   }
   if (authorized === false) {
     return <ClientPageShell><Card><CardContent className="p-6 flex items-start gap-3">
       <ShieldAlert className="h-5 w-5 text-red-600 mt-1" />
-      <div><div className="font-semibold">{t('rha.b.exit.access_denied', locale)}</div>
-      <div className="text-sm text-slate-600">{t('rha.b.exit.access_msg', locale)}</div></div>
+      <div><div className="font-semibold">{t('rhdiv.exit.access_denied', locale)}</div>
+      <div className="text-sm text-slate-600">{t('rhdiv.exit.access_msg', locale)}</div></div>
     </CardContent></Card></ClientPageShell>
   }
 
@@ -201,20 +201,20 @@ export default function ExitStatementsPage() {
       <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2" style={{ color: NAVY }}>
-            <LogOut className="h-6 w-6" style={{ color: GOLD }} /> {t('rha.b.exit.title', locale)}
+            <LogOut className="h-6 w-6" style={{ color: GOLD }} /> {t('rhdiv.exit.title', locale)}
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            {t('rha.b.exit.subtitle', locale)}
+            {t('rhdiv.exit.subtitle', locale)}
           </p>
         </div>
 
         {/* Nouveau */}
         <Card>
-          <CardHeader><CardTitle className="text-base">{t('rha.b.exit.new_title', locale)}</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t('rhdiv.exit.new_title', locale)}</CardTitle></CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-5 gap-3">
               <div>
-                <Label>{t('rha.b.exit.lbl_societe', locale)}</Label>
+                <Label>{t('rhdiv.exit.lbl_societe', locale)}</Label>
                 <Select value={societeId} onValueChange={setSocieteId}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -223,9 +223,9 @@ export default function ExitStatementsPage() {
                 </Select>
               </div>
               <div>
-                <Label>{t('rha.b.exit.lbl_employee', locale)}</Label>
+                <Label>{t('rhdiv.exit.lbl_employee', locale)}</Label>
                 <Select value={employeId} onValueChange={setEmployeId}>
-                  <SelectTrigger><SelectValue placeholder={t('rha.b.exit.select', locale)} /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('rhdiv.exit.select', locale)} /></SelectTrigger>
                   <SelectContent>
                     {employesFiltres.map(e => (
                       <SelectItem key={e.id} value={e.id}>{e.prenom} {e.nom}</SelectItem>
@@ -234,11 +234,11 @@ export default function ExitStatementsPage() {
                 </Select>
               </div>
               <div>
-                <Label>{t('rha.b.exit.lbl_exit_date', locale)}</Label>
+                <Label>{t('rhdiv.exit.lbl_exit_date', locale)}</Label>
                 <Input type="date" value={dateExit} onChange={e => setDateExit(e.target.value)} />
               </div>
               <div>
-                <Label>{t('rha.b.exit.lbl_motif', locale)}</Label>
+                <Label>{t('rhdiv.exit.lbl_motif', locale)}</Label>
                 <Select value={motif} onValueChange={v => setMotif(v as MotifExit)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -252,12 +252,12 @@ export default function ExitStatementsPage() {
                 <Button onClick={handleCalculer} disabled={calculating || !employeId}
                   variant="outline" className="gap-2">
                   {calculating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Calculator className="h-3 w-3" />}
-                  {t('rha.b.exit.btn_calculate', locale)}
+                  {t('rhdiv.exit.btn_calculate', locale)}
                 </Button>
                 <Button onClick={handleSauvegarder} disabled={saving || !employeId}
                   className="gap-2" style={{ backgroundColor: NAVY, color: 'white' }}>
                   {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                  {t('rha.b.exit.btn_save', locale)}
+                  {t('rhdiv.exit.btn_save', locale)}
                 </Button>
               </div>
             </div>
@@ -265,15 +265,15 @@ export default function ExitStatementsPage() {
             {preview && (
               <div className="mt-3 grid md:grid-cols-3 gap-3">
                 <div className="p-3 rounded border bg-slate-50">
-                  <div className="text-xs text-slate-500">{t('rha.b.exit.last_month', locale)}</div>
+                  <div className="text-xs text-slate-500">{t('rhdiv.exit.last_month', locale)}</div>
                   <div className="text-lg font-semibold">{formaterMUR(preview.dernier)}</div>
                 </div>
                 <div className="p-3 rounded border bg-slate-50">
-                  <div className="text-xs text-slate-500">{t('rha.b.exit.avg_12', locale)}</div>
+                  <div className="text-xs text-slate-500">{t('rhdiv.exit.avg_12', locale)}</div>
                   <div className="text-lg font-semibold">{formaterMUR(preview.moyenne)}</div>
                 </div>
                 <div className="p-3 rounded border" style={{ borderColor: NAVY, backgroundColor: GOLD + '10' }}>
-                  <div className="text-xs" style={{ color: NAVY }}>{t('rha.b.exit.final_remuneration', locale)}</div>
+                  <div className="text-xs" style={{ color: NAVY }}>{t('rhdiv.exit.final_remuneration', locale)}</div>
                   <div className="text-lg font-bold" style={{ color: NAVY }}>{formaterMUR(preview.retenu)}</div>
                 </div>
               </div>
@@ -293,27 +293,27 @@ export default function ExitStatementsPage() {
 
         {/* Liste */}
         <Card>
-          <CardHeader><CardTitle className="text-base">{t('rha.b.exit.list_title', locale)}</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t('rhdiv.exit.list_title', locale)}</CardTitle></CardHeader>
           <CardContent>
             {loadingList ? (
               <div className="flex items-center gap-2 text-slate-500 text-sm">
-                <Loader2 className="h-4 w-4 animate-spin" /> {t('rha.b.exit.loading', locale)}
+                <Loader2 className="h-4 w-4 animate-spin" /> {t('rhdiv.exit.loading', locale)}
               </div>
             ) : exits.length === 0 ? (
-              <div className="text-sm text-slate-500 italic">{t('rha.b.exit.no_exit', locale)}</div>
+              <div className="text-sm text-slate-500 italic">{t('rhdiv.exit.no_exit', locale)}</div>
             ) : (
               <div className="overflow-x-auto border rounded">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t('rha.b.exit.col_employee', locale)}</TableHead>
-                      <TableHead>{t('rha.b.exit.col_exit_date', locale)}</TableHead>
-                      <TableHead>{t('rha.b.exit.col_motif', locale)}</TableHead>
-                      <TableHead className="text-right">{t('rha.b.exit.col_final_rem', locale)}</TableHead>
-                      <TableHead className="text-right">{t('rha.b.exit.col_gratuity', locale)}</TableHead>
-                      <TableHead>{t('rha.b.exit.col_deadline', locale)}</TableHead>
-                      <TableHead>{t('rha.b.exit.col_status', locale)}</TableHead>
-                      <TableHead className="text-right">{t('rha.b.exit.col_actions', locale)}</TableHead>
+                      <TableHead>{t('rhdiv.exit.col_employee', locale)}</TableHead>
+                      <TableHead>{t('rhdiv.exit.col_exit_date', locale)}</TableHead>
+                      <TableHead>{t('rhdiv.exit.col_motif', locale)}</TableHead>
+                      <TableHead className="text-right">{t('rhdiv.exit.col_final_rem', locale)}</TableHead>
+                      <TableHead className="text-right">{t('rhdiv.exit.col_gratuity', locale)}</TableHead>
+                      <TableHead>{t('rhdiv.exit.col_deadline', locale)}</TableHead>
+                      <TableHead>{t('rhdiv.exit.col_status', locale)}</TableHead>
+                      <TableHead className="text-right">{t('rhdiv.exit.col_actions', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -363,19 +363,19 @@ export default function ExitStatementsPage() {
         {/* Dialog édition gratuity */}
         {editingId && (
           <Card className="border-2" style={{ borderColor: GOLD }}>
-            <CardHeader><CardTitle className="text-base">{t('rha.b.exit.edit_title', locale)}</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">{t('rhdiv.exit.edit_title', locale)}</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <div className="grid md:grid-cols-3 gap-3">
                 <div>
-                  <Label>{t('rha.b.exit.lbl_gratuity_mur', locale)}</Label>
+                  <Label>{t('rhdiv.exit.lbl_gratuity_mur', locale)}</Label>
                   <Input type="number" value={editGratuity} onChange={e => setEditGratuity(e.target.value)} />
                 </div>
                 <div>
-                  <Label>{t('rha.b.exit.lbl_pay_date', locale)}</Label>
+                  <Label>{t('rhdiv.exit.lbl_pay_date', locale)}</Label>
                   <Input type="date" value={editDatePaiement} onChange={e => setEditDatePaiement(e.target.value)} />
                 </div>
                 <div>
-                  <Label>{t('rha.b.exit.lbl_past_services', locale)}</Label>
+                  <Label>{t('rhdiv.exit.lbl_past_services', locale)}</Label>
                   <Input type="number" value={editPastServices} onChange={e => setEditPastServices(e.target.value)} />
                 </div>
               </div>
@@ -386,9 +386,9 @@ export default function ExitStatementsPage() {
                 <Button size="sm" onClick={handleSaveEdit} disabled={rowLoading === editingId}
                   style={{ backgroundColor: NAVY, color: 'white' }}>
                   {rowLoading === editingId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                  {t('rha.b.exit.btn_save_short', locale)}
+                  {t('rhdiv.exit.btn_save_short', locale)}
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>{t('rha.b.exit.btn_cancel', locale)}</Button>
+                <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>{t('rhdiv.exit.btn_cancel', locale)}</Button>
               </div>
             </CardContent>
           </Card>
@@ -400,10 +400,10 @@ export default function ExitStatementsPage() {
 
 function ExitStatutBadge({ statut, locale }: { statut: StatutExit; locale: Locale }) {
   const cfg: Record<StatutExit, { bg: string; color: string; label: string }> = {
-    brouillon: { bg: '#e5e7eb', color: '#1f2937', label: t('rha.b.exit.status_brouillon', locale) },
-    valide: { bg: '#dbeafe', color: '#1e40af', label: t('rha.b.exit.status_valide', locale) },
-    soumis_mra: { bg: '#dcfce7', color: '#166534', label: t('rha.b.exit.status_soumis_mra', locale) },
-    annule: { bg: '#fee2e2', color: '#991b1b', label: t('rha.b.exit.status_annule', locale) },
+    brouillon: { bg: '#e5e7eb', color: '#1f2937', label: t('rhdiv.exit.status_brouillon', locale) },
+    valide: { bg: '#dbeafe', color: '#1e40af', label: t('rhdiv.exit.status_valide', locale) },
+    soumis_mra: { bg: '#dcfce7', color: '#166534', label: t('rhdiv.exit.status_soumis_mra', locale) },
+    annule: { bg: '#fee2e2', color: '#991b1b', label: t('rhdiv.exit.status_annule', locale) },
   }
   const c = cfg[statut] || cfg.brouillon
   return <Badge style={{ backgroundColor: c.bg, color: c.color }} className="font-normal">{c.label}</Badge>

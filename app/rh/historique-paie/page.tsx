@@ -148,16 +148,16 @@ export default function HistoriquePaiePage() {
     <div className="space-y-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('rha.a.histp.title', locale)}</h1>
-          <p className="text-gray-500 text-sm">{t('rha.a.histp.subtitle', locale)}</p>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('rhdiv.histp.title', locale)}</h1>
+          <p className="text-gray-500 text-sm">{t('rhdiv.histp.subtitle', locale)}</p>
         </div>
         <div className="flex gap-2">
           <Select value={societe} onValueChange={setSociete}>
-            <SelectTrigger className="w-[220px]"><SelectValue placeholder={t('rha.a.common.societe', locale)} /></SelectTrigger>
+            <SelectTrigger className="w-[220px]"><SelectValue placeholder={t('rhdiv.common.societe', locale)} /></SelectTrigger>
             <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
           </Select>
           <Button variant="outline" onClick={() => window.location.href = "/rh/import-paie"}>
-            <FileText className="h-4 w-4 mr-1" /> {t('rha.a.common.importer', locale)}
+            <FileText className="h-4 w-4 mr-1" /> {t('rhdiv.common.importer', locale)}
           </Button>
         </div>
       </div>
@@ -182,22 +182,22 @@ export default function HistoriquePaiePage() {
         <Card><CardContent className="p-4 text-center">
           <Calendar className="h-5 w-5 mx-auto mb-1" style={{ color: GOLD }} />
           <p className="text-2xl font-bold" style={{ color: NAVY }}>{periodes.length}</p>
-          <p className="text-xs text-gray-500">{t('rha.a.histp.mois_importes', locale)}</p>
+          <p className="text-xs text-gray-500">{t('rhdiv.histp.mois_importes', locale)}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4 text-center">
           <Banknote className="h-5 w-5 mx-auto mb-1 text-blue-600" />
           <p className="text-2xl font-bold text-blue-600">{fmt(totalBrut)}</p>
-          <p className="text-xs text-gray-500">{t('rha.a.histp.total_brut', locale)}</p>
+          <p className="text-xs text-gray-500">{t('rhdiv.histp.total_brut', locale)}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4 text-center">
           <Banknote className="h-5 w-5 mx-auto mb-1 text-emerald-600" />
           <p className="text-2xl font-bold text-emerald-600">{fmt(totalNet)}</p>
-          <p className="text-xs text-gray-500">{t('rha.a.histp.total_net', locale)}</p>
+          <p className="text-xs text-gray-500">{t('rhdiv.histp.total_net', locale)}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4 text-center">
           <Banknote className="h-5 w-5 mx-auto mb-1 text-orange-600" />
           <p className="text-2xl font-bold text-orange-600">{fmt(totalCharges)}</p>
-          <p className="text-xs text-gray-500">{t('rha.a.histp.total_charges', locale)}</p>
+          <p className="text-xs text-gray-500">{t('rhdiv.histp.total_charges', locale)}</p>
         </CardContent></Card>
       </div>
 
@@ -206,7 +206,7 @@ export default function HistoriquePaiePage() {
       ) : periodes.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-gray-400">
           <Calendar className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-          <p>{t('rha.a.histp.aucun_historique', locale)}</p>
+          <p>{t('rhdiv.histp.aucun_historique', locale)}</p>
         </CardContent></Card>
       ) : (
         <div className="space-y-2">
@@ -221,18 +221,18 @@ export default function HistoriquePaiePage() {
                     {isOpen ? <ChevronDown className="h-5 w-5 text-gray-400" /> : <ChevronRight className="h-5 w-5 text-gray-400" />}
                     <div>
                       <p className="font-bold capitalize text-lg" style={{ color: NAVY }}>{moisLabel}</p>
-                      <p className="text-xs text-gray-500"><Users className="inline h-3 w-3 mr-1" />{p.nb} {t('rha.a.common.employes', locale)}</p>
+                      <p className="text-xs text-gray-500"><Users className="inline h-3 w-3 mr-1" />{p.nb} {t('rhdiv.common.employes', locale)}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-6 text-sm">
                     <div className="text-right">
-                      <p className="font-mono text-blue-600">{fmt(p.total_brut)} <span className="text-xs text-gray-400">{t('rha.a.histp.brut_suffix', locale)}</span></p>
+                      <p className="font-mono text-blue-600">{fmt(p.total_brut)} <span className="text-xs text-gray-400">{t('rhdiv.histp.brut_suffix', locale)}</span></p>
                     </div>
                     <div className="text-right">
-                      <p className="font-mono text-emerald-600 font-bold">{fmt(p.total_net)} <span className="text-xs text-gray-400">{t('rha.a.histp.net_suffix', locale)}</span></p>
+                      <p className="font-mono text-emerald-600 font-bold">{fmt(p.total_net)} <span className="text-xs text-gray-400">{t('rhdiv.histp.net_suffix', locale)}</span></p>
                     </div>
                     <div className="text-right">
-                      <p className="font-mono text-orange-600">{fmt(p.total_charges)} <span className="text-xs text-gray-400">{t('rha.a.histp.charges_suffix', locale)}</span></p>
+                      <p className="font-mono text-orange-600">{fmt(p.total_charges)} <span className="text-xs text-gray-400">{t('rhdiv.histp.charges_suffix', locale)}</span></p>
                     </div>
                   </div>
                 </button>
@@ -241,24 +241,24 @@ export default function HistoriquePaiePage() {
                   <CardContent className="border-t space-y-4">
                     {/* Détail par employé */}
                     <div>
-                      <h3 className="text-sm font-medium mb-2" style={{ color: NAVY }}>{t('rha.a.histp.detail_par_employe', locale)}</h3>
+                      <h3 className="text-sm font-medium mb-2" style={{ color: NAVY }}>{t('rhdiv.histp.detail_par_employe', locale)}</h3>
                       <div className="overflow-x-auto">
                         <table className="w-full text-xs">
                           <thead className="bg-gray-50">
                             <tr>
-                              <th className="px-2 py-1.5 text-left">{t('rha.a.common.employe', locale)}</th>
-                              <th className="px-2 py-1.5 text-right">{t('rha.a.histp.col_basic', locale)}</th>
-                              <th className="px-2 py-1.5 text-right">{t('rha.a.histp.col_ot', locale)}</th>
-                              <th className="px-2 py-1.5 text-right">{t('rha.a.histp.col_primes', locale)}</th>
-                              <th className="px-2 py-1.5 text-right">{t('rha.a.histp.col_csg_sal', locale)}</th>
-                              <th className="px-2 py-1.5 text-right">{t('rha.a.histp.col_nsf_sal', locale)}</th>
-                              <th className="px-2 py-1.5 text-right">{t('rha.a.histp.col_paye', locale)}</th>
-                              <th className="px-2 py-1.5 text-right">{t('rha.a.histp.col_csg_pat', locale)}</th>
-                              <th className="px-2 py-1.5 text-right">{t('rha.a.histp.col_nsf_pat', locale)}</th>
-                              <th className="px-2 py-1.5 text-right">{t('rha.a.histp.col_levy', locale)}</th>
-                              <th className="px-2 py-1.5 text-right">{t('rha.a.histp.col_prgf', locale)}</th>
-                              <th className="px-2 py-1.5 text-right font-bold text-emerald-700">{t('rha.a.histp.col_net', locale)}</th>
-                              <th className="px-2 py-1.5 text-center">{t('rha.a.histp.col_fiche', locale)}</th>
+                              <th className="px-2 py-1.5 text-left">{t('rhdiv.common.employe', locale)}</th>
+                              <th className="px-2 py-1.5 text-right">{t('rhdiv.histp.col_basic', locale)}</th>
+                              <th className="px-2 py-1.5 text-right">{t('rhdiv.histp.col_ot', locale)}</th>
+                              <th className="px-2 py-1.5 text-right">{t('rhdiv.histp.col_primes', locale)}</th>
+                              <th className="px-2 py-1.5 text-right">{t('rhdiv.histp.col_csg_sal', locale)}</th>
+                              <th className="px-2 py-1.5 text-right">{t('rhdiv.histp.col_nsf_sal', locale)}</th>
+                              <th className="px-2 py-1.5 text-right">{t('rhdiv.histp.col_paye', locale)}</th>
+                              <th className="px-2 py-1.5 text-right">{t('rhdiv.histp.col_csg_pat', locale)}</th>
+                              <th className="px-2 py-1.5 text-right">{t('rhdiv.histp.col_nsf_pat', locale)}</th>
+                              <th className="px-2 py-1.5 text-right">{t('rhdiv.histp.col_levy', locale)}</th>
+                              <th className="px-2 py-1.5 text-right">{t('rhdiv.histp.col_prgf', locale)}</th>
+                              <th className="px-2 py-1.5 text-right font-bold text-emerald-700">{t('rhdiv.histp.col_net', locale)}</th>
+                              <th className="px-2 py-1.5 text-center">{t('rhdiv.histp.col_fiche', locale)}</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y">
@@ -397,15 +397,15 @@ export default function HistoriquePaiePage() {
                     {/* Écritures comptables */}
                     {ecritures.length > 0 && (
                       <div>
-                        <h3 className="text-sm font-medium mb-2" style={{ color: NAVY }}>{t('rha.a.histp.ecritures_comptables', locale)}</h3>
+                        <h3 className="text-sm font-medium mb-2" style={{ color: NAVY }}>{t('rhdiv.histp.ecritures_comptables', locale)}</h3>
                         <div className="overflow-x-auto">
                           <table className="w-full text-xs">
                             <thead className="bg-gray-50">
                               <tr>
-                                <th className="px-2 py-1.5 text-left">{t('rha.a.histp.col_compte', locale)}</th>
-                                <th className="px-2 py-1.5 text-left">{t('rha.a.histp.col_libelle', locale)}</th>
-                                <th className="px-2 py-1.5 text-right">{t('rha.a.histp.col_debit', locale)}</th>
-                                <th className="px-2 py-1.5 text-right">{t('rha.a.histp.col_credit', locale)}</th>
+                                <th className="px-2 py-1.5 text-left">{t('rhdiv.histp.col_compte', locale)}</th>
+                                <th className="px-2 py-1.5 text-left">{t('rhdiv.histp.col_libelle', locale)}</th>
+                                <th className="px-2 py-1.5 text-right">{t('rhdiv.histp.col_debit', locale)}</th>
+                                <th className="px-2 py-1.5 text-right">{t('rhdiv.histp.col_credit', locale)}</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y">
