@@ -909,34 +909,34 @@ export default function ParametresPaiePage() {
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
-              {t('rha.a.paiep.title', locale)}
+              {t('rhpa.paiep.title', locale)}
             </h1>
             {mraStatus === 'ok' && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-100 text-green-800 border border-green-200">
                 <CheckCircle2 className="w-3 h-3" />
-                {t('rha.a.paiep.badge_uptodate', locale)}
+                {t('rhpa.paiep.badge_uptodate', locale)}
               </span>
             )}
             {(mraStatus === 'error' || mraStatus === 'idle') && !loading && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-orange-100 text-orange-800 border border-orange-200">
                 <AlertTriangle className="w-3 h-3" />
-                {t('rha.a.paiep.badge_unverified', locale)}
+                {t('rhpa.paiep.badge_unverified', locale)}
               </span>
             )}
             {mraStatus === 'loading' && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-100 text-blue-700 border border-blue-200">
                 <Loader2 className="w-3 h-3 animate-spin" />
-                {t('rha.a.paiep.badge_loading', locale)}
+                {t('rhpa.paiep.badge_loading', locale)}
               </span>
             )}
           </div>
           <p className="text-sm text-gray-500">
-            {t('rha.a.paiep.subtitle_finance', locale)} {new Date().getFullYear()}/{new Date().getFullYear() + 1} — {t('rha.a.paiep.subtitle_holidays', locale)}
+            {t('rhpa.paiep.subtitle_finance', locale)} {new Date().getFullYear()}/{new Date().getFullYear() + 1} — {t('rhpa.paiep.subtitle_holidays', locale)}
             {mraUpdatedAt && mraStatus === 'ok' && (
-              <span className="text-gray-400"> · {t('rha.a.paiep.updated_at', locale)} {new Date(mraUpdatedAt).toLocaleString(locale === 'en' ? 'en-GB' : 'fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+              <span className="text-gray-400"> · {t('rhpa.paiep.updated_at', locale)} {new Date(mraUpdatedAt).toLocaleString(locale === 'en' ? 'en-GB' : 'fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
             )}
             {mraSource && mraStatus === 'ok' && (
-              <span className="text-gray-400"> · {t('rha.a.paiep.source', locale)}: {mraSource}</span>
+              <span className="text-gray-400"> · {t('rhpa.paiep.source', locale)}: {mraSource}</span>
             )}
           </p>
         </div>
@@ -950,11 +950,11 @@ export default function ParametresPaiePage() {
             {mraStatus === 'loading'
               ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
               : <RefreshCw className="w-4 h-4 mr-2" />}
-            {t('rha.a.paiep.refresh_rates', locale)}
+            {t('rhpa.paiep.refresh_rates', locale)}
           </Button>
           <Button onClick={handleSave} disabled={saving} className="text-white" style={{ backgroundColor: NAVY }}>
             {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-            {saved ? t('rha.a.paiep.saved', locale) : t('rha.a.paiep.save', locale)}
+            {saved ? t('rhpa.paiep.saved', locale) : t('rhpa.paiep.save', locale)}
           </Button>
         </div>
       </div>
@@ -963,8 +963,8 @@ export default function ParametresPaiePage() {
         <div className="rounded-md border border-orange-200 bg-orange-50 p-3 flex items-start gap-2 text-sm">
           <AlertTriangle className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
           <div className="text-orange-900">
-            <strong>{t('rha.a.paiep.err_fetch_rates', locale)}</strong> {t('rha.a.paiep.err_fetch_hint', locale)}
-            {mraError && <span className="block text-[11px] text-orange-700 mt-0.5">{t('rha.a.paiep.detail', locale)}: {mraError}</span>}
+            <strong>{t('rhpa.paiep.err_fetch_rates', locale)}</strong> {t('rhpa.paiep.err_fetch_hint', locale)}
+            {mraError && <span className="block text-[11px] text-orange-700 mt-0.5">{t('rhpa.paiep.detail', locale)}: {mraError}</span>}
           </div>
         </div>
       )}
@@ -988,7 +988,7 @@ export default function ParametresPaiePage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base" style={{ color: NAVY }}>
-                {t('rha.a.paiep.csg_title', locale)}
+                {t('rhpa.paiep.csg_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1021,7 +1021,7 @@ export default function ParametresPaiePage() {
               />
               <div className="bg-blue-50 p-3 rounded text-xs text-blue-800 flex gap-2">
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <p>{t('rha.a.paiep.csg_info', locale)}</p>
+                <p>{t('rhpa.paiep.csg_info', locale)}</p>
               </div>
             </CardContent>
           </Card>
@@ -1030,7 +1030,7 @@ export default function ParametresPaiePage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base" style={{ color: NAVY }}>
-                {t('rha.a.paiep.nsf_title', locale)}
+                {t('rhpa.paiep.nsf_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1070,7 +1070,7 @@ export default function ParametresPaiePage() {
               />
               <div className="bg-blue-50 p-3 rounded text-xs text-blue-800 flex gap-2">
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <p>{t('rha.a.paiep.nsf_info', locale)}</p>
+                <p>{t('rhpa.paiep.nsf_info', locale)}</p>
               </div>
             </CardContent>
           </Card>
@@ -1079,7 +1079,7 @@ export default function ParametresPaiePage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base" style={{ color: NAVY }}>
-                {t('rha.a.paiep.paye_title', locale)}
+                {t('rhpa.paiep.paye_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1111,7 +1111,7 @@ export default function ParametresPaiePage() {
               />
               <div className="bg-blue-50 p-3 rounded text-xs text-blue-800 flex gap-2">
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <p>{t('rha.a.paiep.paye_info', locale)}</p>
+                <p>{t('rhpa.paiep.paye_info', locale)}</p>
               </div>
 
               {/* Sprint 2 — night shift majoration paramétrable (mig 137) */}
@@ -1131,15 +1131,15 @@ export default function ParametresPaiePage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base" style={{ color: NAVY }}>
-                {t('rha.a.paiep.forex_title', locale)}
+                {t('rhpa.paiep.forex_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-medium text-green-800">{t('rha.a.paiep.live_rates', locale)}</p>
+                  <p className="text-sm font-medium text-green-800">{t('rhpa.paiep.live_rates', locale)}</p>
                   <Button variant="outline" size="sm" onClick={refreshRates} disabled={loadingRates}>
-                    {loadingRates ? <Loader2 className="w-4 h-4 animate-spin" /> : t('rha.a.paiep.refresh', locale)}
+                    {loadingRates ? <Loader2 className="w-4 h-4 animate-spin" /> : t('rhpa.paiep.refresh', locale)}
                   </Button>
                 </div>
                 {loadingRates ? (
@@ -1167,18 +1167,18 @@ export default function ParametresPaiePage() {
                   </div>
                 )}
                 <p className="text-xs text-gray-500 mt-2">
-                  {t('rha.a.paiep.source', locale)}:{" "}
+                  {t('rhpa.paiep.source', locale)}:{" "}
                   {ratesSource === "database"
-                    ? t('rha.a.paiep.source_db', locale)
+                    ? t('rhpa.paiep.source_db', locale)
                     : ratesSource === "fallback"
-                    ? t('rha.a.paiep.source_fallback', locale)
-                    : t('rha.a.paiep.source_api', locale)}
+                    ? t('rhpa.paiep.source_fallback', locale)
+                    : t('rhpa.paiep.source_api', locale)}
                 </p>
               </div>
 
               <div>
-                <Label>{t('rha.a.paiep.override_label', locale)}</Label>
-                <p className="text-xs text-gray-400 mb-1">{t('rha.a.paiep.override_desc', locale)}</p>
+                <Label>{t('rhpa.paiep.override_label', locale)}</Label>
+                <p className="text-xs text-gray-400 mb-1">{t('rhpa.paiep.override_desc', locale)}</p>
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
@@ -1194,7 +1194,7 @@ export default function ParametresPaiePage() {
 
               <div className="bg-blue-50 p-3 rounded text-xs text-blue-800 flex gap-2">
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <p>{t('rha.a.paiep.forex_info', locale)}</p>
+                <p>{t('rhpa.paiep.forex_info', locale)}</p>
               </div>
             </CardContent>
           </Card>
@@ -1203,29 +1203,29 @@ export default function ParametresPaiePage() {
           <Card className="col-span-2">
             <CardHeader>
               <CardTitle className="text-base" style={{ color: NAVY }}>
-                {t('rha.a.paiep.ot_title', locale)}
+                {t('rhpa.paiep.ot_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-3 gap-4">
                 <div className="bg-gray-50 p-4 rounded-lg border">
-                  <p className="font-medium text-sm">{t('rha.a.paiep.ot_normal', locale)}</p>
-                  <p className="text-2xl font-bold" style={{ color: NAVY }}>{t('rha.a.paiep.ot_normal_per_day', locale)}</p>
-                  <p className="text-xs text-gray-400 mt-1">{t('rha.a.paiep.ot_normal_desc', locale)}</p>
+                  <p className="font-medium text-sm">{t('rhpa.paiep.ot_normal', locale)}</p>
+                  <p className="text-2xl font-bold" style={{ color: NAVY }}>{t('rhpa.paiep.ot_normal_per_day', locale)}</p>
+                  <p className="text-xs text-gray-400 mt-1">{t('rhpa.paiep.ot_normal_desc', locale)}</p>
                 </div>
                 <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-                  <p className="font-medium text-sm text-orange-800">{t('rha.a.paiep.ot_t1', locale)}</p>
+                  <p className="font-medium text-sm text-orange-800">{t('rhpa.paiep.ot_t1', locale)}</p>
                   <p className="text-2xl font-bold text-orange-600">1.5×</p>
-                  <p className="text-xs text-orange-600 mt-1">{t('rha.a.paiep.ot_t1_desc', locale)}</p>
+                  <p className="text-xs text-orange-600 mt-1">{t('rhpa.paiep.ot_t1_desc', locale)}</p>
                 </div>
                 <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-                  <p className="font-medium text-sm text-red-800">{t('rha.a.paiep.ot_t2', locale)}</p>
+                  <p className="font-medium text-sm text-red-800">{t('rhpa.paiep.ot_t2', locale)}</p>
                   <p className="text-2xl font-bold text-red-600">2×</p>
-                  <p className="text-xs text-red-600 mt-1">{t('rha.a.paiep.ot_t2_desc', locale)}</p>
+                  <p className="text-xs text-red-600 mt-1">{t('rhpa.paiep.ot_t2_desc', locale)}</p>
                 </div>
               </div>
               <p className="text-xs text-gray-400 mt-3">
-                {t('rha.a.paiep.ot_formula', locale)}
+                {t('rhpa.paiep.ot_formula', locale)}
               </p>
             </CardContent>
           </Card>
@@ -1234,16 +1234,16 @@ export default function ParametresPaiePage() {
           <Card className="col-span-2">
             <CardHeader>
               <CardTitle className="text-base flex items-center justify-between" style={{ color: NAVY }}>
-                <span>{t('rha.a.paiep.holidays_title', locale)} {anneeFeries}</span>
+                <span>{t('rhpa.paiep.holidays_title', locale)} {anneeFeries}</span>
                 <span className="text-xs font-normal text-gray-500">
-                  {joursFeries.length > 0 ? `${joursFeries.length} ${t('rha.a.paiep.holidays_count', locale)}` : t('rha.a.paiep.holidays_loading', locale)}
+                  {joursFeries.length > 0 ? `${joursFeries.length} ${t('rhpa.paiep.holidays_count', locale)}` : t('rhpa.paiep.holidays_loading', locale)}
                 </span>
               </CardTitle>
             </CardHeader>
             <CardContent>
               {joursFeries.length === 0 ? (
                 <p className="text-xs text-gray-400 italic">
-                  {t('rha.a.paiep.holidays_none', locale)} {anneeFeries}.
+                  {t('rhpa.paiep.holidays_none', locale)} {anneeFeries}.
                 </p>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
@@ -1261,8 +1261,8 @@ export default function ParametresPaiePage() {
                 </div>
               )}
               <p className="text-xs text-gray-400 mt-3">
-                {t('rha.a.paiep.holidays_footer', locale)}
-                {' '}{t('rha.a.paiep.holidays_modify', locale)} : <code className="text-[11px] bg-gray-100 px-1 rounded">public.jours_feries</code>.
+                {t('rhpa.paiep.holidays_footer', locale)}
+                {' '}{t('rhpa.paiep.holidays_modify', locale)} : <code className="text-[11px] bg-gray-100 px-1 rounded">public.jours_feries</code>.
               </p>
             </CardContent>
           </Card>

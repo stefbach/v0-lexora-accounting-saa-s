@@ -11,7 +11,7 @@ export default function ExportsMRARedirect() {
   }, [router])
   return (
     <div className="flex items-center justify-center min-h-[50vh] text-gray-400 text-sm">
-      {t('rha.a.redir.exports_mra', locale)}
+      {t('rhpa.redir.exports_mra', locale)}
     </div>
   )
 }
