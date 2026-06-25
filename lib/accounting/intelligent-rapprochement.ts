@@ -92,7 +92,7 @@ export function buildAliasMap(aliases: SupplierAlias[]): Map<string, string> {
     map.set(norm.replace(/[\s.]+/g, ''), canon)
   }
   if (aliases.length === 0) {
-    console.log(`[intelligent] Using ${GLOBAL_FALLBACK_ALIASES.length} fallback aliases (supplier_aliases table empty or not applied)`)
+    console.warn(`[intelligent] Using ${GLOBAL_FALLBACK_ALIASES.length} fallback aliases (supplier_aliases table empty or not applied)`)
   }
   return map
 }
@@ -946,7 +946,7 @@ export function autoClassify(
     })
 
     if (isInterSocieteByTiers || isInterSocieteByLib) {
-      console.log(`[autoClassify] INTER-SOCIÉTÉS: tiers="${tiers}" lib="${lib.substring(0,40)}" sisters=[${sisterNamesNorm.join(',')}]`)
+      console.warn(`[autoClassify] INTER-SOCIÉTÉS: tiers="${tiers}" lib="${lib.substring(0,40)}" sisters=[${sisterNamesNorm.join(',')}]`)
       results.push({
         transactionKey: txKey(tx), transaction: tx,
         type: 'virement_inter_societe',
@@ -976,7 +976,7 @@ export function autoClassify(
     })()
 
     if (isInternalByPattern || isInternalByName || isInternalByAlias) {
-      console.log(`[autoClassify] INTERCOMPTE: tiers="${tiers}" lib="${lib.substring(0,40)}" pattern=${isInternalByPattern} name=${isInternalByName} alias=${isInternalByAlias} selfNames=[${selfNamesNorm.join(',')}]`)
+      console.warn(`[autoClassify] INTERCOMPTE: tiers="${tiers}" lib="${lib.substring(0,40)}" pattern=${isInternalByPattern} name=${isInternalByName} alias=${isInternalByAlias} selfNames=[${selfNamesNorm.join(',')}]`)
       results.push({
         transactionKey: txKey(tx), transaction: tx,
         type: 'transfert_interne',
@@ -1415,7 +1415,7 @@ function matchByAmountFallback(
     }
   }
 
-  console.log(`[intelligent/fallback] ${matches.length} matches trouvés sans alias (${matches.filter(m => m.strategy === 'amount_exact').length} exact, ${matches.filter(m => m.strategy === 'amount_tds').length} TDS, ${matches.filter(m => m.strategy === 'amount_close').length} close, ${matches.filter(m => m.strategy === 'amount_multi_facture').length} multi-factures)`)
+  console.warn(`[intelligent/fallback] ${matches.length} matches trouvés sans alias (${matches.filter(m => m.strategy === 'amount_exact').length} exact, ${matches.filter(m => m.strategy === 'amount_tds').length} TDS, ${matches.filter(m => m.strategy === 'amount_close').length} close, ${matches.filter(m => m.strategy === 'amount_multi_facture').length} multi-factures)`)
   return matches
 }
 
@@ -1444,9 +1444,9 @@ export function runIntelligentRapprochement(
   // Debug: log supplier profiles with both factures AND transactions
   for (const [key, profile] of registry) {
     if (profile.factures.length > 0 && profile.transactions.length > 0) {
-      console.log(`[intelligent] Supplier "${key}" (${profile.rawNames.join(', ')}): ${profile.factures.length} factures, ${profile.transactions.length} transactions`)
+      console.warn(`[intelligent] Supplier "${key}" (${profile.rawNames.join(', ')}): ${profile.factures.length} factures, ${profile.transactions.length} transactions`)
     } else if (profile.transactions.length > 0 && profile.factures.length === 0) {
-      console.log(`[intelligent] Supplier "${key}" has ${profile.transactions.length} bank tx but 0 factures — no match possible`)
+      console.warn(`[intelligent] Supplier "${key}" has ${profile.transactions.length} bank tx but 0 factures — no match possible`)
     }
   }
 

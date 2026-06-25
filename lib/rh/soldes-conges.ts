@@ -314,7 +314,7 @@ export async function recomputeSoldeCongesAll(
       }
     }
 
-    console.log(
+    console.warn(
       `[soldes-conges] period ${periode_debut}→${periode_fin} `
       + `for ${employeId}: AL=${alPris}/${alDroit} SL=${slPris}/${slDroit}`,
     )

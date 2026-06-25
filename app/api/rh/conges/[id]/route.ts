@@ -103,7 +103,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         await recomputeSoldeCongesAll(supabase, conge.employe_id, dateDebutForRecompute)
       }
 
-      console.log(`[conges hard-delete] ${id} (${conge.type_conge} ${conge.date_debut}→${conge.date_fin} ${conge.nb_jours}j statut=${conge.statut}) par user=${user.id}`)
+      console.warn(`[conges hard-delete] ${id} (${conge.type_conge} ${conge.date_debut}→${conge.date_fin} ${conge.nb_jours}j statut=${conge.statut}) par user=${user.id}`)
       return NextResponse.json({
         success: true,
         message: wasApproved

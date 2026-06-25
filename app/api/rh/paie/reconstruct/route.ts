@@ -293,7 +293,7 @@ export async function POST(request: Request) {
       },
     })
 
-    console.log(
+    console.warn(
       `[paie/reconstruct] OK bulletin_archive=${activeBulletin.id} nouveau=${(inserted as any).id} ` +
         `par=${user.email || user.id} retenues_manuelles=${reconstructed.retenues_manuelles}`,
     )

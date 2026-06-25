@@ -102,7 +102,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       nom: emp.nom || undefined,
     })
 
-    console.log(
+    console.warn(
       `[reset-credentials] OK employe=${emp.id} email=${emp.email} `
       + `auth_user_id=${emp.auth_user_id} email_sent=${mail.ok} by=${user.id}`,
     )

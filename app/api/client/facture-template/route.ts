@@ -67,7 +67,7 @@ export async function POST(request: Request) {
       const isJpegMagic = headHex.startsWith('ffd8ff')
       const isWebpMagic = head.subarray(0, 4).toString('ascii') === 'RIFF'
 
-      console.log(`[facture-template] file=${file.name} size=${file.size} mime=${mimeFromHeader} ext=${ext} magic=${headHex.substring(0, 8)}`)
+      console.warn(`[facture-template] file=${file.name} size=${file.size} mime=${mimeFromHeader} ext=${ext} magic=${headHex.substring(0, 8)}`)
 
       // Construit le prompt d'analyse en intégrant les consignes libres de
       // l'utilisateur (le cas échéant). Les consignes sont une information
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
         }, { status: 400 })
       }
 
-      console.log(`[facture-template] Calling Claude (model=claude-sonnet-4-6, max_tokens=${MAX_TOKENS})...`)
+      console.warn(`[facture-template] Calling Claude (model=claude-sonnet-4-6, max_tokens=${MAX_TOKENS})...`)
       let msg: any
       const t0 = Date.now()
       try {
@@ -121,7 +121,7 @@ export async function POST(request: Request) {
         }, { status: 500 })
       }
       const dt = Date.now() - t0
-      console.log(`[facture-template] Claude responded in ${dt}ms, stop_reason=${msg.stop_reason}, usage=${JSON.stringify(msg.usage)}`)
+      console.warn(`[facture-template] Claude responded in ${dt}ms, stop_reason=${msg.stop_reason}, usage=${JSON.stringify(msg.usage)}`)
 
       const text = (msg.content || []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
       if (!text) {

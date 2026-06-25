@@ -70,7 +70,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   // Logs étape par étape pour tracer les 500 en prod (Vercel Functions logs).
   const step = (label: string, extra?: any) =>
-    console.log(`[employes POST] ${label}`, extra !== undefined ? extra : '')
+    console.warn(`[employes POST] ${label}`, extra !== undefined ? extra : '')
   try {
     step('START')
     const supabaseAuth = await createServerClient()

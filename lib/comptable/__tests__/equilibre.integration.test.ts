@@ -85,7 +85,7 @@ describeIntegration('compta — invariants d\'équilibre (intégration Supabase)
     allRows = await fetchAllEcritures(supabase)
     // Indication console (utile en CI)
     // eslint-disable-next-line no-console
-    console.log(`[equilibre.integration] fetched ${allRows.length} ecritures`)
+    console.warn(`[equilibre.integration] fetched ${allRows.length} ecritures`)
   }, 60_000)
 
   it('I1 — équilibre global par société (tol 0.02 MUR)', () => {

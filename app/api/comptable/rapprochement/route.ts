@@ -529,7 +529,7 @@ async function creerMiroirInterSociete(
     return { created: false, reason: `insert_failed: ${insErr.message}` }
   }
 
-  console.log(
+  console.warn(
     `[inter-societes] miroir OK — source=${societe_source_id} dest=${societe_dest_id} ` +
     `montant=${montant_mur} MUR ref=${mirrorRefFolio} (destIsIn=${destIsIn})`,
   )
@@ -614,12 +614,12 @@ export async function POST(request: Request) {
         ])
         classificationRules = (rulesRes.data || []) as ClassificationRule[]
         directors = (dirRes.data || []) as any[]
-        console.log(`[rapprochement] Loaded ${classificationRules.length} rules, ${directors.length} directors`)
+        console.warn(`[rapprochement] Loaded ${classificationRules.length} rules, ${directors.length} directors`)
       } catch (rulesErr) {
         console.warn('[rapprochement] classification_rules/directors not available (migration 135 not applied?):', rulesErr)
       }
 
-      console.log(`[rapprochement] Parallel load done in ${Date.now() - t0}ms: ${releves.length} releves, ${(facturesData || []).length} factures`)
+      console.warn(`[rapprochement] Parallel load done in ${Date.now() - t0}ms: ${releves.length} releves, ${(facturesData || []).length} factures`)
 
       if (!releves || releves.length === 0) {
         return NextResponse.json({ matched: 0, total: 0, message: 'Aucun relevé bancaire' })
@@ -686,7 +686,7 @@ export async function POST(request: Request) {
       let counts = { matched: 0, interne: 0, frais_bancaires: 0, salaire_bulk: 0, mra: 0, salaire_individuel: 0, propose: 0, not_matched: 0, total: 0 }
       const matchesList: any[] = []
 
-      console.log(`[rapprochement] Starting: ${releves.length} releves, ${ecritures.length} ecritures, ${factures.length} factures, loaded in ${Date.now() - t0}ms`)
+      console.warn(`[rapprochement] Starting: ${releves.length} releves, ${ecritures.length} ecritures, ${factures.length} factures, loaded in ${Date.now() - t0}ms`)
 
       // Collect all unclassified transactions across ALL relevés for the intelligent engine
       const globalUnclassified: Array<{ releveId: string; txIdx: number; tx: MatchingTransaction }> = []
@@ -917,13 +917,13 @@ export async function POST(request: Request) {
             entryB.updatedTxs[match.txIdx] = { ...entryB.updatedTxs[match.txIdx], statut: 'interne', matched_type: 'transfert_interne', vi_pair_code: viCode, vi_pair_releve: a.releveId }
             entryA.changed = true; entryB.changed = true
             paired.add(keyA); paired.add(`${match.releveId}:${match.txIdx}`)
-            console.log(`[rapprochement] VI pair ${viCode}: ${a.amount} ${a.isDebit ? '→' : '←'} counterpart on ${match.compteBancaireId}`)
+            console.warn(`[rapprochement] VI pair ${viCode}: ${a.amount} ${a.isDebit ? '→' : '←'} counterpart on ${match.compteBancaireId}`)
           } else {
             // No counterpart found — mark as waiting
             const entry = releveMap.get(a.releveId)!
             entry.updatedTxs[a.txIdx] = { ...entry.updatedTxs[a.txIdx], statut: 'interne_en_attente', note: 'Virement interne — contrepartie introuvable' }
             entry.changed = true
-            console.log(`[rapprochement] VI unpaired: ${a.amount} on ${a.compteBancaireId} ${a.date} — marked interne_en_attente`)
+            console.warn(`[rapprochement] VI unpaired: ${a.amount} on ${a.compteBancaireId} ${a.date} — marked interne_en_attente`)
           }
         }
       }
@@ -962,7 +962,7 @@ export async function POST(request: Request) {
             .or(`societe_id.eq.${societe_id},societe_id.is.null`)
           if (aliasRows && aliasRows.length > 0) {
             aliasMap = buildAliasMap(aliasRows as SupplierAlias[])
-            console.log(`[rapprochement] Loaded ${aliasRows.length} supplier aliases`)
+            console.warn(`[rapprochement] Loaded ${aliasRows.length} supplier aliases`)
           }
         } catch (aliasErr) {
           console.warn('[rapprochement] supplier_aliases table not found, running without aliases')
@@ -980,7 +980,7 @@ export async function POST(request: Request) {
           }
         }
 
-        console.log(`[rapprochement] Running intelligent engine on ${allTxs.length} unclassified tx, ${engineFactures.length} factures, ${aliasMap.size} aliases`)
+        console.warn(`[rapprochement] Running intelligent engine on ${allTxs.length} unclassified tx, ${engineFactures.length} factures, ${aliasMap.size} aliases`)
 
         const intelligentResult = runIntelligentRapprochement(allTxs, engineFactures, {
           societeNames,
@@ -991,7 +991,7 @@ export async function POST(request: Request) {
           aliasMap,
         })
 
-        console.log(`[rapprochement] Intelligent engine results:`, intelligentResult.stats)
+        console.warn(`[rapprochement] Intelligent engine results:`, intelligentResult.stats)
 
         // Apply supplier matches
         for (const match of intelligentResult.matches) {
@@ -1070,7 +1070,7 @@ export async function POST(request: Request) {
               factures = factures.filter((ff: any) => ff.id !== fId)
             }
             if (facturesUpdated > 0) {
-              console.log(`[rapprochement] ${facturesUpdated} facture(s) → paye for ${match.supplierName}`)
+              console.warn(`[rapprochement] ${facturesUpdated} facture(s) → paye for ${match.supplierName}`)
             }
 
             // FIX 1 — Generate BNQ journal entries + lettrer ACH/BNQ ensemble.
@@ -1365,7 +1365,7 @@ export async function POST(request: Request) {
             }
             repaired = fixedOk
             if (repaired > 0) {
-              console.log(`[rapprochement] Consistency repair: ${repaired} factures fixed to paye`)
+              console.warn(`[rapprochement] Consistency repair: ${repaired} factures fixed to paye`)
             }
           }
         }
@@ -1452,7 +1452,7 @@ export async function POST(request: Request) {
           if (entryChanged) entry.changed = true
         }
         if (backfilled > 0) {
-          console.log(`[rapprochement] FIX 4 backfill: ${backfilled} tx rapproche ← facture_id inféré`)
+          console.warn(`[rapprochement] FIX 4 backfill: ${backfilled} tx rapproche ← facture_id inféré`)
           // Persiste uniquement les relevés effectivement touchés.
           for (const [releveId, entry] of releveMap) {
             if (entry.changed) {
@@ -1506,7 +1506,7 @@ export async function POST(request: Request) {
             (e.journal === 'ACH' || e.journal === 'OD') && Number(e.credit_mur) > 0 && !e.lettre
           )
 
-          console.log(`[rapprochement] Phase finale: ${achNonLettrees.length} ACH non lettrées à traiter`)
+          console.warn(`[rapprochement] Phase finale: ${achNonLettrees.length} ACH non lettrées à traiter`)
 
           for (const [releveId, entry] of releveMap) {
             for (let i = 0; i < entry.updatedTxs.length; i++) {
@@ -1617,7 +1617,7 @@ export async function POST(request: Request) {
                     .eq('ref_folio', refFolio)
                     .eq('societe_id', societe_id)
                     .eq('journal', 'BNQ')
-                  console.log(`[rapprochement] Updated lettre ${lettreCode} on existing BNQ ${refFolio}`)
+                  console.warn(`[rapprochement] Updated lettre ${lettreCode} on existing BNQ ${refFolio}`)
                 }
               } else {
                 // Create new BNQ entries
@@ -1898,7 +1898,7 @@ export async function POST(request: Request) {
                       await supabase.from('ecritures_comptables_v2')
                         .update({ lettre: classLettre, date_lettrage: new Date().toISOString().split('T')[0] })
                         .eq('id', matched.id)
-                      console.log(`[rapprochement] Lettrage salaire: BNQ ${classLettre} ↔ SAL ${matched.id}`)
+                      console.warn(`[rapprochement] Lettrage salaire: BNQ ${classLettre} ↔ SAL ${matched.id}`)
                     }
                   }
                 }
@@ -1906,13 +1906,13 @@ export async function POST(request: Request) {
             }
           }
           } // close for (releveId2)
-          console.log(`[rapprochement] Phase finale: ${ecrituresCreees} BNQ créées, ${ecrituresLettrees} ACH lettrées`)
+          console.warn(`[rapprochement] Phase finale: ${ecrituresCreees} BNQ créées, ${ecrituresLettrees} ACH lettrées`)
         }
       } catch (genErr) {
         console.warn('[rapprochement] Phase finale failed:', genErr)
       }
 
-      console.log('[rapprochement] Result:', counts, 'ecritures_lettrees:', ecrituresLettrees)
+      console.warn('[rapprochement] Result:', counts, 'ecritures_lettrees:', ecrituresLettrees)
 
       const totalClassified = counts.matched + counts.interne + counts.frais_bancaires + counts.salaire_bulk + counts.mra
 
@@ -2190,7 +2190,7 @@ export async function POST(request: Request) {
         let compteCharge = /^[0-9]/.test(compteChargeBody)
           ? compteChargeBody
           : (CLASSE_COMPTES[classification] || '471')
-        console.log(`[lettrer_manuel] societe=${societe_id} tx=${transaction_id} classification=${classification} → compte=${compteCharge}`)
+        console.warn(`[lettrer_manuel] societe=${societe_id} tx=${transaction_id} classification=${classification} → compte=${compteCharge}`)
 
         // ── DÉTECTION INTER-SOCIÉTÉS (migration 302 / fix bug 291-293) ─────
         // Si la tx est classée 'virement_interne' (ou si on est en virement
@@ -2218,7 +2218,7 @@ export async function POST(request: Request) {
               compteCharge = COMPTE_GROUPE_451  // basculer 5800 → 451
               interSocieteDest = detection.societe_dest_id
               interSocieteScore = detection.score
-              console.log(
+              console.warn(
                 `[lettrer_manuel] INTER-SOCIÉTÉS détecté ` +
                 `(${detection.match_method}, score=${detection.score.toFixed(2)}) — ` +
                 `compte forcé à 451, dest=${detection.societe_dest_id}`,
@@ -2286,9 +2286,9 @@ export async function POST(request: Request) {
                 lettre_code: code,
               })
               if (mirrorRes.created) {
-                console.log(`[lettrer_manuel/inter] miroir créé dest=${interSocieteDest} score=${interSocieteScore.toFixed(2)}`)
+                console.warn(`[lettrer_manuel/inter] miroir créé dest=${interSocieteDest} score=${interSocieteScore.toFixed(2)}`)
               } else {
-                console.log(`[lettrer_manuel/inter] miroir non créé : ${mirrorRes.reason}`)
+                console.warn(`[lettrer_manuel/inter] miroir non créé : ${mirrorRes.reason}`)
               }
             } catch (mirrorErr: any) {
               console.warn('[lettrer_manuel/inter] miroir échoué (non-bloquant):', mirrorErr?.message)
@@ -2347,16 +2347,16 @@ export async function POST(request: Request) {
                 await supabase.from('ecritures_comptables_v2')
                   .update({ lettre: code, date_lettrage: new Date().toISOString().split('T')[0] })
                   .eq('id', matchId)
-                console.log(`[lettrer_manuel/${classification}] lettrage croisé OK : écriture ${matchId} lettrée avec ${code}`)
+                console.warn(`[lettrer_manuel/${classification}] lettrage croisé OK : écriture ${matchId} lettrée avec ${code}`)
               } else if (exactMatches.length === 0) {
-                console.log(`[lettrer_manuel/${classification}] aucun match pour ${amountMurMC} MUR sur compte ${compteCharge} (±${LETTRAGE_CROISE_DATE_WINDOW_DAYS}j) — BNQ créée mais pas de lettrage croisé`)
+                console.warn(`[lettrer_manuel/${classification}] aucun match pour ${amountMurMC} MUR sur compte ${compteCharge} (±${LETTRAGE_CROISE_DATE_WINDOW_DAYS}j) — BNQ créée mais pas de lettrage croisé`)
               } else {
                 // Plusieurs candidats : on tente le match le plus proche en date
                 const closestByDate = selectClosestByDate(exactMatches as any[], dateRef)!
                 await supabase.from('ecritures_comptables_v2')
                   .update({ lettre: code, date_lettrage: new Date().toISOString().split('T')[0] })
                   .eq('id', closestByDate.id)
-                console.log(`[lettrer_manuel/${classification}] ${exactMatches.length} candidats — lettré le plus proche en date (${closestByDate.id})`)
+                console.warn(`[lettrer_manuel/${classification}] ${exactMatches.length} candidats — lettré le plus proche en date (${closestByDate.id})`)
               }
             } catch (lettrageErr: any) {
               console.warn(`[lettrer_manuel/${classification}] lettrage croisé échoué (non-bloquant):`, lettrageErr?.message)
@@ -2398,9 +2398,9 @@ export async function POST(request: Request) {
                   source_releve_id: releve_id,
                   source_transaction_idx: txIdx,
                 })
-                console.log(`[lettrer_manuel/CCA] solde ${matchedCca.nom}: ${matchedCca.solde} → ${newSolde}`)
+                console.warn(`[lettrer_manuel/CCA] solde ${matchedCca.nom}: ${matchedCca.solde} → ${newSolde}`)
               } else {
-                console.log(`[lettrer_manuel/CCA] aucun CCA trouvé pour societe=${societe_id} tiers="${tiersName}" — solde non mis à jour`)
+                console.warn(`[lettrer_manuel/CCA] aucun CCA trouvé pour societe=${societe_id} tiers="${tiersName}" — solde non mis à jour`)
               }
             } catch (ccaErr: any) {
               console.warn('[lettrer_manuel/CCA] mise à jour CCA échouée (non-bloquant):', ccaErr?.message)
@@ -3565,7 +3565,7 @@ export async function POST(request: Request) {
               { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', numero_compte: '581',
                 libelle, debit_mur: isOutgoing ? txAmountMUR : 0, credit_mur: isOutgoing ? 0 : txAmountMUR, lettre: lettre581 },
             ], 'ecritures_comptables_v2')
-            if (insTransit.skipped > 0) console.log(`[auto_rapprocher transit BNQ] skipped:`, insTransit.skipReasons)
+            if (insTransit.skipped > 0) console.warn(`[auto_rapprocher transit BNQ] skipped:`, insTransit.skipReasons)
             created++
             continue
           }
@@ -3600,7 +3600,7 @@ export async function POST(request: Request) {
               libelle: `Virement ${(facture.tiers || '').substring(0, 30)}`,
               debit_mur: isPayment ? 0 : txAmountMUR, credit_mur: isPayment ? txAmountMUR : 0, lettre },
           ], 'ecritures_comptables_v2')
-          if (insRegular.skipped > 0) console.log(`[auto_rapprocher regular BNQ] skipped:`, insRegular.skipReasons)
+          if (insRegular.skipped > 0) console.warn(`[auto_rapprocher regular BNQ] skipped:`, insRegular.skipReasons)
 
           // Letter existing 401/411 facture entry with same code
           const factureMUR = Math.round(Number(facture.montant_mur || 0) * 100) / 100
@@ -3686,7 +3686,7 @@ export async function POST(request: Request) {
     if (action === 'sync_lettrage') {
       const { societe_id: socId, mois: moisFilter } = body
       if (!socId) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
-      console.log(`[sync_lettrage] start societe=${socId} mois_filter=${moisFilter || 'all'}`)
+      console.warn(`[sync_lettrage] start societe=${socId} mois_filter=${moisFilter || 'all'}`)
 
       const { data: dossierRow } = await supabase
         .from('dossiers').select('id').eq('societe_id', socId).limit(1).maybeSingle()
@@ -3718,7 +3718,7 @@ export async function POST(request: Request) {
         console.error(`[sync_lettrage] factures fetch failed:`, facturesErr.message)
         return NextResponse.json({ error: `factures: ${facturesErr.message}` }, { status: 500 })
       }
-      console.log(`[sync_lettrage] ${(paidFactures || []).length} paid facture(s) found`)
+      console.warn(`[sync_lettrage] ${(paidFactures || []).length} paid facture(s) found`)
 
       // FIX 2 — Charger comptes bancaires + relevés pour router la 2e
       // ligne BNQ sur le bon 512xxx. Map : releve_id → compte_comptable.
@@ -3849,7 +3849,7 @@ export async function POST(request: Request) {
               errors.push({ facture_id: f.id, reason: `ACH/VTE absente et recréation échouée : ${gen.error || 'inconnue'}` })
               continue
             }
-            console.log(`[sync_lettrage] ACH/VTE recréée pour facture ${f.id} (${f.numero_facture}) — ${gen.nb_entries} lignes`)
+            console.warn(`[sync_lettrage] ACH/VTE recréée pour facture ${f.id} (${f.numero_facture}) — ${gen.nb_entries} lignes`)
             // Re-query the ACH row that was just inserted.
             const { data: reAch } = await supabase.from('ecritures_comptables_v2')
               .select('id, compte:numero_compte, debit:debit_mur, credit:credit_mur, date_ecriture, libelle, lettre')
@@ -4035,7 +4035,7 @@ export async function POST(request: Request) {
               errors.push({ facture_id: f.id, reason: `BNQ insert failed: ${(insSync.error as any).message || insSync.error}` })
               continue
             }
-            if (insSync.skipped > 0) console.log(`[sync_lettrage BNQ] skipped:`, insSync.skipReasons)
+            if (insSync.skipped > 0) console.warn(`[sync_lettrage BNQ] skipped:`, insSync.skipReasons)
             const createdRows = insSync.data || []
             // v2 expose numero_compte (pas compte) — on couvre les 2 noms.
             const createdTier = createdRows.find((r: any) =>

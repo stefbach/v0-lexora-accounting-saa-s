@@ -485,7 +485,7 @@ export async function processReleveBancaire(
     )
     inserted = { id: result.releve_id, version: result.version, replaced: result.replaced }
     if (result.replaced) {
-      console.log(
+      console.warn(
         `[process-releve] releve_bancaire REPLACED (v${result.version}, previous=${result.previous_id})`,
       )
     }

@@ -133,9 +133,9 @@ export async function extractBankStatement(
         : ''
     if (text && text.trim().length > 200) {
       extractedText = text
-      console.log(`[bank-extract] unpdf success: ${text.length} chars from PDF`)
+      console.warn(`[bank-extract] unpdf success: ${text.length} chars from PDF`)
     } else {
-      console.log('[bank-extract] unpdf returned too little text, falling back to PDF base64')
+      console.warn('[bank-extract] unpdf returned too little text, falling back to PDF base64')
     }
   } catch (e: any) {
     console.warn('[bank-extract] unpdf failed, falling back to PDF base64:', e?.message)
@@ -161,7 +161,7 @@ export async function extractBankStatement(
   const initialResponse = await initialStream.finalMessage()
   let rawText = initialResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
   let stopReason: string | null = initialResponse.stop_reason
-  console.log(`[bank-extract] initial: length=${rawText.length}, stop=${stopReason}`)
+  console.warn(`[bank-extract] initial: length=${rawText.length}, stop=${stopReason}`)
 
   // --- Continuation loop ---
   let parsed = tryParseFullJson(rawText)
@@ -203,7 +203,7 @@ export async function extractBankStatement(
         ? `Tu as renvoyé le résumé du relevé (soldes ${headerContainer?.solde_ouverture || '?'} → ${headerContainer?.solde_cloture || '?'}, débits ${headerContainer?.total_debits || '?'}, crédits ${headerContainer?.total_credits || '?'}) mais AUCUNE transaction. Extrais MAINTENANT TOUTES les lignes du tableau de transactions (date, libellé, débit, crédit, solde après).`
         : `Tu as déjà extrait ${extraTransactions.length} transactions supplémentaires. Reprends APRÈS la dernière.`
 
-    console.log(`[bank-extract] continuation ${nbContinuations}/${maxContinuations} — landmark=${lm.date}/${lm.desc?.slice(0, 30)}`)
+    console.warn(`[bank-extract] continuation ${nbContinuations}/${maxContinuations} — landmark=${lm.date}/${lm.desc?.slice(0, 30)}`)
 
     try {
       // Continuation : utilise le texte extrait s'il est disponible (plus fiable),
@@ -225,15 +225,15 @@ export async function extractBankStatement(
       const contResponse = await contStream.finalMessage()
       const contText = contResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
       stopReason = contResponse.stop_reason
-      console.log(`[bank-extract] continuation ${nbContinuations}: length=${contText.length}, stop=${stopReason}`)
+      console.warn(`[bank-extract] continuation ${nbContinuations}: length=${contText.length}, stop=${stopReason}`)
 
       const newTxs = tryParseTransactionsArray(contText)
       if (!newTxs || newTxs.length === 0) {
-        console.log(`[bank-extract] continuation ${nbContinuations}: 0 new tx, stop loop`)
+        console.warn(`[bank-extract] continuation ${nbContinuations}: 0 new tx, stop loop`)
         break
       }
       extraTransactions.push(...newTxs)
-      console.log(`[bank-extract] continuation ${nbContinuations}: +${newTxs.length} tx (total extra=${extraTransactions.length})`)
+      console.warn(`[bank-extract] continuation ${nbContinuations}: +${newTxs.length} tx (total extra=${extraTransactions.length})`)
     } catch (err: any) {
       console.warn(`[bank-extract] continuation ${nbContinuations} failed:`, err?.message || err)
       break
@@ -274,7 +274,7 @@ export async function extractBankStatement(
   }
 
   const finalContainer = parsed?.extraction ?? parsed
-  console.log(`[bank-extract] DONE — continuations=${nbContinuations}, tx_added=${added}, dup_skipped=${skipped}, final_count=${finalContainer?.transactions?.length || finalContainer?.lignes?.length || 0}`)
+  console.warn(`[bank-extract] DONE — continuations=${nbContinuations}, tx_added=${added}, dup_skipped=${skipped}, final_count=${finalContainer?.transactions?.length || finalContainer?.lignes?.length || 0}`)
 
   return {
     parsed,

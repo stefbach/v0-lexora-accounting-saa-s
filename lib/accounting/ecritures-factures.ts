@@ -462,7 +462,7 @@ export async function createEcrituresForPayment(
         .eq('journal', 'BNQ')
         .limit(1)
       if (existingBnq && existingBnq.length > 0) {
-        console.log(`[createEcrituresForPayment] BNQ déjà existante pour facture ${payment.facture_id} — skip création (garde-fou anti-doublon)`)
+        console.warn(`[createEcrituresForPayment] BNQ déjà existante pour facture ${payment.facture_id} — skip création (garde-fou anti-doublon)`)
         // Si une lettre est fournie et que les BNQ existantes n'en ont pas,
         // on la pose pour préserver le lettrage croisé avec la facture VTE/ACH.
         if (payment.lettre_code && existingBnq.some((e: any) => !e.lettre)) {
@@ -604,7 +604,7 @@ export async function createEcrituresForPayment(
     )
     if (insRes.error) return { ok: false, error: insRes.error.message }
     if (insRes.skipped > 0) {
-      console.log(`[createEcrituresForPayment] skipped ${insRes.skipped} doublon(s) BNQ:`, insRes.skipReasons)
+      console.warn(`[createEcrituresForPayment] skipped ${insRes.skipped} doublon(s) BNQ:`, insRes.skipReasons)
     }
     const inserted = insRes.data || []
 
@@ -672,7 +672,7 @@ export async function createEcrituresForPayment(
               if (fxRes.error) {
                 console.warn('[createEcrituresForPayment] Écart change non comptabilisé:', fxRes.error.message)
               } else {
-                console.log(`[createEcrituresForPayment] Écart change ${isGain ? 'gain' : 'perte'} ${absEcart} MUR → ${compteFx}`)
+                console.warn(`[createEcrituresForPayment] Écart change ${isGain ? 'gain' : 'perte'} ${absEcart} MUR → ${compteFx}`)
               }
             }
           }

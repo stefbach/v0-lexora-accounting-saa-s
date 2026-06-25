@@ -361,7 +361,7 @@ export async function GET(request: Request) {
       lines = fb.lines; total = fb.total; raison = fb.raison
       source = 'bulletin'
     }
-    console.log('[depart/solde] GET PDF source resolved', {
+    console.warn('[depart/solde] GET PDF source resolved', {
       employe_id, source, lines_count: lines.length, total,
     })
 

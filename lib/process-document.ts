@@ -126,5 +126,5 @@ Règles : pas de markdown, pas de backticks, JSON strict uniquement. Si illisibl
     }
   }
 
-  console.log(`[processDocument] Done: ${typeDoc} / ${detectedSociete}`)
+  console.warn(`[processDocument] Done: ${typeDoc} / ${detectedSociete}`)
 }

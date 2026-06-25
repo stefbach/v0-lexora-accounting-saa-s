@@ -222,7 +222,7 @@ export async function POST(request: Request) {
       const formData = await request.formData()
       const file = formData.get('file') as File
       if (!file) return NextResponse.json({ error: 'Fichier requis' }, { status: 400 })
-      console.log(`[import-paie] Parsing file: ${file.name}, size: ${file.size}, type: ${file.type}`)
+      console.warn(`[import-paie] Parsing file: ${file.name}, size: ${file.size}, type: ${file.type}`)
 
       let XLSX: any
       try {
@@ -238,7 +238,7 @@ export async function POST(request: Request) {
         wb = XLSX.read(buffer, { type: 'array', cellText: true, cellDates: true })
         ws = wb.Sheets[wb.SheetNames[0]]
         rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][]
-        console.log(`[import-paie] Parsed ${rows.length} rows from sheet "${wb.SheetNames[0]}"`)
+        console.warn(`[import-paie] Parsed ${rows.length} rows from sheet "${wb.SheetNames[0]}"`)
       } catch (parseErr: any) {
         console.error('[import-paie] Excel parse error:', parseErr)
         return NextResponse.json({ error: 'Erreur lecture fichier Excel: ' + (parseErr.message || 'Format invalide') }, { status: 400 })
@@ -288,10 +288,10 @@ export async function POST(request: Request) {
         mergedHeaders.push(parts.join(' '))
       }
 
-      console.log(`[import-paie] Header row: ${hIdx}, Name row: ${nameRowIdx}, Merged headers: ${mergedHeaders.slice(0, 10).join(' | ')}`)
+      console.warn(`[import-paie] Header row: ${hIdx}, Name row: ${nameRowIdx}, Merged headers: ${mergedHeaders.slice(0, 10).join(' | ')}`)
 
       const colMap = detectColumns(mergedHeaders)
-      console.log(`[import-paie] Column mapping: ${JSON.stringify(colMap)}`)
+      console.warn(`[import-paie] Column mapping: ${JSON.stringify(colMap)}`)
 
       // Determine data start row (after ALL header rows)
       const dataStartRow = Math.max(hIdx, nameRowIdx) + 1
@@ -327,7 +327,7 @@ export async function POST(request: Request) {
           total_er: getVal(r, 'total_er'), net_pay: getVal(r, 'net_pay'),
         }))
 
-      console.log(`[import-paie] Found ${employes.length} employees. First: ${employes[0]?.nom || 'none'} ${employes[0]?.prenom || ''}`)
+      console.warn(`[import-paie] Found ${employes.length} employees. First: ${employes[0]?.nom || 'none'} ${employes[0]?.prenom || ''}`)
 
       // If no employees found, return debug info
       if (employes.length === 0) {
@@ -362,7 +362,7 @@ export async function POST(request: Request) {
           if (cm2) { periode = `${cm2[1]}-${cm2[2]}`; break }
         }
       }
-      console.log(`[import-paie] Detected period: "${periode}" from filename "${file.name}"`)
+      console.warn(`[import-paie] Detected period: "${periode}" from filename "${file.name}"`)
 
       return NextResponse.json({ columns: Object.entries(colMap).map(([f, i]) => ({ field: f, header: headers[i], index: i })), employes, periode_detected: periode, nb_rows: employes.length })
     }
@@ -511,7 +511,7 @@ export async function POST(request: Request) {
           .eq('societe_id', societe_id)
           .eq('journal', 'SAL')
           .eq('date_ecriture', periodeDate)
-        console.log(`[import-paie] Deleted old SAL entries for ${periodeDate}`)
+        console.warn(`[import-paie] Deleted old SAL entries for ${periodeDate}`)
 
         const t = employes.reduce((s: any, e: any) => ({
           basic: s.basic + (e.salaire_base || 0),
@@ -531,7 +531,7 @@ export async function POST(request: Request) {
         }), { basic: 0, ot: 0, allowances: 0, brut: 0, net: 0, csg_sal: 0, nsf_sal: 0, paye: 0, csg_pat: 0, nsf_pat: 0, levy: 0, prgf: 0, total_er: 0, absence: 0 })
 
         const moisLabel = new Date(periodeDate).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
-        console.log(`[import-paie] Compta: basic=${t.basic}, ot=${t.ot}, allow=${t.allowances}, net=${t.net}, csg_s=${t.csg_sal}, csg_p=${t.csg_pat}`)
+        console.warn(`[import-paie] Compta: basic=${t.basic}, ot=${t.ot}, allow=${t.allowances}, net=${t.net}, csg_s=${t.csg_sal}, csg_p=${t.csg_pat}`)
 
         // Codes PCM (Plan Comptable Mauricien, migration 018) — canoniques 4 chiffres.
         // Remplace les anciens codes 6-chiffres fantaisistes (641100, 421000, 431000, 432000…)
@@ -580,10 +580,10 @@ export async function POST(request: Request) {
         const ecart = Math.round(totalCredit - totalDebit)
         if (ecart > 0) {
           entries.push(mkEntry('6418', `Ajustement paie (éléments non détaillés) ${moisLabel}`, ecart, 0))
-          console.log(`[import-paie] Ajustement +${ecart} MUR en 6419 pour équilibrer le bulletin SAL`)
+          console.warn(`[import-paie] Ajustement +${ecart} MUR en 6419 pour équilibrer le bulletin SAL`)
         } else if (ecart < 0) {
           entries.push(mkEntry('4210', `Ajustement paie (retenue non détaillée) ${moisLabel}`, 0, Math.abs(ecart)))
-          console.log(`[import-paie] Ajustement ${ecart} MUR en 4210 pour équilibrer le bulletin SAL`)
+          console.warn(`[import-paie] Ajustement ${ecart} MUR en 4210 pour équilibrer le bulletin SAL`)
         }
 
         // Insert directement dans ecritures_comptables_v2 (pas la vue v1 qui
@@ -594,7 +594,7 @@ export async function POST(request: Request) {
           errors.push(`Compta: ${comptaErr.message}`)
         } else {
           comptaOk = true
-          console.log(`[import-paie] ${entries.length} écritures comptables créées (journal SAL)`)
+          console.warn(`[import-paie] ${entries.length} écritures comptables créées (journal SAL)`)
         }
       } else {
         console.warn('[import-paie] No dossier found for societe — compta skipped')

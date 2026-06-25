@@ -282,7 +282,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
       },
     })
 
-    console.log(
+    console.warn(
       `[restore-from-archive] OK ancien_actif=${id} nouveau_actif=${(restored as any).id} par=${auth.userEmail || auth.userId}`,
     )
 

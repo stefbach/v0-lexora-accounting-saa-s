@@ -192,7 +192,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       console.error('[decomptabiliser] suppression écritures BP échouée:', ecrDelErr.message)
     }
 
-    console.log(
+    console.warn(
       `[decomptabiliser] OK bulletin=${bulletin_id} ` +
       `ecriture_avant=${(bulletin as any).ecriture_id || 'n/a'} ` +
       `ecritures_supprimees=${ecrDeleted ?? '?'} ` +

@@ -280,7 +280,7 @@ export default function FraisKmPage() {
         }),
       })
       const data = await res.json().catch(() => ({}))
-      console.log("[create_trajet] response:", data)
+      console.warn("[create_trajet] response:", data)
       if (!res.ok) {
         const code = data.code ? ` [${data.code}]` : ""
         const msg = data.code === "42P01"
@@ -400,7 +400,7 @@ export default function FraisKmPage() {
       })
       const data = await res.json().catch(() => ({}))
       // FIX-RADICAL (mig 429) — log systématique + capture pour panel debug.
-      console.log('[addTrajet] response:', { status: res.status, data })
+      console.warn('[addTrajet] response:', { status: res.status, data })
       setLastResponse({ status: res.status, data })
       if (!res.ok) {
         // FIX-X (mai 2026) — toast détaillé pour aider le diagnostic en

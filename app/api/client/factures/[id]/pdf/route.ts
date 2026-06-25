@@ -175,7 +175,7 @@ export async function GET(request: Request, { params }: Params) {
       && pdfStoredAtMs >= templateVersionMs
       && pdfStoredAtMs >= updatedAtMs - 1000
     // Log explicite pour faciliter le debug en prod : voir Vercel logs.
-    console.log('[pdf]', {
+    console.warn('[pdf]', {
       facture_id: id,
       has_pdf_url: !!facture.pdf_url,
       pdf_stored_at: facture.pdf_stored_at || null,

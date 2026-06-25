@@ -87,9 +87,9 @@ export async function POST(
     )
     const useSaved = !forceOcr && hasUsableData
     if (useSaved) {
-      console.log(`[reanalyze] Using saved extraction for doc ${id} — tiers/montant present`)
+      console.warn(`[reanalyze] Using saved extraction for doc ${id} — tiers/montant present`)
     } else {
-      console.log(`[reanalyze] Forcing fresh Claude OCR for doc ${id} — saved data empty or force_ocr=true`)
+      console.warn(`[reanalyze] Forcing fresh Claude OCR for doc ${id} — saved data empty or force_ocr=true`)
     }
 
     // Mark document as processing
@@ -272,18 +272,18 @@ export async function POST(
     const uniqueUserSocietesVal = Array.from(new Map(allUserSocietesVal.map((s: any) => [s.id, s])).values()) as { id: string; nom: string; brn?: string }[]
 
     const validation = validateAndCleanExtraction(finalExtraction, finalTypeDocument, uniqueUserSocietesVal)
-    console.log(`[reanalyze] Validation: société_id=${validation.societe_id}, confidence=${validation.confidence}`)
+    console.warn(`[reanalyze] Validation: société_id=${validation.societe_id}, confidence=${validation.confidence}`)
 
     if (validation.societe_id && !validation.needs_confirmation) {
       const matchedSoc = uniqueUserSocietesVal.find(s => s.id === validation.societe_id)
       if (matchedSoc) {
         finalSociete = matchedSoc.nom
-        console.log(`[reanalyze] Société auto-matched: ${finalSociete}`)
+        console.warn(`[reanalyze] Société auto-matched: ${finalSociete}`)
       }
     }
 
     const extractionConfidence = computeConfidence(finalExtraction, finalTypeDocument)
-    console.log(`[reanalyze] Confidence score: ${extractionConfidence}/100`)
+    console.warn(`[reanalyze] Confidence score: ${extractionConfidence}/100`)
 
     // Delete old accounting entries for this document
     // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on supprime direct dans V2.
@@ -488,13 +488,13 @@ export async function POST(
           let factureIdForLink: string | null = existingFacture?.id || null
           if (existingFacture) {
             await supabase.from('factures').update(factureData).eq('id', existingFacture.id)
-            console.log(`[reanalyze] Updated facture ${existingFacture.id}`)
+            console.warn(`[reanalyze] Updated facture ${existingFacture.id}`)
           } else {
             const { data: inserted, error: factErr } = await supabase.from('factures').insert(factureData).select('id').maybeSingle()
             if (factErr) console.error('[reanalyze] facture insert error:', factErr.message)
             else {
               factureIdForLink = inserted?.id || null
-              console.log(`[reanalyze] Created facture ${factureIdForLink} for document ${id} — tiers="${factureTiers}", ttc=${montantTTC} ${devise}`)
+              console.warn(`[reanalyze] Created facture ${factureIdForLink} for document ${id} — tiers="${factureTiers}", ttc=${montantTTC} ${devise}`)
             }
           }
 
@@ -606,7 +606,7 @@ export async function POST(
           || (accountHolder && !isBankName(accountHolder) ? null : accountHolder)
           || (extractedIBAN ? `Banque (${extractedIBAN.slice(0, 4)}…)` : null)
           || 'Banque non identifiée'
-        console.log(`[reanalyze] Creating bank account (fallback): ${finalBankName} for societe=${bankSocieteId}`)
+        console.warn(`[reanalyze] Creating bank account (fallback): ${finalBankName} for societe=${bankSocieteId}`)
         const { error: bankInsertErr } = await supabase.from('comptes_bancaires').insert({
           societe_id: bankSocieteId, banque: finalBankName,
           nom_compte: normNumeroCompte || null,
@@ -687,7 +687,7 @@ export async function POST(
           .limit(1).maybeSingle()
         if (anySocieteAcc && anySocieteAcc.societe_id === bankSocieteId) {
           bankAccount = anySocieteAcc
-          console.log(`[reanalyze] Fallback account ${bankAccount.id} for societe ${bankSocieteId} (devise ${bankDevise})`)
+          console.warn(`[reanalyze] Fallback account ${bankAccount.id} for societe ${bankSocieteId} (devise ${bankDevise})`)
         }
       }
 
@@ -708,7 +708,7 @@ export async function POST(
           statut_rapprochement: ecartSolde > 1 ? 'ecart_detecte' : 'en_attente',
         })
         if (releveError) console.error('[reanalyze] releves_bancaires insert error:', releveError.message)
-        else console.log(`[reanalyze] Bank statement stored: ${normalizedTransactions.length} transactions`)
+        else console.warn(`[reanalyze] Bank statement stored: ${normalizedTransactions.length} transactions`)
       } else if (!bankAccount) {
         console.error(`[reanalyze] releve NOT stored — no bank account found/created for société ${bankSocieteId}, doc ${id}`)
       } else if (normalizedTransactions.length === 0) {

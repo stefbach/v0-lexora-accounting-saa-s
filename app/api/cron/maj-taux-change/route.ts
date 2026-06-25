@@ -39,7 +39,7 @@ export async function GET(request: Request) {
   if (result.error) {
     console.warn('[CRON maj-taux-change] Succès partiel:', result.error)
   } else {
-    console.log('[CRON maj-taux-change] Toutes sources OK')
+    console.warn('[CRON maj-taux-change] Toutes sources OK')
   }
 
   return NextResponse.json({

@@ -343,7 +343,7 @@ export async function POST(request: Request) {
         .eq('id', user.id)
         .maybeSingle()
       const trajetRole = profTrajet?.role || 'authenticated'
-      console.log('[create_trajet] user=', user.id, 'role=', trajetRole)
+      console.warn('[create_trajet] user=', user.id, 'role=', trajetRole)
 
       // Résoudre societe_id si non fourni (via employes)
       let sid = bodySocieteId
@@ -375,7 +375,7 @@ export async function POST(request: Request) {
       }
 
       // Log avant l'INSERT — grep facile dans les logs Vercel
-      console.log('[create_trajet] user=', user.id, 'role=', trajetRole,
+      console.warn('[create_trajet] user=', user.id, 'role=', trajetRole,
         'employe=', employe_id, 'societe=', sid, 'periode=', periodeDate,
         'km=', kmNum, 'AR=', Boolean(aller_retour))
 
@@ -619,7 +619,7 @@ export async function POST(request: Request) {
 
       // Log explicite des clés envoyées — facilite le diagnostic Vercel
       // quand on retombe sur une erreur 428C9 / "cannot insert into column".
-      console.log('[frais-km saisir] payload keys:', Object.keys(insertRow).join(','), 'periode:', periodeDate)
+      console.warn('[frais-km saisir] payload keys:', Object.keys(insertRow).join(','), 'periode:', periodeDate)
 
       const { data, error } = await supabase
         .from('frais_km_mois')

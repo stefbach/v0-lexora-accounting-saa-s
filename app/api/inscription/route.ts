@@ -43,7 +43,7 @@ function getAdminClient() {
 async function sendEmail(to: string, subject: string, html: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
-    console.log('[inscription] RESEND_API_KEY absent — email skipped:', to, subject)
+    console.warn('[inscription] RESEND_API_KEY absent — email skipped:', to, subject)
     return
   }
   try {
