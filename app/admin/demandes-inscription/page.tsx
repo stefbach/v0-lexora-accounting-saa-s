@@ -27,6 +27,7 @@ import {
   Mail, Phone, Building2, UserCircle, Calendar, MessageSquare,
   ChevronRight, AlertTriangle,
 } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Plan {
   id: string
@@ -67,6 +68,7 @@ function fmtDate(d: string | null): string {
 }
 
 export default function AdminDemandesInscriptionPage() {
+  const locale = getLocale()
   const [statut, setStatut] = useState<'en_attente' | 'validee' | 'refusee'>('en_attente')
   const [demandes, setDemandes] = useState<Demande[]>([])
   const [plans, setPlans] = useState<Plan[]>([])
@@ -97,15 +99,15 @@ export default function AdminDemandesInscriptionPage() {
       ])
       const dj = await demandesRes.json()
       const pj = await plansRes.json()
-      if (!demandesRes.ok) throw new Error(dj.error || 'Erreur chargement')
+      if (!demandesRes.ok) throw new Error(dj.error || t('adm2.dem.err_loading', locale))
       setDemandes(dj.demandes || [])
       setPlans(pj.plans || [])
     } catch (e: any) {
-      setError(e?.message || 'Erreur')
+      setError(e?.message || t('adm2.dem.err_generic', locale))
     } finally {
       setLoading(false)
     }
-  }, [statut])
+  }, [statut, locale])
 
   useEffect(() => { load() }, [load])
 
@@ -138,12 +140,12 @@ export default function AdminDemandesInscriptionPage() {
         }),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Erreur validation')
-      showToast('Demande validée — email envoyé au prospect.')
+      if (!r.ok) throw new Error(j.error || t('adm2.dem.err_generic', locale))
+      showToast(t('adm2.dem.validated_toast', locale))
       setValidateDemande(null)
       load()
     } catch (e: any) {
-      showToast(e?.message || 'Erreur', 'error')
+      showToast(e?.message || t('adm2.dem.err_generic', locale), 'error')
     } finally {
       setValidating(false)
     }
@@ -159,13 +161,13 @@ export default function AdminDemandesInscriptionPage() {
         body: JSON.stringify({ rejected_reason: rejectReason.trim() }),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Erreur refus')
-      showToast('Demande refusée — email envoyé.')
+      if (!r.ok) throw new Error(j.error || t('adm2.dem.err_generic', locale))
+      showToast(t('adm2.dem.rejected_toast', locale))
       setRejectDemande(null)
       setRejectReason('')
       load()
     } catch (e: any) {
-      showToast(e?.message || 'Erreur', 'error')
+      showToast(e?.message || t('adm2.dem.err_generic', locale), 'error')
     } finally {
       setRejecting(false)
     }
@@ -177,15 +179,15 @@ export default function AdminDemandesInscriptionPage() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <UserCircle className="h-6 w-6 text-[#0B0F2E]" />
-            Demandes d'inscription
+            {t('adm2.dem.title', locale)}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Valider ou refuser les demandes publiques de création de compte.
+            {t('adm2.dem.subtitle', locale)}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           {loading ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
-          Rafraîchir
+          {t('adm2.dem.refresh', locale)}
         </Button>
       </div>
 
@@ -199,15 +201,15 @@ export default function AdminDemandesInscriptionPage() {
         <TabsList>
           <TabsTrigger value="en_attente">
             <Clock className="h-3.5 w-3.5 mr-1" />
-            En attente
+            {t('adm2.dem.tab_pending', locale)}
           </TabsTrigger>
           <TabsTrigger value="validee">
             <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-            Validées
+            {t('adm2.dem.tab_validated', locale)}
           </TabsTrigger>
           <TabsTrigger value="refusee">
             <XCircle className="h-3.5 w-3.5 mr-1" />
-            Refusées
+            {t('adm2.dem.tab_rejected', locale)}
           </TabsTrigger>
         </TabsList>
 
@@ -220,7 +222,7 @@ export default function AdminDemandesInscriptionPage() {
                 </div>
               ) : demandes.length === 0 ? (
                 <p className="py-12 text-center text-sm text-muted-foreground">
-                  Aucune demande {statut === 'en_attente' ? 'en attente' : statut === 'validee' ? 'validée' : 'refusée'}.
+                  {statut === 'en_attente' ? t('adm2.dem.none_pending', locale) : statut === 'validee' ? t('adm2.dem.none_validated', locale) : t('adm2.dem.none_rejected', locale)}
                 </p>
               ) : (
                 <div className="divide-y">
@@ -228,6 +230,7 @@ export default function AdminDemandesInscriptionPage() {
                     <DemandeCard
                       key={d.id}
                       demande={d}
+                      locale={locale}
                       onValidate={() => openValidate(d)}
                       onReject={() => setRejectDemande(d)}
                     />
@@ -243,47 +246,47 @@ export default function AdminDemandesInscriptionPage() {
       <Dialog open={!!validateDemande} onOpenChange={(o) => !o && setValidateDemande(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Valider la demande</DialogTitle>
+            <DialogTitle>{t('adm2.dem.validate_title', locale)}</DialogTitle>
           </DialogHeader>
           {validateDemande && (
             <div className="space-y-4 text-sm">
               <div className="rounded border bg-muted/30 p-3">
                 <p className="font-semibold">{validateDemande.prenom} {validateDemande.nom}</p>
                 <p className="text-muted-foreground text-xs">{validateDemande.email}</p>
-                <p className="text-muted-foreground text-xs">Type : {validateDemande.type_demandeur}</p>
+                <p className="text-muted-foreground text-xs">{t('adm2.dem.type', locale)} : {validateDemande.type_demandeur}</p>
                 {validateDemande.societe_data?.nom && (
-                  <p className="text-muted-foreground text-xs">Société : {validateDemande.societe_data.nom}</p>
+                  <p className="text-muted-foreground text-xs">{t('adm2.dem.company', locale)} : {validateDemande.societe_data.nom}</p>
                 )}
                 {validateDemande.cabinet_data?.nom_cabinet && (
-                  <p className="text-muted-foreground text-xs">Cabinet : {validateDemande.cabinet_data.nom_cabinet}</p>
+                  <p className="text-muted-foreground text-xs">{t('adm2.dem.cabinet', locale)} : {validateDemande.cabinet_data.nom_cabinet}</p>
                 )}
               </div>
 
               <div>
-                <Label>Plan attribué</Label>
+                <Label>{t('adm2.dem.attributed_plan', locale)}</Label>
                 <Select value={validatePlan || '__none__'} onValueChange={v => setValidatePlan(v === '__none__' ? '' : v)}>
-                  <SelectTrigger><SelectValue placeholder="Choisir un plan" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('adm2.dem.choose_plan', locale)} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">Pas de plan attribué</SelectItem>
+                    <SelectItem value="__none__">{t('adm2.dem.no_plan', locale)}</SelectItem>
                     {plans.map(p => (
                       <SelectItem key={p.id} value={p.id}>
-                        {p.nom} — {p.prix_mensuel_mur} MUR/mois
+                        {p.nom} — {p.prix_mensuel_mur} {t('adm2.dem.per_month', locale)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {validateDemande.plan_id && validatePlan !== validateDemande.plan_id && (
                   <p className="text-[11px] text-amber-700 mt-1">
-                    ⚠️ Le prospect avait choisi : <strong>{validateDemande.plan?.nom || '—'}</strong>
+                    ⚠️ {t('adm2.dem.prospect_chose', locale)} <strong>{validateDemande.plan?.nom || '—'}</strong>
                   </p>
                 )}
               </div>
 
               <div>
-                <Label>Tarif final (MUR / {validateDemande.periodicite})</Label>
-                <Input type="number" value={validateTarif} onChange={e => setValidateTarif(e.target.value)} placeholder="Tarif final" />
+                <Label>{t('adm2.dem.final_price', locale).replace('{periodicite}', validateDemande.periodicite)}</Label>
+                <Input type="number" value={validateTarif} onChange={e => setValidateTarif(e.target.value)} placeholder={t('adm2.dem.final_price_ph', locale)} />
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Tu peux ajuster le tarif (remise négociée par exemple).
+                  {t('adm2.dem.price_adjust_hint', locale)}
                 </p>
               </div>
 
@@ -296,21 +299,21 @@ export default function AdminDemandesInscriptionPage() {
                     className="mt-0.5"
                   />
                   <span className="text-sm">
-                    Créer aussi la société <strong>{validateDemande.societe_data.nom}</strong> + dossier client
+                    {t('adm2.dem.create_company', locale)} <strong>{validateDemande.societe_data.nom}</strong> {t('adm2.dem.create_company_suffix', locale)}
                   </span>
                 </label>
               )}
 
               <div className="rounded border-l-4 border-blue-300 bg-blue-50 p-3 text-xs text-blue-900">
-                ℹ️ Un email avec les identifiants temporaires sera envoyé automatiquement au prospect.
+                ℹ️ {t('adm2.dem.email_info', locale)}
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setValidateDemande(null)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setValidateDemande(null)}>{t('adm2.dem.cancel', locale)}</Button>
             <Button onClick={submitValidation} disabled={validating} className="bg-emerald-600 hover:bg-emerald-700">
               {validating ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
-              Valider et créer le compte
+              {t('adm2.dem.validate_create', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -320,33 +323,33 @@ export default function AdminDemandesInscriptionPage() {
       <Dialog open={!!rejectDemande} onOpenChange={(o) => !o && setRejectDemande(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Refuser la demande</DialogTitle>
+            <DialogTitle>{t('adm2.dem.reject_title', locale)}</DialogTitle>
           </DialogHeader>
           {rejectDemande && (
             <div className="space-y-4">
               <p className="text-sm">
-                Refuser la demande de <strong>{rejectDemande.prenom} {rejectDemande.nom}</strong> ({rejectDemande.email}) ?
+                {t('adm2.dem.reject_confirm', locale)} <strong>{rejectDemande.prenom} {rejectDemande.nom}</strong> ({rejectDemande.email}) ?
               </p>
               <div>
-                <Label>Motif du refus (obligatoire — envoyé par email)</Label>
+                <Label>{t('adm2.dem.reject_reason', locale)}</Label>
                 <Textarea
                   value={rejectReason}
                   onChange={e => setRejectReason(e.target.value)}
-                  placeholder="Ex : Votre activité ne correspond pas à notre offre actuelle…"
+                  placeholder={t('adm2.dem.reject_reason_ph', locale)}
                   rows={4}
                 />
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectDemande(null)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setRejectDemande(null)}>{t('adm2.dem.cancel', locale)}</Button>
             <Button
               onClick={submitReject}
               disabled={rejecting || !rejectReason.trim()}
               className="bg-red-600 hover:bg-red-700"
             >
               {rejecting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <XCircle className="h-4 w-4 mr-1" />}
-              Refuser et notifier
+              {t('adm2.dem.reject_notify', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -361,8 +364,9 @@ export default function AdminDemandesInscriptionPage() {
   )
 }
 
-function DemandeCard({ demande, onValidate, onReject }: {
+function DemandeCard({ demande, locale, onValidate, onReject }: {
   demande: Demande
+  locale: any
   onValidate: () => void
   onReject: () => void
 }) {
@@ -375,21 +379,21 @@ function DemandeCard({ demande, onValidate, onReject }: {
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-semibold text-sm">{demande.prenom} {demande.nom}</h3>
             <Badge variant="outline" className="text-[10px]">
-              {demande.type_demandeur === 'dirigeant' ? '👤 Dirigeant' : '🧮 Comptable'}
+              {demande.type_demandeur === 'dirigeant' ? t('adm2.dem.type_dirigeant', locale) : t('adm2.dem.type_comptable', locale)}
             </Badge>
             {demande.plan?.nom && (
               <Badge className="text-[10px] bg-blue-100 text-blue-700 border-blue-200">
-                Plan : {demande.plan.nom} · {demande.periodicite}
+                {t('adm2.dem.plan_badge', locale).replace('{name}', demande.plan.nom).replace('{periodicite}', demande.periodicite)}
               </Badge>
             )}
             {demande.statut === 'validee' && (
               <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200">
-                ✓ Validée {fmtDate(demande.validated_at)}
+                {t('adm2.dem.validated_badge', locale).replace('{date}', fmtDate(demande.validated_at))}
               </Badge>
             )}
             {demande.statut === 'refusee' && (
               <Badge className="text-[10px] bg-red-100 text-red-700 border-red-200">
-                ✗ Refusée
+                {t('adm2.dem.rejected_badge', locale)}
               </Badge>
             )}
           </div>
@@ -410,11 +414,11 @@ function DemandeCard({ demande, onValidate, onReject }: {
             )}
             {cd.nom_cabinet && (
               <div className="flex items-center gap-1.5">
-                <Building2 className="h-3 w-3" /> Cabinet {cd.nom_cabinet}
+                <Building2 className="h-3 w-3" /> {t('adm2.dem.cabinet_prefix', locale)} {cd.nom_cabinet}
               </div>
             )}
             <div className="flex items-center gap-1.5">
-              <Calendar className="h-3 w-3" /> Reçue {fmtDate(demande.created_at)}
+              <Calendar className="h-3 w-3" /> {t('adm2.dem.received', locale).replace('{date}', fmtDate(demande.created_at))}
             </div>
           </div>
 
@@ -427,13 +431,13 @@ function DemandeCard({ demande, onValidate, onReject }: {
 
           {demande.statut === 'refusee' && demande.rejected_reason && (
             <div className="mt-2 text-xs text-red-700 italic">
-              Motif refus : {demande.rejected_reason}
+              {t('adm2.dem.reject_motive', locale)} {demande.rejected_reason}
             </div>
           )}
 
           {demande.statut === 'validee' && demande.tarif_final_mur && (
             <p className="text-xs text-emerald-700 mt-1">
-              Tarif appliqué : <strong>{demande.tarif_final_mur} MUR / {demande.periodicite}</strong>
+              {t('adm2.dem.applied_price', locale)} <strong>{demande.tarif_final_mur} MUR / {demande.periodicite}</strong>
             </p>
           )}
         </div>
@@ -441,10 +445,10 @@ function DemandeCard({ demande, onValidate, onReject }: {
         {demande.statut === 'en_attente' && (
           <div className="flex flex-col gap-1.5 flex-shrink-0">
             <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-8 text-xs" onClick={onValidate}>
-              <CheckCircle2 className="h-3 w-3 mr-1" /> Valider
+              <CheckCircle2 className="h-3 w-3 mr-1" /> {t('adm2.dem.validate', locale)}
             </Button>
             <Button size="sm" variant="outline" className="h-8 text-xs border-red-300 text-red-700 hover:bg-red-50" onClick={onReject}>
-              <XCircle className="h-3 w-3 mr-1" /> Refuser
+              <XCircle className="h-3 w-3 mr-1" /> {t('adm2.dem.reject', locale)}
             </Button>
           </div>
         )}

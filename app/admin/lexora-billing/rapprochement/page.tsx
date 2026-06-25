@@ -12,6 +12,7 @@
 import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
 import { ArrowLeft, Loader2, Link2, CheckCircle2, AlertCircle } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Tx {
   id: string; date_operation: string; libelle: string; reference: string | null; montant: number
@@ -29,6 +30,7 @@ function fmt(n: number) {
 }
 
 export default function ReconcilePage() {
+  const locale = getLocale()
   const [loading, setLoading] = useState(true)
   const [txs, setTxs] = useState<Tx[]>([])
   const [invs, setInvs] = useState<Inv[]>([])
@@ -42,11 +44,11 @@ export default function ReconcilePage() {
     try {
       const res = await fetch('/api/admin/lexora-billing/reconcile', { cache: 'no-store' })
       const j = await res.json()
-      if (!res.ok) throw new Error(j.error || 'Erreur')
+      if (!res.ok) throw new Error(j.error || t('adm3.rec.err_generic', locale))
       setTxs(j.transactions || []); setInvs(j.invoices || []); setSugs(j.suggestions || [])
       setWarning(j.warning || null)
     } catch (e: any) {
-      setMsg({ type: 'error', text: e?.message || 'Erreur' })
+      setMsg({ type: 'error', text: e?.message || t('adm3.rec.err_generic', locale) })
     } finally {
       setLoading(false)
     }
@@ -61,11 +63,11 @@ export default function ReconcilePage() {
         body: JSON.stringify({ invoice_id, transaction_id }),
       })
       const j = await res.json()
-      if (!res.ok) throw new Error(j.error || 'Erreur')
-      setMsg({ type: 'success', text: 'Rapprochée. Écriture compta créée.' })
+      if (!res.ok) throw new Error(j.error || t('adm3.rec.err_generic', locale))
+      setMsg({ type: 'success', text: t('adm3.rec.toast_linked', locale) })
       load()
     } catch (e: any) {
-      setMsg({ type: 'error', text: e?.message || 'Erreur' })
+      setMsg({ type: 'error', text: e?.message || t('adm3.rec.err_generic', locale) })
     } finally {
       setLinking(null)
       setTimeout(() => setMsg(null), 4000)
@@ -80,8 +82,8 @@ export default function ReconcilePage() {
       <div className="flex items-center gap-3 mb-6">
         <Link href="/admin/lexora-billing" className="text-gray-400 hover:text-gray-700"><ArrowLeft className="h-5 w-5" /></Link>
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>Rapprochement bancaire</h1>
-          <p className="text-sm text-gray-500 mt-1">Transactions DDS non rapprochées ↔ factures Lexora impayées.</p>
+          <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>{t('adm3.rec.title', locale)}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t('adm3.rec.subtitle', locale)}</p>
         </div>
       </div>
 
@@ -102,20 +104,20 @@ export default function ReconcilePage() {
       ) : (
         <>
           <section className="mb-8">
-            <h2 className="font-bold text-sm uppercase tracking-wider text-gray-500 mb-3">Suggestions de matching ({sugs.length})</h2>
+            <h2 className="font-bold text-sm uppercase tracking-wider text-gray-500 mb-3">{t('adm3.rec.suggestions_a', locale)} ({sugs.length})</h2>
             {sugs.length === 0 ? (
-              <p className="text-sm text-gray-500">Aucune suggestion automatique. Rapprochement manuel via les tableaux ci-dessous.</p>
+              <p className="text-sm text-gray-500">{t('adm3.rec.no_suggestions', locale)}</p>
             ) : (
               <div className="bg-white border rounded-lg overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 text-left">
                     <tr>
-                      <th className="px-4 py-2 font-semibold text-gray-600">Facture</th>
-                      <th className="px-4 py-2 font-semibold text-gray-600">Client</th>
-                      <th className="px-4 py-2 font-semibold text-gray-600">Transaction</th>
-                      <th className="px-4 py-2 font-semibold text-gray-600 text-right">Montant</th>
-                      <th className="px-4 py-2 font-semibold text-gray-600">Raison</th>
-                      <th className="px-4 py-2 font-semibold text-gray-600 text-right">Action</th>
+                      <th className="px-4 py-2 font-semibold text-gray-600">{t('adm3.rec.th_invoice', locale)}</th>
+                      <th className="px-4 py-2 font-semibold text-gray-600">{t('adm3.rec.th_client', locale)}</th>
+                      <th className="px-4 py-2 font-semibold text-gray-600">{t('adm3.rec.th_transaction', locale)}</th>
+                      <th className="px-4 py-2 font-semibold text-gray-600 text-right">{t('adm3.rec.th_amount', locale)}</th>
+                      <th className="px-4 py-2 font-semibold text-gray-600">{t('adm3.rec.th_reason', locale)}</th>
+                      <th className="px-4 py-2 font-semibold text-gray-600 text-right">{t('adm3.rec.th_action', locale)}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -140,7 +142,7 @@ export default function ReconcilePage() {
                           <td className="px-4 py-2 text-right">
                             <button onClick={() => link(s.invoice_id, s.transaction_id)} disabled={linking === key}
                                     className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded text-white bg-green-700 hover:bg-green-800">
-                              {linking === key ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />} Lier
+                              {linking === key ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />} {t('adm3.rec.link', locale)}
                             </button>
                           </td>
                         </tr>
@@ -154,19 +156,19 @@ export default function ReconcilePage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <section>
-              <h2 className="font-bold text-sm uppercase tracking-wider text-gray-500 mb-3">Transactions non rapprochées ({txs.length})</h2>
+              <h2 className="font-bold text-sm uppercase tracking-wider text-gray-500 mb-3">{t('adm3.rec.unmatched_tx_a', locale)} ({txs.length})</h2>
               <div className="bg-white border rounded-lg overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 text-left">
                     <tr>
-                      <th className="px-3 py-2 font-semibold text-gray-600">Date</th>
-                      <th className="px-3 py-2 font-semibold text-gray-600">Libellé</th>
-                      <th className="px-3 py-2 font-semibold text-gray-600 text-right">Montant</th>
+                      <th className="px-3 py-2 font-semibold text-gray-600">{t('adm3.rec.th_date', locale)}</th>
+                      <th className="px-3 py-2 font-semibold text-gray-600">{t('adm3.rec.th_label', locale)}</th>
+                      <th className="px-3 py-2 font-semibold text-gray-600 text-right">{t('adm3.rec.th_amount', locale)}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {txs.length === 0 ? (
-                      <tr><td colSpan={3} className="px-3 py-6 text-center text-gray-500">Rien à rapprocher.</td></tr>
+                      <tr><td colSpan={3} className="px-3 py-6 text-center text-gray-500">{t('adm3.rec.nothing_to_reconcile', locale)}</td></tr>
                     ) : txs.map(t => (
                       <tr key={t.id} className="border-t">
                         <td className="px-3 py-2 text-xs">{t.date_operation}</td>
@@ -180,19 +182,19 @@ export default function ReconcilePage() {
             </section>
 
             <section>
-              <h2 className="font-bold text-sm uppercase tracking-wider text-gray-500 mb-3">Factures impayées ({invs.length})</h2>
+              <h2 className="font-bold text-sm uppercase tracking-wider text-gray-500 mb-3">{t('adm3.rec.unpaid_invoices_a', locale)} ({invs.length})</h2>
               <div className="bg-white border rounded-lg overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 text-left">
                     <tr>
-                      <th className="px-3 py-2 font-semibold text-gray-600">N°</th>
-                      <th className="px-3 py-2 font-semibold text-gray-600">Client</th>
-                      <th className="px-3 py-2 font-semibold text-gray-600 text-right">Montant</th>
+                      <th className="px-3 py-2 font-semibold text-gray-600">{t('adm3.rec.th_number', locale)}</th>
+                      <th className="px-3 py-2 font-semibold text-gray-600">{t('adm3.rec.th_client', locale)}</th>
+                      <th className="px-3 py-2 font-semibold text-gray-600 text-right">{t('adm3.rec.th_amount', locale)}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {invs.length === 0 ? (
-                      <tr><td colSpan={3} className="px-3 py-6 text-center text-gray-500">Aucune facture impayée.</td></tr>
+                      <tr><td colSpan={3} className="px-3 py-6 text-center text-gray-500">{t('adm3.rec.no_unpaid', locale)}</td></tr>
                     ) : invs.map(i => (
                       <tr key={i.id} className="border-t">
                         <td className="px-3 py-2 font-mono text-xs">{i.invoice_number}</td>

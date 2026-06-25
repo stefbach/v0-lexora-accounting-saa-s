@@ -1,11 +1,20 @@
+"use client"
+
 import { JurisdictionBadge } from '@/components/jurisdictions/jurisdiction-badge'
+import { t, getLocale } from '@/lib/i18n'
 
 const STATS = {
   totalCountries: 18, // 17 OHADA + Maurice
   ohadaCountries: 17,
   totalAccounts: 200, // SYSCOHADA
-  zones: ['UEMOA (8 pays)', 'CEMAC (6 pays)', 'Autres OHADA (3 pays)', 'Maurice (PCM)'],
 }
+
+const ZONE_KEYS = [
+  'adm2.ohada.zone_uemoa',
+  'adm2.ohada.zone_cemac',
+  'adm2.ohada.zone_other',
+  'adm2.ohada.zone_maurice',
+] as const
 
 const JURISDICTIONS = [
   { code: 'MU', framework: 'PCM', status: 'ACTIVE', companies: 0 },
@@ -29,12 +38,13 @@ const JURISDICTIONS = [
 ]
 
 export default function OhadaAdminPage() {
+  const locale = getLocale()
   return (
     <div className="p-8 max-w-7xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">OHADA Multi-Juridictions</h1>
+        <h1 className="text-3xl font-bold mb-2">{t('adm2.ohada.title', locale)}</h1>
         <p className="text-gray-600">
-          Support de 17 pays OHADA (SYSCOHADA) + Maurice (PCM) — La couche régionale qui dépasse Sage X3
+          {t('adm2.ohada.subtitle', locale)}
         </p>
       </div>
 
@@ -42,29 +52,29 @@ export default function OhadaAdminPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-white p-6 rounded-lg border shadow-sm">
           <div className="text-3xl font-bold text-blue-600">{STATS.totalCountries}</div>
-          <div className="text-sm text-gray-600 mt-1">Pays supportés</div>
+          <div className="text-sm text-gray-600 mt-1">{t('adm2.ohada.stat_countries', locale)}</div>
         </div>
         <div className="bg-white p-6 rounded-lg border shadow-sm">
           <div className="text-3xl font-bold text-green-600">{STATS.ohadaCountries}</div>
-          <div className="text-sm text-gray-600 mt-1">Pays OHADA</div>
+          <div className="text-sm text-gray-600 mt-1">{t('adm2.ohada.stat_ohada', locale)}</div>
         </div>
         <div className="bg-white p-6 rounded-lg border shadow-sm">
           <div className="text-3xl font-bold text-purple-600">{STATS.totalAccounts}+</div>
-          <div className="text-sm text-gray-600 mt-1">Comptes SYSCOHADA</div>
+          <div className="text-sm text-gray-600 mt-1">{t('adm2.ohada.stat_accounts', locale)}</div>
         </div>
         <div className="bg-white p-6 rounded-lg border shadow-sm">
           <div className="text-3xl font-bold text-orange-600">9</div>
-          <div className="text-sm text-gray-600 mt-1">Classes comptables</div>
+          <div className="text-sm text-gray-600 mt-1">{t('adm2.ohada.stat_classes', locale)}</div>
         </div>
       </div>
 
       {/* Zones */}
       <div className="bg-white p-6 rounded-lg border shadow-sm mb-8">
-        <h2 className="text-xl font-bold mb-4">Zones Économiques</h2>
+        <h2 className="text-xl font-bold mb-4">{t('adm2.ohada.zones_title', locale)}</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {STATS.zones.map(zone => (
-            <div key={zone} className="p-4 bg-gray-50 rounded">
-              <div className="font-medium">{zone}</div>
+          {ZONE_KEYS.map(zoneKey => (
+            <div key={zoneKey} className="p-4 bg-gray-50 rounded">
+              <div className="font-medium">{t(zoneKey, locale)}</div>
             </div>
           ))}
         </div>
@@ -73,16 +83,16 @@ export default function OhadaAdminPage() {
       {/* Jurisdictions Table */}
       <div className="bg-white rounded-lg border shadow-sm">
         <div className="p-6 border-b">
-          <h2 className="text-xl font-bold">Juridictions Disponibles</h2>
+          <h2 className="text-xl font-bold">{t('adm2.ohada.juris_title', locale)}</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="text-left p-4 text-sm font-medium text-gray-600">Pays</th>
-                <th className="text-left p-4 text-sm font-medium text-gray-600">Framework</th>
-                <th className="text-left p-4 text-sm font-medium text-gray-600">Statut</th>
-                <th className="text-left p-4 text-sm font-medium text-gray-600">Sociétés</th>
+                <th className="text-left p-4 text-sm font-medium text-gray-600">{t('adm2.ohada.col_country', locale)}</th>
+                <th className="text-left p-4 text-sm font-medium text-gray-600">{t('adm2.ohada.col_framework', locale)}</th>
+                <th className="text-left p-4 text-sm font-medium text-gray-600">{t('adm2.ohada.col_status', locale)}</th>
+                <th className="text-left p-4 text-sm font-medium text-gray-600">{t('adm2.ohada.col_companies', locale)}</th>
               </tr>
             </thead>
             <tbody>

@@ -72,39 +72,44 @@ const ROLE_COLORS: Record<string, string> = {
   employe: 'bg-gray-100 text-gray-700',
   salarie: 'bg-gray-100 text-gray-700',
 }
-const ROLE_LABELS: Record<string, string> = {
-  admin: 'Admin', super_admin: 'Super Admin',
-  comptable: 'Comptable', comptable_dedie: 'Comptable Dédié',
-  client_admin: 'Dirigeant', client_user: 'Utilisateur', client_assistant: 'Assistant',
-  rh: 'RH', juridique: 'Juridique', manager: 'Manager',
-  team_leader: 'Team Leader', direction: 'Direction', employe: 'Employé', salarie: 'Salarié',
+const ROLE_KEYS = [
+  'admin', 'super_admin', 'comptable', 'comptable_dedie',
+  'client_admin', 'client_user', 'client_assistant',
+  'rh', 'juridique', 'manager', 'team_leader', 'direction', 'employe', 'salarie',
+] as const
+function roleLabel(role: string, locale: any): string {
+  const key = `adm2.users.role_${role}`
+  const label = t(key, locale)
+  return label === key ? role : label
 }
-const ROLES_OPTIONS = Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))
-
-function RoleBadge({ role }: { role: string }) {
-  return <Badge className={`text-[10px] ${ROLE_COLORS[role] || 'bg-gray-100 text-gray-700'}`}>{ROLE_LABELS[role] || role}</Badge>
+function rolesOptions(locale: any) {
+  return ROLE_KEYS.map(value => ({ value, label: roleLabel(value, locale) }))
 }
 
-function matchUser(u: UserCard, q: string): boolean {
+function RoleBadge({ role, locale }: { role: string; locale: any }) {
+  return <Badge className={`text-[10px] ${ROLE_COLORS[role] || 'bg-gray-100 text-gray-700'}`}>{roleLabel(role, locale)}</Badge>
+}
+
+function matchUser(u: UserCard, q: string, locale: any): boolean {
   if (!q) return true
   const s = q.toLowerCase()
   return (u.full_name || '').toLowerCase().includes(s)
       || u.email.toLowerCase().includes(s)
-      || (ROLE_LABELS[u.role] || u.role).toLowerCase().includes(s)
+      || roleLabel(u.role, locale).toLowerCase().includes(s)
 }
-function matchSociete(s: SocieteNode, q: string): boolean {
+function matchSociete(s: SocieteNode, q: string, locale: any): boolean {
   if (!q) return true
   const ql = q.toLowerCase()
   return s.nom.toLowerCase().includes(ql)
       || (s.brn || '').toLowerCase().includes(ql)
-      || s.users.some(u => matchUser(u, q))
+      || s.users.some(u => matchUser(u, q, locale))
 }
-function matchClient(c: ClientNode, q: string): boolean {
+function matchClient(c: ClientNode, q: string, locale: any): boolean {
   if (!q) return true
   const ql = q.toLowerCase()
   return (c.full_name || '').toLowerCase().includes(ql)
       || c.email.toLowerCase().includes(ql)
-      || c.societes.some(s => matchSociete(s, q))
+      || c.societes.some(s => matchSociete(s, q, locale))
 }
 
 function genPassword() {
@@ -142,11 +147,11 @@ export default function UsersPage() {
       if (tRes.error) throw new Error(tRes.error)
       setTree(tRes); setSocietes(sRes.societes || [])
     } catch (e: any) {
-      setError(e?.message || 'Erreur')
+      setError(e?.message || t('adm2.users.err_generic', locale))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [locale])
   useEffect(() => { load() }, [load])
 
   // Auto-expand quand la query change : tout client/société qui matche
@@ -156,10 +161,10 @@ export default function UsersPage() {
     const ec = new Set(expandedClients)
     const es = new Set(expandedSocietes)
     for (const c of tree.clients) {
-      if (matchClient(c, query)) {
+      if (matchClient(c, query, locale)) {
         ec.add(c.id)
         for (const s of c.societes) {
-          if (matchSociete(s, query)) es.add(s.id)
+          if (matchSociete(s, query, locale)) es.add(s.id)
         }
       }
     }
@@ -189,9 +194,9 @@ export default function UsersPage() {
     setExpandedSocietes(next)
   }
 
-  const filteredClients   = useMemo(() => !tree ? [] : tree.clients.filter(c => matchClient(c, query)), [tree, query])
-  const filteredPlateforme = useMemo(() => !tree ? [] : tree.plateforme.filter(u => matchUser(u, query)), [tree, query])
-  const filteredOrphelins = useMemo(() => !tree ? [] : tree.orphelins.filter(u => matchUser(u, query)), [tree, query])
+  const filteredClients   = useMemo(() => !tree ? [] : tree.clients.filter(c => matchClient(c, query, locale)), [tree, query, locale])
+  const filteredPlateforme = useMemo(() => !tree ? [] : tree.plateforme.filter(u => matchUser(u, query, locale)), [tree, query, locale])
+  const filteredOrphelins = useMemo(() => !tree ? [] : tree.orphelins.filter(u => matchUser(u, query, locale)), [tree, query, locale])
 
   const createUser = async () => {
     if (!form.prenom || !form.nom || !form.email || !form.role) return
@@ -206,13 +211,13 @@ export default function UsersPage() {
         }),
       })
       const j = await res.json()
-      if (!res.ok) throw new Error(j.error || 'Erreur')
+      if (!res.ok) throw new Error(j.error || t('adm2.users.err_generic', locale))
       setLastPassword(form.password)
       setCreateOpen(false)
       setForm({ prenom: '', nom: '', email: '', password: genPassword(), role: 'client_admin', societe_id: '' })
       load()
     } catch (e: any) {
-      alert(e?.message || 'Erreur')
+      alert(e?.message || t('adm2.users.err_generic', locale))
     } finally {
       setCreateSaving(false)
     }
@@ -226,8 +231,8 @@ export default function UsersPage() {
     load()
   }
   const deleteUser = async (u: UserCard, hard: boolean) => {
-    const verb = hard ? 'supprimer DÉFINITIVEMENT' : 'désactiver'
-    if (!confirm(`${verb} ${u.full_name || u.email} ?`)) return
+    const verb = hard ? t('adm2.users.confirm_hard', locale) : t('adm2.users.confirm_soft', locale)
+    if (!confirm(t('adm2.users.confirm_action', locale).replace('{verb}', verb).replace('{name}', u.full_name || u.email))) return
     const url = hard ? `/api/admin/users?user_id=${u.id}&hard=1` : `/api/admin/users?user_id=${u.id}`
     const res = await fetch(url, { method: 'DELETE' })
     if (res.ok) load(); else alert((await res.json()).error)
@@ -249,40 +254,40 @@ export default function UsersPage() {
           <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('adm.users.title', locale)}</h1>
           {tree && (
             <p className="text-sm text-gray-500">
-              {tree.totals.users} utilisateurs · {tree.totals.clients} clients · {tree.totals.societes} sociétés
+              {t('adm2.users.totals', locale).replace('{users}', String(tree.totals.users)).replace('{clients}', String(tree.totals.clients)).replace('{societes}', String(tree.totals.societes))}
             </p>
           )}
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-1.5" /> Nouvel utilisateur</Button>
+            <Button className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-1.5" /> {t('adm2.users.new_user', locale)}</Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
-            <DialogHeader><DialogTitle>Créer un compte</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{t('adm2.users.create_account', locale)}</DialogTitle></DialogHeader>
             <div className="space-y-3 pt-2">
               <div className="grid grid-cols-2 gap-2">
-                <div><Label>Prénom</Label><Input value={form.prenom} onChange={e => setForm(f => ({...f, prenom: e.target.value}))} /></div>
-                <div><Label>Nom</Label><Input value={form.nom} onChange={e => setForm(f => ({...f, nom: e.target.value}))} /></div>
+                <div><Label>{t('adm2.users.firstname', locale)}</Label><Input value={form.prenom} onChange={e => setForm(f => ({...f, prenom: e.target.value}))} /></div>
+                <div><Label>{t('adm2.users.lastname', locale)}</Label><Input value={form.nom} onChange={e => setForm(f => ({...f, nom: e.target.value}))} /></div>
               </div>
-              <div><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} /></div>
+              <div><Label>{t('adm2.users.email', locale)}</Label><Input type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} /></div>
               <div>
-                <Label>Rôle</Label>
+                <Label>{t('adm2.users.role', locale)}</Label>
                 <Select value={form.role} onValueChange={v => setForm(f => ({...f, role: v, societe_id: ''}))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{ROLES_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
+                  <SelectContent>{rolesOptions(locale).map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               {form.role !== 'admin' && form.role !== 'super_admin' && (
                 <div>
-                  <Label>Société (optionnel pour Dirigeant)</Label>
+                  <Label>{t('adm2.users.company_optional', locale)}</Label>
                   <Select value={form.societe_id} onValueChange={v => setForm(f => ({...f, societe_id: v}))}>
-                    <SelectTrigger><SelectValue placeholder="Aucune" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('adm2.users.none', locale)} /></SelectTrigger>
                     <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               )}
               <div>
-                <Label>Mot de passe</Label>
+                <Label>{t('adm2.users.password', locale)}</Label>
                 <div className="flex gap-2">
                   <Input value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} className="font-mono" />
                   <Button variant="outline" size="sm" onClick={() => setForm(f => ({...f, password: genPassword()}))}>↺</Button>
@@ -290,7 +295,7 @@ export default function UsersPage() {
               </div>
               <Button onClick={createUser} disabled={createSaving} className="w-full bg-[#0B0F2E]">
                 {createSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Créer
+                {t('adm2.users.create', locale)}
               </Button>
             </div>
           </DialogContent>
@@ -300,7 +305,7 @@ export default function UsersPage() {
       {lastPassword && (
         <div className="p-3 bg-yellow-50 border border-yellow-300 rounded-lg flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-yellow-800">Mot de passe à transmettre</p>
+            <p className="text-xs font-semibold text-yellow-800">{t('adm2.users.password_to_share', locale)}</p>
             <p className="font-mono text-lg text-yellow-900">{lastPassword}</p>
           </div>
           <Button variant="ghost" size="sm" onClick={() => setLastPassword('')}>✕</Button>
@@ -313,12 +318,12 @@ export default function UsersPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
             value={query} onChange={e => setQuery(e.target.value)}
-            placeholder="Rechercher : nom, email, société, BRN, rôle…"
+            placeholder={t('adm2.users.search_placeholder', locale)}
             className="pl-9 h-10"
           />
         </div>
-        <Button variant="outline" size="sm" onClick={expandAll}>Tout déplier</Button>
-        <Button variant="outline" size="sm" onClick={collapseAll}>Tout replier</Button>
+        <Button variant="outline" size="sm" onClick={expandAll}>{t('adm2.users.expand_all', locale)}</Button>
+        <Button variant="outline" size="sm" onClick={collapseAll}>{t('adm2.users.collapse_all', locale)}</Button>
       </div>
 
       {error && <div className="p-3 bg-red-50 text-red-800 text-sm rounded-lg">{error}</div>}
@@ -326,18 +331,18 @@ export default function UsersPage() {
       {loading ? (
         <div className="text-center py-12"><Loader2 className="w-6 h-6 animate-spin text-gray-400 mx-auto" /></div>
       ) : !tree ? (
-        <div className="text-center text-gray-500 py-12">Aucune donnée.</div>
+        <div className="text-center text-gray-500 py-12">{t('adm2.users.no_data', locale)}</div>
       ) : (
         <div className="space-y-4">
 
           {filteredPlateforme.length > 0 && (
             <Section
-              icon={ShieldAlert} title="Plateforme Lexora" subtitle="Comptes admin / super_admin"
+              icon={ShieldAlert} title={t('adm2.users.platform_title', locale)} subtitle={t('adm2.users.platform_subtitle', locale)}
               count={filteredPlateforme.length} open={expandedPlateforme} onToggle={() => setExpandedPlateforme(!expandedPlateforme)}
             >
               <div className="space-y-1.5">
                 {filteredPlateforme.map(u => (
-                  <UserRow key={u.id} u={u} onActive={setUserActive} onDelete={deleteUser} onRoleChange={changeRole} />
+                  <UserRow key={u.id} u={u} locale={locale} onActive={setUserActive} onDelete={deleteUser} onRoleChange={changeRole} />
                 ))}
               </div>
             </Section>
@@ -347,16 +352,16 @@ export default function UsersPage() {
             <div className="flex items-center gap-2 mb-3">
               <Briefcase className="w-5 h-5 text-[#0B0F2E]" />
               <h2 className="text-sm font-bold uppercase tracking-wider text-[#0B0F2E]">
-                Clients ({filteredClients.length}{query ? ` sur ${tree.clients.length}` : ''})
+                {t('adm2.users.clients_count', locale).replace('{count}', String(filteredClients.length)).replace('{extra}', query ? t('adm2.users.clients_of', locale).replace('{total}', String(tree.clients.length)) : '')}
               </h2>
             </div>
             {filteredClients.length === 0 ? (
-              <Empty text={query ? `Aucun client ne matche « ${query} ».` : 'Aucun client.'} />
+              <Empty text={query ? t('adm2.users.no_client_match', locale).replace('{query}', query) : t('adm2.users.no_client', locale)} />
             ) : (
               <div className="space-y-2">
                 {filteredClients.map(c => (
                   <ClientCard
-                    key={c.id} client={c} query={query}
+                    key={c.id} client={c} query={query} locale={locale}
                     expanded={expandedClients.has(c.id)} onToggle={() => toggleClient(c.id)}
                     expandedSocietes={expandedSocietes} onToggleSociete={toggleSociete}
                     onUserActive={setUserActive} onUserDelete={deleteUser} onRoleChange={changeRole}
@@ -368,12 +373,12 @@ export default function UsersPage() {
 
           {filteredOrphelins.length > 0 && (
             <Section
-              icon={UserCheck} title="Utilisateurs orphelins" subtitle="Non rattachés à un client ou une société"
+              icon={UserCheck} title={t('adm2.users.orphans_title', locale)} subtitle={t('adm2.users.orphans_subtitle', locale)}
               count={filteredOrphelins.length} open={expandedOrphelins} onToggle={() => setExpandedOrphelins(!expandedOrphelins)}
             >
               <div className="space-y-1.5">
                 {filteredOrphelins.map(u => (
-                  <UserRow key={u.id} u={u} onActive={setUserActive} onDelete={deleteUser} onRoleChange={changeRole} />
+                  <UserRow key={u.id} u={u} locale={locale} onActive={setUserActive} onDelete={deleteUser} onRoleChange={changeRole} />
                 ))}
               </div>
             </Section>
@@ -409,14 +414,14 @@ function Empty({ text }: { text: string }) {
   return <div className="text-center text-gray-400 text-sm py-8 bg-white rounded-lg border border-dashed">{text}</div>
 }
 
-function ClientCard({ client, query, expanded, onToggle, expandedSocietes, onToggleSociete, onUserActive, onUserDelete, onRoleChange }: {
-  client: ClientNode; query: string; expanded: boolean; onToggle: () => void
+function ClientCard({ client, query, locale, expanded, onToggle, expandedSocietes, onToggleSociete, onUserActive, onUserDelete, onRoleChange }: {
+  client: ClientNode; query: string; locale: any; expanded: boolean; onToggle: () => void
   expandedSocietes: Set<string>; onToggleSociete: (id: string) => void
   onUserActive: (u: UserCard, a: boolean) => void
   onUserDelete: (u: UserCard, h: boolean) => void
   onRoleChange: (u: UserCard, r: string) => void
 }) {
-  const visibleSocietes = client.societes.filter(s => matchSociete(s, query))
+  const visibleSocietes = client.societes.filter(s => matchSociete(s, query, locale))
   return (
     <Card className={!client.actif ? 'opacity-60' : ''}>
       <button onClick={onToggle} className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 rounded-t-lg">
@@ -428,17 +433,17 @@ function ClientCard({ client, query, expanded, onToggle, expandedSocietes, onTog
             <p className="font-semibold text-[#0B0F2E]">{client.full_name || '—'}</p>
             <p className="text-xs text-gray-500">{client.email}</p>
           </div>
-          <Badge className="bg-amber-50 text-amber-800 border border-amber-200">Client</Badge>
-          {!client.actif && <Badge className="bg-gray-100 text-gray-600">Inactif</Badge>}
+          <Badge className="bg-amber-50 text-amber-800 border border-amber-200">{t('adm2.users.badge_client', locale)}</Badge>
+          {!client.actif && <Badge className="bg-gray-100 text-gray-600">{t('adm2.users.badge_inactive', locale)}</Badge>}
         </div>
         <div className="flex items-center gap-3 text-xs">
           <span className="inline-flex items-center gap-1 text-gray-500">
             <Building2 className="w-3.5 h-3.5" />
-            {client.societes_count} société{client.societes_count > 1 ? 's' : ''}
+            {client.societes_count} {client.societes_count > 1 ? t('adm2.users.societe_many', locale) : t('adm2.users.societe_one', locale)}
           </span>
           <span className="inline-flex items-center gap-1 text-gray-500">
             <UsersIcon className="w-3.5 h-3.5" />
-            {client.users_count} user{client.users_count > 1 ? 's' : ''}
+            {client.users_count} {client.users_count > 1 ? t('adm2.users.user_many', locale) : t('adm2.users.user_one', locale)}
           </span>
           {expanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
         </div>
@@ -446,10 +451,10 @@ function ClientCard({ client, query, expanded, onToggle, expandedSocietes, onTog
       {expanded && (
         <CardContent className="px-4 pb-4 pt-0 space-y-2">
           {visibleSocietes.length === 0 ? (
-            <Empty text="Aucune société rattachée." />
+            <Empty text={t('adm2.users.no_company_linked', locale)} />
           ) : visibleSocietes.map(s => (
             <SocieteCard
-              key={s.id} societe={s} query={query}
+              key={s.id} societe={s} query={query} locale={locale}
               expanded={expandedSocietes.has(s.id)} onToggle={() => onToggleSociete(s.id)}
               onUserActive={onUserActive} onUserDelete={onUserDelete} onRoleChange={onRoleChange}
             />
@@ -460,13 +465,13 @@ function ClientCard({ client, query, expanded, onToggle, expandedSocietes, onTog
   )
 }
 
-function SocieteCard({ societe, query, expanded, onToggle, onUserActive, onUserDelete, onRoleChange }: {
-  societe: SocieteNode; query: string; expanded: boolean; onToggle: () => void
+function SocieteCard({ societe, query, locale, expanded, onToggle, onUserActive, onUserDelete, onRoleChange }: {
+  societe: SocieteNode; query: string; locale: any; expanded: boolean; onToggle: () => void
   onUserActive: (u: UserCard, a: boolean) => void
   onUserDelete: (u: UserCard, h: boolean) => void
   onRoleChange: (u: UserCard, r: string) => void
 }) {
-  const visibleUsers = societe.users.filter(u => matchUser(u, query))
+  const visibleUsers = societe.users.filter(u => matchUser(u, query, locale))
   return (
     <div className="border rounded-lg bg-gray-50/40">
       <button onClick={onToggle} className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-100 rounded-t-lg">
@@ -486,9 +491,9 @@ function SocieteCard({ societe, query, expanded, onToggle, onUserActive, onUserD
       {expanded && (
         <div className="px-3 pb-3 space-y-1">
           {visibleUsers.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-3">Aucun utilisateur ne matche.</p>
+            <p className="text-xs text-gray-400 text-center py-3">{t('adm2.users.no_user_match', locale)}</p>
           ) : visibleUsers.map(u => (
-            <UserRow key={u.id} u={u} onActive={onUserActive} onDelete={onUserDelete} onRoleChange={onRoleChange} />
+            <UserRow key={u.id} u={u} locale={locale} onActive={onUserActive} onDelete={onUserDelete} onRoleChange={onRoleChange} />
           ))}
         </div>
       )}
@@ -496,8 +501,9 @@ function SocieteCard({ societe, query, expanded, onToggle, onUserActive, onUserD
   )
 }
 
-function UserRow({ u, onActive, onDelete, onRoleChange }: {
+function UserRow({ u, locale, onActive, onDelete, onRoleChange }: {
   u: UserCard
+  locale: any
   onActive: (u: UserCard, a: boolean) => void
   onDelete: (u: UserCard, h: boolean) => void
   onRoleChange: (u: UserCard, r: string) => void
@@ -512,24 +518,24 @@ function UserRow({ u, onActive, onDelete, onRoleChange }: {
           <p className="text-sm font-medium truncate">{u.full_name || '—'}</p>
           <p className="text-[10px] text-gray-500 truncate">{u.email}</p>
         </div>
-        <RoleBadge role={u.role} />
-        {!u.actif && <Badge className="bg-gray-100 text-gray-600 text-[10px]">Inactif</Badge>}
+        <RoleBadge role={u.role} locale={locale} />
+        {!u.actif && <Badge className="bg-gray-100 text-gray-600 text-[10px]">{t('adm2.users.badge_inactive', locale)}</Badge>}
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
         <Select value={u.role} onValueChange={v => onRoleChange(u, v)}>
           <SelectTrigger className="h-7 text-xs w-32"><SelectValue /></SelectTrigger>
-          <SelectContent>{ROLES_OPTIONS.map(r => <SelectItem key={r.value} value={r.value} className="text-xs">{r.label}</SelectItem>)}</SelectContent>
+          <SelectContent>{rolesOptions(locale).map(r => <SelectItem key={r.value} value={r.value} className="text-xs">{r.label}</SelectItem>)}</SelectContent>
         </Select>
         {u.actif ? (
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-amber-600" onClick={() => onActive(u, false)} title="Désactiver">
+          <Button variant="ghost" size="sm" className="h-7 px-2 text-amber-600" onClick={() => onActive(u, false)} title={t('adm2.users.deactivate', locale)}>
             <Power className="w-3.5 h-3.5" />
           </Button>
         ) : (
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-emerald-600" onClick={() => onActive(u, true)} title="Réactiver">
+          <Button variant="ghost" size="sm" className="h-7 px-2 text-emerald-600" onClick={() => onActive(u, true)} title={t('adm2.users.reactivate', locale)}>
             <Power className="w-3.5 h-3.5" />
           </Button>
         )}
-        <Button variant="ghost" size="sm" className="h-7 px-2 text-red-600" onClick={() => onDelete(u, true)} title="Supprimer définitivement">
+        <Button variant="ghost" size="sm" className="h-7 px-2 text-red-600" onClick={() => onDelete(u, true)} title={t('adm2.users.delete_perm', locale)}>
           <Trash2 className="w-3.5 h-3.5" />
         </Button>
       </div>

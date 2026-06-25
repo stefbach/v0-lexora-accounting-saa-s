@@ -16,6 +16,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react"
 import Link from "next/link"
 import { Loader2, FileText, CheckCircle2, AlertCircle, Send, X, Eye, Settings, Repeat, Plus } from "lucide-react"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 type Status = 'brouillon' | 'emise' | 'partiellement_payee' | 'payee' | 'en_retard' | 'annulee'
 
@@ -41,13 +42,17 @@ interface Stats {
   total: number; total_ttc: number; paid_ttc: number; unpaid_ttc: number; overdue_count: number
 }
 
-const STATUS_COLORS: Record<Status, { bg: string; text: string; label: string }> = {
-  brouillon:            { bg: '#F3F4F6', text: '#374151', label: 'Brouillon' },
-  emise:                { bg: '#DBEAFE', text: '#1E40AF', label: 'Émise' },
-  partiellement_payee:  { bg: '#FEF3C7', text: '#92400E', label: 'Partielle' },
-  payee:                { bg: '#D1FAE5', text: '#065F46', label: 'Payée' },
-  en_retard:            { bg: '#FEE2E2', text: '#991B1B', label: 'En retard' },
-  annulee:              { bg: '#E5E7EB', text: '#4B5563', label: 'Annulée' },
+const STATUS_COLORS: Record<Status, { bg: string; text: string; key: string }> = {
+  brouillon:            { bg: '#F3F4F6', text: '#374151', key: 'adm3.bill.status_brouillon' },
+  emise:                { bg: '#DBEAFE', text: '#1E40AF', key: 'adm3.bill.status_emise' },
+  partiellement_payee:  { bg: '#FEF3C7', text: '#92400E', key: 'adm3.bill.status_partielle' },
+  payee:                { bg: '#D1FAE5', text: '#065F46', key: 'adm3.bill.status_payee' },
+  en_retard:            { bg: '#FEE2E2', text: '#991B1B', key: 'adm3.bill.status_en_retard' },
+  annulee:              { bg: '#E5E7EB', text: '#4B5563', key: 'adm3.bill.status_annulee' },
+}
+
+function statusLabel(status: Status, locale: Locale) {
+  return t(STATUS_COLORS[status].key, locale)
 }
 
 function fmt(n: number, devise = 'MUR') {
@@ -55,6 +60,7 @@ function fmt(n: number, devise = 'MUR') {
 }
 
 export default function LexoraBillingPage() {
+  const locale = getLocale()
   const [loading, setLoading] = useState(true)
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
@@ -86,18 +92,18 @@ export default function LexoraBillingPage() {
       if (search) params.set('q', search)
       const res = await fetch(`/api/admin/lexora-billing?${params}`, { cache: 'no-store' })
       const j = await res.json()
-      if (!res.ok) throw new Error(j.error || 'Erreur')
+      if (!res.ok) throw new Error(j.error || t('adm3.bill.err_generic', locale))
       setInvoices(j.invoices || [])
       setStats(j.stats || null)
     } catch (e: any) {
-      setMessage({ type: 'error', text: e?.message || 'Erreur' })
+      setMessage({ type: 'error', text: e?.message || t('adm3.bill.err_generic', locale) })
     } finally {
       setLoading(false)
     }
   }, [filter, search])
 
   useEffect(() => { fetchData() }, [fetchData])
-  useEffect(() => { if (message) { const t = setTimeout(() => setMessage(null), 5000); return () => clearTimeout(t) } }, [message])
+  useEffect(() => { if (message) { const timer = setTimeout(() => setMessage(null), 5000); return () => clearTimeout(timer) } }, [message])
 
   const triggerDunning = async () => {
     if (!dunningOpen) return
@@ -109,11 +115,11 @@ export default function LexoraBillingPage() {
         body: JSON.stringify({ channels: dunningChannels, stage: 'manual' }),
       })
       const j = await res.json()
-      if (!res.ok) throw new Error(j.error || 'Erreur')
+      if (!res.ok) throw new Error(j.error || t('adm3.bill.err_generic', locale))
       setDunningResults(j.results)
-      setMessage({ type: 'success', text: `${dunningChannels.length} canal(canaux) déclenché(s)` })
+      setMessage({ type: 'success', text: `${dunningChannels.length} ${t('adm3.bill.toast_dun_channels_a', locale)} ${t('adm3.bill.toast_dun_channels_b', locale)}` })
     } catch (e: any) {
-      setMessage({ type: 'error', text: e?.message || 'Erreur' })
+      setMessage({ type: 'error', text: e?.message || t('adm3.bill.err_generic', locale) })
     } finally {
       setDunningSending(false)
     }
@@ -129,12 +135,12 @@ export default function LexoraBillingPage() {
         body: JSON.stringify({ action: 'mark_paid', payment_reference: payRef, payment_method: 'virement' }),
       })
       const j = await res.json()
-      if (!res.ok) throw new Error(j.error || 'Erreur')
-      setMessage({ type: 'success', text: 'Facture marquée payée + écriture compta créée.' })
+      if (!res.ok) throw new Error(j.error || t('adm3.bill.err_generic', locale))
+      setMessage({ type: 'success', text: t('adm3.bill.toast_paid', locale) })
       setPayOpen(null); setPayRef('')
       fetchData()
     } catch (e: any) {
-      setMessage({ type: 'error', text: e?.message || 'Erreur' })
+      setMessage({ type: 'error', text: e?.message || t('adm3.bill.err_generic', locale) })
     } finally {
       setPaySaving(false)
     }
@@ -157,8 +163,8 @@ export default function LexoraBillingPage() {
   }
 
   const submitEmit = async () => {
-    if (!emitForm.societe_id) { setMessage({ type: 'error', text: 'Sélectionne une société.' }); return }
-    if (!emitForm.plan_id && !emitForm.tarif_ht_mur) { setMessage({ type: 'error', text: 'Choisis un plan ou saisis un tarif HT.' }); return }
+    if (!emitForm.societe_id) { setMessage({ type: 'error', text: t('adm3.bill.toast_select_company', locale) }); return }
+    if (!emitForm.plan_id && !emitForm.tarif_ht_mur) { setMessage({ type: 'error', text: t('adm3.bill.toast_plan_or_rate', locale) }); return }
     setEmitSaving(true)
     try {
       const res = await fetch('/api/admin/lexora-billing/emit', {
@@ -173,23 +179,23 @@ export default function LexoraBillingPage() {
         }),
       })
       const j = await res.json()
-      if (!res.ok) throw new Error(j.error || 'Erreur')
-      setMessage({ type: 'success', text: j.reused ? 'Facture déjà existante — réutilisée.' : `Facture ${j.invoice?.invoice_number} créée.` })
+      if (!res.ok) throw new Error(j.error || t('adm3.bill.err_generic', locale))
+      setMessage({ type: 'success', text: j.reused ? t('adm3.bill.toast_invoice_reused', locale) : `${t('adm3.bill.toast_invoice_created_a', locale)} ${j.invoice?.invoice_number} ${t('adm3.bill.toast_invoice_created_b', locale)}` })
       setEmitOpen(false); fetchData()
     } catch (e: any) {
-      setMessage({ type: 'error', text: e?.message || 'Erreur' })
+      setMessage({ type: 'error', text: e?.message || t('adm3.bill.err_generic', locale) })
     } finally {
       setEmitSaving(false)
     }
   }
 
   const cancel = async (inv: Invoice) => {
-    if (!confirm(`Annuler la facture ${inv.invoice_number} ?`)) return
+    if (!confirm(`${t('adm3.bill.confirm_cancel_a', locale)} ${inv.invoice_number} ?`)) return
     const res = await fetch(`/api/admin/lexora-billing/${inv.id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'cancel' }),
     })
-    if (res.ok) { setMessage({ type: 'success', text: 'Annulée.' }); fetchData() }
+    if (res.ok) { setMessage({ type: 'success', text: t('adm3.bill.toast_cancelled', locale) }); fetchData() }
     else { const j = await res.json(); setMessage({ type: 'error', text: j.error }) }
   }
 
@@ -197,21 +203,21 @@ export default function LexoraBillingPage() {
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>Facturation Lexora</h1>
-          <p className="text-sm text-gray-500 mt-1">Factures émises par Digital Data Solutions Ltd aux clients SaaS.</p>
+          <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>{t('adm3.bill.title', locale)}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t('adm3.bill.subtitle', locale)}</p>
         </div>
         <div className="flex gap-2">
           <button onClick={openEmit}
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-sm" style={{ backgroundColor: '#D4AF37', color: '#0B0F2E' }}>
-            <Plus className="h-4 w-4" /> Émettre une facture
+            <Plus className="h-4 w-4" /> {t('adm3.bill.emit_invoice', locale)}
           </button>
           <Link href="/admin/lexora-billing/rapprochement"
                 className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 text-sm">
-            <Repeat className="h-4 w-4" /> Rapprochement
+            <Repeat className="h-4 w-4" /> {t('adm3.bill.reconcile', locale)}
           </Link>
           <Link href="/admin/lexora-billing/parametres"
                 className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm" style={{ backgroundColor: '#0B0F2E', color: 'white' }}>
-            <Settings className="h-4 w-4" /> Paramètres émetteur
+            <Settings className="h-4 w-4" /> {t('adm3.bill.issuer_settings', locale)}
           </Link>
         </div>
       </div>
@@ -227,20 +233,20 @@ export default function LexoraBillingPage() {
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           <div className="bg-white border rounded-lg p-4">
-            <p className="text-xs uppercase tracking-wider text-gray-500">Total facturé</p>
+            <p className="text-xs uppercase tracking-wider text-gray-500">{t('adm3.bill.kpi_total', locale)}</p>
             <p className="text-xl font-bold mt-1" style={{ color: '#0B0F2E' }}>{fmt(stats.total_ttc)}</p>
-            <p className="text-xs text-gray-400 mt-1">{stats.total} facture(s)</p>
+            <p className="text-xs text-gray-400 mt-1">{stats.total} {t('adm3.bill.kpi_invoices_suffix', locale)}</p>
           </div>
           <div className="bg-white border rounded-lg p-4">
-            <p className="text-xs uppercase tracking-wider text-gray-500">Encaissé</p>
+            <p className="text-xs uppercase tracking-wider text-gray-500">{t('adm3.bill.kpi_collected', locale)}</p>
             <p className="text-xl font-bold mt-1 text-green-700">{fmt(stats.paid_ttc)}</p>
           </div>
           <div className="bg-white border rounded-lg p-4">
-            <p className="text-xs uppercase tracking-wider text-gray-500">Impayé</p>
+            <p className="text-xs uppercase tracking-wider text-gray-500">{t('adm3.bill.kpi_unpaid', locale)}</p>
             <p className="text-xl font-bold mt-1 text-amber-700">{fmt(stats.unpaid_ttc)}</p>
           </div>
           <div className="bg-white border rounded-lg p-4">
-            <p className="text-xs uppercase tracking-wider text-gray-500">En retard</p>
+            <p className="text-xs uppercase tracking-wider text-gray-500">{t('adm3.bill.kpi_overdue', locale)}</p>
             <p className="text-xl font-bold mt-1 text-red-700">{stats.overdue_count}</p>
           </div>
         </div>
@@ -251,10 +257,10 @@ export default function LexoraBillingPage() {
         {(['all','emise','partiellement_payee','payee','en_retard','annulee'] as const).map(s => (
           <button key={s} onClick={() => setFilter(s)}
                   className={`px-3 py-1.5 rounded-lg text-sm border ${filter === s ? 'bg-[#0B0F2E] text-white border-[#0B0F2E]' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
-            {s === 'all' ? 'Toutes' : STATUS_COLORS[s as Status].label}
+            {s === 'all' ? t('adm3.bill.filter_all', locale) : statusLabel(s as Status, locale)}
           </button>
         ))}
-        <input type="text" placeholder="Recherche N° facture…" value={search} onChange={e => setSearch(e.target.value)}
+        <input type="text" placeholder={t('adm3.bill.search_placeholder', locale)} value={search} onChange={e => setSearch(e.target.value)}
                className="ml-auto px-3 py-1.5 rounded-lg border text-sm w-64" />
       </div>
 
@@ -264,20 +270,20 @@ export default function LexoraBillingPage() {
       ) : invoices.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
           <FileText className="h-12 w-12 mx-auto mb-2 opacity-30" />
-          <p>Aucune facture pour ce filtre.</p>
+          <p>{t('adm3.bill.empty', locale)}</p>
         </div>
       ) : (
         <div className="bg-white border rounded-lg overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-left">
               <tr>
-                <th className="px-4 py-3 font-semibold text-gray-600">N°</th>
-                <th className="px-4 py-3 font-semibold text-gray-600">Date</th>
-                <th className="px-4 py-3 font-semibold text-gray-600">Client</th>
-                <th className="px-4 py-3 font-semibold text-gray-600">Échéance</th>
-                <th className="px-4 py-3 font-semibold text-gray-600 text-right">Montant TTC</th>
-                <th className="px-4 py-3 font-semibold text-gray-600">Statut</th>
-                <th className="px-4 py-3 font-semibold text-gray-600 text-right">Actions</th>
+                <th className="px-4 py-3 font-semibold text-gray-600">{t('adm3.bill.th_number', locale)}</th>
+                <th className="px-4 py-3 font-semibold text-gray-600">{t('adm3.bill.th_date', locale)}</th>
+                <th className="px-4 py-3 font-semibold text-gray-600">{t('adm3.bill.th_client', locale)}</th>
+                <th className="px-4 py-3 font-semibold text-gray-600">{t('adm3.bill.th_due', locale)}</th>
+                <th className="px-4 py-3 font-semibold text-gray-600 text-right">{t('adm3.bill.th_amount_ttc', locale)}</th>
+                <th className="px-4 py-3 font-semibold text-gray-600">{t('adm3.bill.th_status', locale)}</th>
+                <th className="px-4 py-3 font-semibold text-gray-600 text-right">{t('adm3.bill.th_actions', locale)}</th>
               </tr>
             </thead>
             <tbody>
@@ -297,27 +303,27 @@ export default function LexoraBillingPage() {
                     <td className="px-4 py-3 text-right font-semibold">{fmt(inv.amount_ttc, inv.devise)}</td>
                     <td className="px-4 py-3">
                       <span className="inline-block px-2 py-0.5 rounded text-xs font-medium" style={{ backgroundColor: s.bg, color: s.text }}>
-                        {s.label}
+                        {statusLabel(inv.status, locale)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="inline-flex gap-1">
                         <a href={`/api/admin/lexora-billing/${inv.id}/pdf`} target="_blank" rel="noopener"
-                           className="p-1.5 rounded hover:bg-gray-100" title="Voir PDF">
+                           className="p-1.5 rounded hover:bg-gray-100" title={t('adm3.bill.action_view_pdf', locale)}>
                           <Eye className="h-4 w-4" />
                         </a>
                         {inv.status !== 'payee' && inv.status !== 'annulee' && (
                           <>
                             <button onClick={() => { setDunningOpen(inv); setDunningResults(null) }}
-                                    className="p-1.5 rounded hover:bg-gray-100" title="Relancer">
+                                    className="p-1.5 rounded hover:bg-gray-100" title={t('adm3.bill.action_dun', locale)}>
                               <Send className="h-4 w-4 text-amber-600" />
                             </button>
                             <button onClick={() => setPayOpen(inv)}
-                                    className="p-1.5 rounded hover:bg-gray-100" title="Marquer payée">
+                                    className="p-1.5 rounded hover:bg-gray-100" title={t('adm3.bill.action_mark_paid', locale)}>
                               <CheckCircle2 className="h-4 w-4 text-green-600" />
                             </button>
                             <button onClick={() => cancel(inv)}
-                                    className="p-1.5 rounded hover:bg-gray-100" title="Annuler">
+                                    className="p-1.5 rounded hover:bg-gray-100" title={t('adm3.bill.action_cancel', locale)}>
                               <X className="h-4 w-4 text-red-600" />
                             </button>
                           </>
@@ -334,20 +340,20 @@ export default function LexoraBillingPage() {
 
       {/* Dunning dialog */}
       {dunningOpen && (
-        <Modal onClose={() => setDunningOpen(null)} title={`Relancer ${dunningOpen.invoice_number}`}>
-          <p className="text-sm text-gray-600 mb-4">Choisis les canaux pour envoyer la relance.</p>
+        <Modal onClose={() => setDunningOpen(null)} title={`${t('adm3.bill.dun_title', locale)} ${dunningOpen.invoice_number}`}>
+          <p className="text-sm text-gray-600 mb-4">{t('adm3.bill.dun_help', locale)}</p>
           <div className="space-y-2 mb-4">
             {[
-              { id: 'email', label: 'Email (Resend)', ok: true },
-              { id: 'telegram', label: 'Telegram (bot Lexora)', ok: true },
-              { id: 'sms', label: 'SMS (Twilio)', ok: !!process.env.NEXT_PUBLIC_TWILIO_ENABLED },
-              { id: 'whatsapp', label: 'WhatsApp (Twilio)', ok: !!process.env.NEXT_PUBLIC_TWILIO_ENABLED },
+              { id: 'email', label: t('adm3.bill.dun_email', locale), ok: true },
+              { id: 'telegram', label: t('adm3.bill.dun_telegram', locale), ok: true },
+              { id: 'sms', label: t('adm3.bill.dun_sms', locale), ok: !!process.env.NEXT_PUBLIC_TWILIO_ENABLED },
+              { id: 'whatsapp', label: t('adm3.bill.dun_whatsapp', locale), ok: !!process.env.NEXT_PUBLIC_TWILIO_ENABLED },
             ].map(c => (
               <label key={c.id} className="flex items-center gap-2 p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
                 <input type="checkbox" checked={dunningChannels.includes(c.id)}
                        onChange={e => setDunningChannels(prev => e.target.checked ? [...prev, c.id] : prev.filter(x => x !== c.id))} />
                 <span className="text-sm">{c.label}</span>
-                {!c.ok && <span className="ml-auto text-xs text-amber-600">stub — voir env vars</span>}
+                {!c.ok && <span className="ml-auto text-xs text-amber-600">{t('adm3.bill.dun_stub', locale)}</span>}
               </label>
             ))}
           </div>
@@ -364,10 +370,10 @@ export default function LexoraBillingPage() {
             </div>
           )}
           <div className="flex justify-end gap-2">
-            <button onClick={() => setDunningOpen(null)} className="px-3 py-2 rounded-lg border text-sm">Fermer</button>
+            <button onClick={() => setDunningOpen(null)} className="px-3 py-2 rounded-lg border text-sm">{t('adm3.bill.close', locale)}</button>
             <button onClick={triggerDunning} disabled={dunningSending || dunningChannels.length === 0}
                     className="px-3 py-2 rounded-lg text-sm text-white" style={{ backgroundColor: '#D4AF37', color: '#0B0F2E' }}>
-              {dunningSending ? <Loader2 className="h-4 w-4 animate-spin inline" /> : 'Envoyer'}
+              {dunningSending ? <Loader2 className="h-4 w-4 animate-spin inline" /> : t('adm3.bill.send', locale)}
             </button>
           </div>
         </Modal>
@@ -375,59 +381,59 @@ export default function LexoraBillingPage() {
 
       {/* Emit-invoice dialog */}
       {emitOpen && (
-        <Modal onClose={() => setEmitOpen(false)} title="Émettre une facture">
+        <Modal onClose={() => setEmitOpen(false)} title={t('adm3.bill.emit_title', locale)}>
           <div className="space-y-3">
             <label className="block">
-              <span className="block text-xs font-medium text-gray-600 mb-1">Société cliente *</span>
+              <span className="block text-xs font-medium text-gray-600 mb-1">{t('adm3.bill.emit_company', locale)}</span>
               <select value={emitForm.societe_id} onChange={e => setEmitForm({ ...emitForm, societe_id: e.target.value })}
                       className="w-full px-3 py-2 border rounded-lg text-sm">
-                <option value="">— Choisir —</option>
+                <option value="">{t('adm3.bill.emit_choose', locale)}</option>
                 {emitSocietes.map(s => <option key={s.id} value={s.id}>{s.nom}{s.brn ? ` (${s.brn})` : ''}</option>)}
               </select>
             </label>
             <label className="block">
-              <span className="block text-xs font-medium text-gray-600 mb-1">Plan tarifaire</span>
+              <span className="block text-xs font-medium text-gray-600 mb-1">{t('adm3.bill.emit_plan', locale)}</span>
               <select value={emitForm.plan_id} onChange={e => {
                 const p = emitPlans.find(x => x.id === e.target.value)
                 const period = emitForm.periodicite as 'mensuelle' | 'annuelle'
                 const price = p ? (period === 'annuelle' ? (p.prix_annuel_mur || 0) : p.prix_mensuel_mur) : 0
                 setEmitForm({ ...emitForm, plan_id: e.target.value, tarif_ht_mur: price ? String(price) : emitForm.tarif_ht_mur })
               }} className="w-full px-3 py-2 border rounded-lg text-sm">
-                <option value="">— Aucun (tarif libre) —</option>
-                {emitPlans.map(p => <option key={p.id} value={p.id}>{p.nom} — {p.prix_mensuel_mur.toLocaleString('fr-FR')} MUR/mois</option>)}
+                <option value="">{t('adm3.bill.emit_plan_none', locale)}</option>
+                {emitPlans.map(p => <option key={p.id} value={p.id}>{p.nom} — {p.prix_mensuel_mur.toLocaleString('fr-FR')} {t('adm3.bill.emit_plan_per_month', locale)}</option>)}
               </select>
             </label>
             <div className="grid grid-cols-2 gap-2">
               <label className="block">
-                <span className="block text-xs font-medium text-gray-600 mb-1">Périodicité</span>
+                <span className="block text-xs font-medium text-gray-600 mb-1">{t('adm3.bill.emit_periodicity', locale)}</span>
                 <select value={emitForm.periodicite} onChange={e => setEmitForm({ ...emitForm, periodicite: e.target.value })}
                         className="w-full px-3 py-2 border rounded-lg text-sm">
-                  <option value="mensuelle">Mensuelle</option>
-                  <option value="annuelle">Annuelle</option>
+                  <option value="mensuelle">{t('adm3.bill.emit_monthly', locale)}</option>
+                  <option value="annuelle">{t('adm3.bill.emit_annual', locale)}</option>
                 </select>
               </label>
               <label className="block">
-                <span className="block text-xs font-medium text-gray-600 mb-1">Tarif HT (MUR)</span>
+                <span className="block text-xs font-medium text-gray-600 mb-1">{t('adm3.bill.emit_rate_ht', locale)}</span>
                 <input type="number" value={emitForm.tarif_ht_mur} onChange={e => setEmitForm({ ...emitForm, tarif_ht_mur: e.target.value })}
                        className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="0" />
               </label>
             </div>
             <label className="block">
-              <span className="block text-xs font-medium text-gray-600 mb-1">Désignation (override optionnel)</span>
+              <span className="block text-xs font-medium text-gray-600 mb-1">{t('adm3.bill.emit_designation', locale)}</span>
               <input type="text" value={emitForm.designation} onChange={e => setEmitForm({ ...emitForm, designation: e.target.value })}
-                     className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Abonnement Lexora — Plan X (mensuelle)" />
+                     className="w-full px-3 py-2 border rounded-lg text-sm" placeholder={t('adm3.bill.emit_designation_ph', locale)} />
             </label>
             <label className="block">
-              <span className="block text-xs font-medium text-gray-600 mb-1">Date facture</span>
+              <span className="block text-xs font-medium text-gray-600 mb-1">{t('adm3.bill.emit_date', locale)}</span>
               <input type="date" value={emitForm.invoice_date} onChange={e => setEmitForm({ ...emitForm, invoice_date: e.target.value })}
                      className="w-full px-3 py-2 border rounded-lg text-sm" />
             </label>
           </div>
           <div className="mt-4 flex justify-end gap-2">
-            <button onClick={() => setEmitOpen(false)} className="px-3 py-2 rounded-lg border text-sm">Annuler</button>
+            <button onClick={() => setEmitOpen(false)} className="px-3 py-2 rounded-lg border text-sm">{t('adm3.bill.cancel', locale)}</button>
             <button onClick={submitEmit} disabled={emitSaving}
                     className="px-3 py-2 rounded-lg text-sm font-semibold" style={{ backgroundColor: '#D4AF37', color: '#0B0F2E' }}>
-              {emitSaving ? <Loader2 className="h-4 w-4 animate-spin inline" /> : 'Émettre'}
+              {emitSaving ? <Loader2 className="h-4 w-4 animate-spin inline" /> : t('adm3.bill.emit_submit', locale)}
             </button>
           </div>
         </Modal>
@@ -435,18 +441,18 @@ export default function LexoraBillingPage() {
 
       {/* Mark-paid dialog */}
       {payOpen && (
-        <Modal onClose={() => setPayOpen(null)} title={`Marquer ${payOpen.invoice_number} payée`}>
+        <Modal onClose={() => setPayOpen(null)} title={`${t('adm3.bill.pay_title_a', locale)} ${payOpen.invoice_number} ${t('adm3.bill.pay_title_b', locale)}`}>
           <p className="text-sm text-gray-600 mb-3">
-            Montant : <strong>{fmt(payOpen.amount_ttc, payOpen.devise)}</strong>. Cela créera l'écriture d'encaissement (BNQ ↔ 411) dans la compta DDS.
+            {t('adm3.bill.pay_amount_label', locale)} <strong>{fmt(payOpen.amount_ttc, payOpen.devise)}</strong>. {t('adm3.bill.pay_desc', locale)}
           </p>
-          <label className="block text-sm mb-1">Référence virement (optionnel)</label>
+          <label className="block text-sm mb-1">{t('adm3.bill.pay_ref_label', locale)}</label>
           <input type="text" value={payRef} onChange={e => setPayRef(e.target.value)}
                  className="w-full px-3 py-2 border rounded-lg text-sm mb-4" placeholder="REF-2026-…" />
           <div className="flex justify-end gap-2">
-            <button onClick={() => setPayOpen(null)} className="px-3 py-2 rounded-lg border text-sm">Annuler</button>
+            <button onClick={() => setPayOpen(null)} className="px-3 py-2 rounded-lg border text-sm">{t('adm3.bill.cancel', locale)}</button>
             <button onClick={markPaid} disabled={paySaving}
                     className="px-3 py-2 rounded-lg text-sm text-white bg-green-700">
-              {paySaving ? <Loader2 className="h-4 w-4 animate-spin inline" /> : 'Confirmer'}
+              {paySaving ? <Loader2 className="h-4 w-4 animate-spin inline" /> : t('adm3.bill.pay_confirm', locale)}
             </button>
           </div>
         </Modal>
