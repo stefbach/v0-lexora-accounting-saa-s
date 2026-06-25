@@ -197,10 +197,10 @@ export default function PlanningPage() {
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        notifyError("Enregistrer créneaux", data?.error || `HTTP ${res.status}`)
+        notifyError(t('rhpl.save_creneaux', locale), data?.error || `HTTP ${res.status}`)
       }
     } catch (e: unknown) {
-      notifyError("Erreur réseau", e)
+      notifyError(t('rhpl.network_error', locale), e)
     }
   }, [societe])
 
@@ -287,7 +287,7 @@ export default function PlanningPage() {
               severity: "error",
               empId: emp.id,
               empName: `${emp.prenom} ${emp.nom}`,
-              detail: `Planifié le ${day}/${month + 1} alors qu'un congé est approuvé`,
+              detail: `${t('rhpl.conf_planned_on', locale)} ${day}/${month + 1} ${t('rhpl.conf_while_leave', locale)}`,
             })
           }
         }
@@ -309,8 +309,8 @@ export default function PlanningPage() {
             empId: emp.id,
             empName: `${emp.prenom} ${emp.nom}`,
             detail: isOTLegal
-              ? `Semaine du ${d}/${month + 1}: ${hours}h — OT légal (dépasse ${weeklyLimit}h mais ≤${WEEKLY_OT_LIMIT}h max WRA)`
-              : `Semaine du ${d}/${month + 1}: ${hours}h > ${WEEKLY_OT_LIMIT}h max WRA (dépassement illégal)`,
+              ? `${t('rhpl.week_of', locale)} ${d}/${month + 1}: ${hours}h — ${t('rhpl.ot_legal_exceeds', locale)} ${weeklyLimit}h ${t('rhpl.ot_but_under', locale)} ≤${WEEKLY_OT_LIMIT}h ${t('rhpl.max_wra', locale)})`
+              : `${t('rhpl.week_of', locale)} ${d}/${month + 1}: ${hours}h > ${WEEKLY_OT_LIMIT}h ${t('rhpl.max_wra', locale)} (${t('rhpl.illegal_overrun', locale)})`,
           })
         }
         d += 7
@@ -393,14 +393,14 @@ export default function PlanningPage() {
             if (hours <= WEEKLY_OT_LIMIT) {
               violations.push({
                 severity: "orange",
-                empName: name, empId: emp.id, rule: "Heures semaine (OT)",
-                detail: `Semaine du ${d}: ${hours}h — OT légal (dépasse ${maxWeeklyH}h mais ≤${WEEKLY_OT_LIMIT}h max WRA)`,
+                empName: name, empId: emp.id, rule: t('rhpl.rule_week_hours_ot', locale),
+                detail: `${t('rhpl.week_of', locale)} ${d}: ${hours}h — ${t('rhpl.ot_legal_exceeds', locale)} ${maxWeeklyH}h ${t('rhpl.ot_but_under', locale)} ≤${WEEKLY_OT_LIMIT}h ${t('rhpl.max_wra', locale)})`,
               })
             } else {
               violations.push({
                 severity: "red",
-                empName: name, empId: emp.id, rule: "Heures semaine",
-                detail: `Semaine du ${d}: ${hours}h > ${WEEKLY_OT_LIMIT}h max WRA (dépassement illégal, Art.14)`,
+                empName: name, empId: emp.id, rule: t('rhpl.rule_week_hours', locale),
+                detail: `${t('rhpl.week_of', locale)} ${d}: ${hours}h > ${WEEKLY_OT_LIMIT}h ${t('rhpl.max_wra', locale)} (${t('rhpl.illegal_overrun_art14', locale)})`,
               })
             }
           }
@@ -413,7 +413,7 @@ export default function PlanningPage() {
         for (let d = 1; d <= daysInMonth; d++) {
           const cell = planning[emp.id]?.[d]
           if (cell && cell.heures_prevues > maxDailyH) {
-            violations.push({ severity: "red", empName: name, empId: emp.id, rule: "Heures jour", detail: `Jour ${d}: ${cell.heures_prevues}h / ${maxDailyH}h max` })
+            violations.push({ severity: "red", empName: name, empId: emp.id, rule: t('rhpl.rule_day_hours', locale), detail: `${t('rhpl.day', locale)} ${d}: ${cell.heures_prevues}h / ${maxDailyH}h max` })
           }
         }
       }
@@ -426,7 +426,7 @@ export default function PlanningPage() {
           if (cell && cell.creneau_id !== "repos" && cell.creneau_id !== "conge" && !cell.creneau_id?.startsWith("conge_")) {
             consecutive++
             if (consecutive > maxConsec) {
-              violations.push({ severity: "red", empName: name, empId: emp.id, rule: "Jours consecutifs", detail: `${consecutive} jours consecutifs au jour ${d} (max ${maxConsec})` })
+              violations.push({ severity: "red", empName: name, empId: emp.id, rule: t('rhpl.rule_consec_days', locale), detail: `${consecutive} ${t('rhpl.consec_days_at_day', locale)} ${d} (max ${maxConsec})` })
               break
             }
           } else {
@@ -446,7 +446,7 @@ export default function PlanningPage() {
             if (!cell || cell.creneau_id === "repos" || cell.creneau_id === "conge" || cell.creneau_id?.startsWith("conge_")) restDays++
           }
           if (restDays < reposMin && weekEnd - d >= 6) {
-            violations.push({ severity: "red", empName: name, empId: emp.id, rule: "Repos hebdomadaire", detail: `Semaine du ${d}: ${restDays} jour(s) de repos (min ${reposMin})` })
+            violations.push({ severity: "red", empName: name, empId: emp.id, rule: t('rhpl.rule_weekly_rest', locale), detail: `${t('rhpl.week_of', locale)} ${d}: ${restDays} ${t('rhpl.rest_days_label', locale)} (min ${reposMin})` })
           }
           d += 7
         }
@@ -462,7 +462,7 @@ export default function PlanningPage() {
             const [nfh] = (nuitFin as string).split(":").map(Number)
             const isNight = sh >= ndh || sh < nfh
             if (isNight) {
-              violations.push({ severity: "orange", empName: name, empId: emp.id, rule: "Travail de nuit", detail: `Jour ${d}: creneau ${cell.heure_debut}-${cell.heure_fin} (nuit ${nuitDebut}-${nuitFin})` })
+              violations.push({ severity: "orange", empName: name, empId: emp.id, rule: t('rhpl.rule_night_work', locale), detail: `${t('rhpl.day', locale)} ${d}: ${t('rhpl.slot_label', locale)} ${cell.heure_debut}-${cell.heure_fin} (${t('rhpl.night_label', locale)} ${nuitDebut}-${nuitFin})` })
             }
           }
         }
@@ -475,7 +475,7 @@ export default function PlanningPage() {
           if (cell && cell.heures_prevues >= 6) {
             const pauseDuration = cell.pause_debut && cell.pause_fin ? computeMinutes(cell.pause_debut, cell.pause_fin) : 0
             if (pauseDuration < pauseMin) {
-              violations.push({ severity: "orange", empName: name, empId: emp.id, rule: "Pause minimum", detail: `Jour ${d}: pause ${pauseDuration}min (min ${pauseMin}min pour 6h+)` })
+              violations.push({ severity: "orange", empName: name, empId: emp.id, rule: t('rhpl.rule_min_break', locale), detail: `${t('rhpl.day', locale)} ${d}: ${t('rhpl.break_label', locale)} ${pauseDuration}min (min ${pauseMin}min ${t('rhpl.for_6h_plus', locale)})` })
             }
           }
         }
@@ -508,8 +508,8 @@ export default function PlanningPage() {
               severity: "red",
               empName: name,
               empId: emp.id,
-              rule: "Repos inter-journées",
-              detail: `Jour ${d}→${d + 1}: ${restH}h de repos (min 11h, WRA Art. 19). Fin ${cellD.heure_fin} → Début ${cellD1.heure_debut}`,
+              rule: t('rhpl.rule_inter_day_rest', locale),
+              detail: `${t('rhpl.day', locale)} ${d}→${d + 1}: ${restH}h ${t('rhpl.of_rest', locale)} (min 11h, WRA Art. 19). ${t('rhpl.end_label', locale)} ${cellD.heure_fin} → ${t('rhpl.start_label', locale)} ${cellD1.heure_debut}`,
             })
           }
         }
@@ -526,7 +526,7 @@ export default function PlanningPage() {
         }
         const pct = Math.round((absent / employes.length) * 100)
         if (pct > maxAbsentPct) {
-          violations.push({ severity: "orange", empName: "Equipe", empId: "", rule: "Absences equipe", detail: `Jour ${d}: ${pct}% absents (max ${maxAbsentPct}%)` })
+          violations.push({ severity: "orange", empName: t('rhpl.team', locale), empId: "", rule: t('rhpl.rule_team_absence', locale), detail: `${t('rhpl.day', locale)} ${d}: ${pct}% ${t('rhpl.absent_label', locale)} (max ${maxAbsentPct}%)` })
         }
       }
     }
@@ -534,9 +534,9 @@ export default function PlanningPage() {
     setValidationResults(violations)
     setShowValidation(true)
     if (violations.length === 0) {
-      notifySuccess("Planning conforme - aucune violation detectee")
+      notifySuccess(t('rhpl.compliant_no_violation', locale))
     } else {
-      notifyWarning(`${violations.length} violation(s) detectee(s)`)
+      notifyWarning(`${violations.length} ${t('rhpl.violations_detected', locale)}`)
     }
   }
 
@@ -584,7 +584,7 @@ export default function PlanningPage() {
       return next
     })
     setConfirmGenOpen(false)
-    notifySuccess("Planning type appliqué aux semaines restantes du mois")
+    notifySuccess(t('rhpl.template_applied_weeks', locale))
   }
 
   // ─── Load data ──────────────────────────────────────────────────
@@ -663,7 +663,7 @@ export default function PlanningPage() {
         if (!dStr.startsWith(`${year}-${String(month + 1).padStart(2, "0")}`)) continue
         if (societe !== "all" && jf.societe_id && jf.societe_id !== societe) continue
         const day = parseInt(dStr.slice(8, 10), 10)
-        if (day >= 1 && day <= daysInMonth) feriesMap[day] = jf.libelle || "Jour férié"
+        if (day >= 1 && day <= daysInMonth) feriesMap[day] = jf.libelle || t('rhpl.public_holiday', locale)
       }
       setHolidaysByDay(feriesMap)
       // Build approved leave map — mark days with type (AL, SL, MAT, PAT...)
@@ -811,14 +811,14 @@ export default function PlanningPage() {
           date_fin: dateStr,
           statut: "approuve",
           impose_par_societe: true,
-          motif: "Sick leave saisi via le planning RH",
+          motif: t('rhpl.sl_motif', locale),
         }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.status === 409) {
-        toast.info("Un congé existe déjà pour ce jour")
+        toast.info(t('rhpl.leave_already_exists', locale))
       } else if (!res.ok) {
-        notifyError("Enregistrer sick leave", data?.error || data?.raison || `HTTP ${res.status}`)
+        notifyError(t('rhpl.save_sick_leave', locale), data?.error || data?.raison || `HTTP ${res.status}`)
         return
       } else {
         const finalType = data?.type_conge_final || data?.conge?.type_conge || "SL"
@@ -838,10 +838,10 @@ export default function PlanningPage() {
             [day]: { creneau_id: `conge_${finalType}`, heure_debut: "", heure_fin: "", pause_debut: "", pause_fin: "", heures_prevues: 0 },
           },
         }))
-        notifySuccess(data?.bascule_ul ? `Sick leave enregistré (basculé UL : solde insuffisant)` : "Sick leave enregistré")
+        notifySuccess(data?.bascule_ul ? t('rhpl.sl_saved_ul', locale) : t('rhpl.sl_saved', locale))
       }
     } catch (e: any) {
-      notifyError("Erreur réseau", e)
+      notifyError(t('rhpl.network_error', locale), e)
     } finally {
       setSickPending(prev => { const n = new Set(prev); n.delete(key); return n })
     }
@@ -891,7 +891,7 @@ export default function PlanningPage() {
       c => c.heures_effectives > 0 && !c.nom.toLowerCase().includes("repos"),
     ) || creneaux[0]
     if (!workCreneau) {
-      notifyError("Remplir planning", "Aucun créneau de travail configuré")
+      notifyError(t('rhpl.fill_planning', locale), t('rhpl.no_work_slot', locale))
       return
     }
     // Option B — shift par défaut par employé : si emp.shift_template_id est
@@ -933,8 +933,8 @@ export default function PlanningPage() {
     })
     notifySuccess(
       nbCustom > 0
-        ? `Planning rempli — ${nbCustom} employé(s) avec shift personnalisé, reste "${workCreneau.nom}"`
-        : `Planning rempli avec "${workCreneau.nom}"`,
+        ? `${t('rhpl.filled_prefix', locale)} ${nbCustom} ${t('rhpl.filled_custom_rest', locale)} "${workCreneau.nom}"`
+        : `${t('rhpl.filled_with', locale)} "${workCreneau.nom}"`,
     )
   }
 
@@ -963,7 +963,7 @@ export default function PlanningPage() {
   const applyShiftAssign = () => {
     const c = getCreneauById(shiftAssignCreneauId)
     if (!c || c.heures_effectives === 0) {
-      notifyError("Appliquer shift", "Shift invalide")
+      notifyError(t('rhpl.apply_shift', locale), t('rhpl.invalid_shift', locale))
       return
     }
     setPlanning(prev => {
@@ -998,7 +998,7 @@ export default function PlanningPage() {
       }
       return next
     })
-    notifySuccess(`Shift "${c.nom}" appliqué à ${shiftAssignEmployes.length} employé(s)`)
+    notifySuccess(`${t('rhpl.shift_word', locale)} "${c.nom}" ${t('rhpl.applied_to', locale)} ${shiftAssignEmployes.length} ${t('rhpl.employees_word', locale)}`)
     setShiftAssignOpen(false)
     setShiftAssignCreneauId("")
     setShiftAssignEmployes([])
@@ -1119,13 +1119,13 @@ export default function PlanningPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        notifyError("Enregistrer planning", data.error || res.statusText)
+        notifyError(t('rhpl.save_planning', locale), data.error || res.statusText)
         return
       }
       if (publish) setPublished(true)
-      notifySuccess(publish ? "Planning publié !" : "Planning sauvegardé")
+      notifySuccess(publish ? t('rhpl.planning_published', locale) : t('rhpl.planning_saved', locale))
     } catch (e: any) {
-      notifyError("Erreur réseau", e)
+      notifyError(t('rhpl.network_error', locale), e)
       console.error(e)
     }
     finally { setSaving(false) }
@@ -1136,7 +1136,7 @@ export default function PlanningPage() {
   const addCreneau = () => {
     const id = `c${Date.now()}`
     const newC: Creneau = {
-      id, nom: "Nouveau créneau", code: "X",
+      id, nom: t('rhpl.new_slot', locale), code: "X",
       heure_debut: "08:00", heure_fin: "16:00",
       pause_debut: "12:00", pause_fin: "12:30", pause_minutes: 30,
       heures_effectives: 7.5, couleur: COLORS[creneaux.length % COLORS.length],
@@ -1356,24 +1356,24 @@ export default function PlanningPage() {
             <AlertTriangle className={`h-5 w-5 ${iconColor} shrink-0`} />
             <span className={`text-sm font-medium ${textColor}`}>
               {errors.length > 0 && (
-                <><span className="font-bold">{errors.length} erreur{errors.length > 1 ? "s" : ""}</span> (bloquant)</>
+                <><span className="font-bold">{errors.length} {errors.length > 1 ? t('rhpl.errors', locale) : t('rhpl.error', locale)}</span> ({t('rhpl.blocking', locale)})</>
               )}
               {errors.length > 0 && warnings.length > 0 && <span> — </span>}
               {warnings.length > 0 && (
-                <>{warnings.length} avertissement{warnings.length > 1 ? "s" : ""} (OT légal)</>
+                <>{warnings.length} {warnings.length > 1 ? t('rhpl.warnings', locale) : t('rhpl.warning', locale)} ({t('rhpl.ot_legal_paren', locale)})</>
               )}
             </span>
             <button
               className={`text-sm font-medium underline ${hasErrors ? "text-red-700 hover:text-red-900" : "text-yellow-700 hover:text-yellow-900"}`}
               onClick={() => setShowConflicts(!showConflicts)}
             >
-              {showConflicts ? "Masquer" : "Voir détails"}
+              {showConflicts ? t('rhpl.hide', locale) : t('rhpl.see_details', locale)}
             </button>
           </div>
           {warnings.length > 0 && !hasErrors && (
             <p className="text-xs text-yellow-700 italic">
-              Ces heures dépassent {weeklyLimit}h mais restent dans la limite légale OT
-              ({WEEKLY_OT_LIMIT}h max WRA 2019). À payer en heures supplémentaires.
+              {t('rhpl.ot_note_prefix', locale)} {weeklyLimit}h {t('rhpl.ot_note_mid', locale)}
+              ({WEEKLY_OT_LIMIT}h {t('rhpl.max_wra_2019', locale)}). {t('rhpl.ot_note_suffix', locale)}
             </p>
           )}
           {showConflicts && (
@@ -1385,7 +1385,7 @@ export default function PlanningPage() {
                       ? "bg-red-100 text-red-700"
                       : "bg-orange-100 text-orange-700"
                   }>
-                    {c.type === "leave" ? "Congé" : c.severity === "warning" ? "OT" : "Heures"}
+                    {c.type === "leave" ? t('rhpl.conge_badge', locale) : c.severity === "warning" ? "OT" : t('rhpl.hours_badge', locale)}
                   </Badge>
                   <span className="font-medium">{c.empName}</span>
                   <span className={c.severity === "error" ? "text-red-800" : "text-yellow-900"}>{c.detail}</span>
@@ -1406,19 +1406,19 @@ export default function PlanningPage() {
                 {validationResults.length === 0 ? (
                   <>
                     <CheckCircle2 className="h-5 w-5 text-green-600" />
-                    <span className="text-green-800">Planning conforme WRA 2019</span>
+                    <span className="text-green-800">{t('rhpl.compliant_wra', locale)}</span>
                   </>
                 ) : (
                   <>
                     <XCircle className="h-5 w-5 text-red-600" />
                     <span className="text-red-800">
-                      {validationResults.length} violation{validationResults.length > 1 ? "s" : ""} trouvee{validationResults.length > 1 ? "s" : ""} sur {new Set(validationResults.filter(v => v.empId).map(v => v.empId)).size} employe(s)
+                      {validationResults.length} {validationResults.length > 1 ? t('rhpl.violations_found_plural', locale) : t('rhpl.violation_found', locale)} {t('rhpl.on_word', locale)} {new Set(validationResults.filter(v => v.empId).map(v => v.empId)).size} {t('rhpl.employees_paren', locale)}
                     </span>
                   </>
                 )}
               </CardTitle>
               <Button variant="ghost" size="sm" onClick={() => setShowValidation(false)} className="text-xs">
-                Fermer
+                {t('rhpl.close', locale)}
               </Button>
             </div>
           </CardHeader>
@@ -1430,7 +1430,7 @@ export default function PlanningPage() {
                     v.severity === "red" ? "bg-red-100 text-red-800 border border-red-200" : "bg-orange-100 text-orange-800 border border-orange-200"
                   }`}>
                     <Badge className={`text-[10px] shrink-0 ${v.severity === "red" ? "bg-red-600 text-white" : "bg-orange-500 text-white"}`}>
-                      {v.severity === "red" ? "WRA" : "Alerte"}
+                      {v.severity === "red" ? "WRA" : t('rhpl.alert_badge', locale)}
                     </Badge>
                     <span className="font-medium shrink-0">{v.empName}</span>
                     <span className="font-medium shrink-0">[{v.rule}]</span>
@@ -1480,30 +1480,30 @@ export default function PlanningPage() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm">
-                    <Wand2 className="h-4 w-4 mr-1" /> Remplir <ChevronDown className="h-3 w-3 ml-1" />
+                    <Wand2 className="h-4 w-4 mr-1" /> {t('rhpl.fill', locale)} <ChevronDown className="h-3 w-3 ml-1" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel className="text-xs">Générateurs automatiques</DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-xs">{t('rhpl.auto_generators', locale)}</DropdownMenuLabel>
                   <DropdownMenuItem onClick={generateStandard}>
-                    Planning standard
+                    {t('rhpl.standard_planning', locale)}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={generate3x8}>
-                    Rotation 3×8
+                    {t('rhpl.rotation_3x8', locale)}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setConfirmGenOpen(true)}>
-                    Copier la semaine actuelle
+                    {t('rhpl.copy_current_week', locale)}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setShiftAssignOpen(true)}>
                     <UserCheck className="h-4 w-4 mr-2 text-indigo-600" />
                     <div className="flex flex-col">
-                      <span className="font-medium text-sm">Affecter un shift à des employés</span>
-                      <span className="text-[10px] text-gray-500">Shift choisi pour employés choisis</span>
+                      <span className="font-medium text-sm">{t('rhpl.assign_shift_employees', locale)}</span>
+                      <span className="text-[10px] text-gray-500">{t('rhpl.assign_shift_hint', locale)}</span>
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => setBulkOpen(true)}>
-                    Affectation multiple
+                    {t('rhpl.multi_assign', locale)}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -1512,19 +1512,19 @@ export default function PlanningPage() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm">
-                    <Settings className="h-4 w-4 mr-1" /> Outils <ChevronDown className="h-3 w-3 ml-1" />
+                    <Settings className="h-4 w-4 mr-1" /> {t('rhpl.tools', locale)} <ChevronDown className="h-3 w-3 ml-1" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuItem onClick={runValidation}>
-                    Vérifier la conformité
+                    {t('rhpl.check_compliance', locale)}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => toast.info("Export PDF bientôt disponible")}>
-                    Exporter en PDF
+                  <DropdownMenuItem onClick={() => toast.info(t('rhpl.export_pdf_soon', locale))}>
+                    {t('rhpl.export_pdf', locale)}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link href="/rh/planning/regles">Règles et créneaux</Link>
+                    <Link href="/rh/planning/regles">{t('rhpl.rules_and_slots', locale)}</Link>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -1538,20 +1538,20 @@ export default function PlanningPage() {
                   size="sm"
                   onClick={() => savePlanning(false)}
                   disabled={saving}
-                  title="Enregistrer en brouillon - visible uniquement par vous (RH)"
+                  title={t('rhpl.save_draft_title', locale)}
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
-                  Sauver brouillon
+                  {t('rhpl.save_draft', locale)}
                 </Button>
                 <Button
                   size="sm"
                   onClick={() => setConfirmPublishOpen(true)}
                   disabled={saving}
                   className="text-white hover:opacity-90 bg-emerald-600 hover:bg-emerald-700"
-                  title="Rend le planning visible par tous les employés sur /salarie"
+                  title={t('rhpl.publish_employees_title', locale)}
                 >
                   <Send className="h-4 w-4 mr-1" />
-                  Publier aux employés
+                  {t('rhpl.publish_employees', locale)}
                 </Button>
               </div>
             </div>
@@ -1568,10 +1568,10 @@ export default function PlanningPage() {
                     <Calendar className="w-7 h-7 text-gray-400" />
                   </div>
                   <h3 className="text-lg font-semibold" style={{ color: "#0B0F2E" }}>
-                    Sélectionnez une société
+                    {t('rhpl.select_company', locale)}
                   </h3>
                   <p className="text-sm text-gray-500 max-w-md mx-auto">
-                    Choisissez une société dans le menu déroulant en haut pour afficher son planning.
+                    {t('rhpl.select_company_hint', locale)}
                   </p>
                 </>
               ) : allEmployes.length === 0 ? (
@@ -1580,15 +1580,15 @@ export default function PlanningPage() {
                     <Users className="w-7 h-7 text-amber-600" />
                   </div>
                   <h3 className="text-lg font-semibold" style={{ color: "#0B0F2E" }}>
-                    Aucun employé dans cette société
+                    {t('rhpl.no_employee_company', locale)}
                   </h3>
                   <p className="text-sm text-gray-500 max-w-md mx-auto">
-                    Ajoutez des employés pour commencer à planifier leurs horaires.
+                    {t('rhpl.no_employee_hint', locale)}
                   </p>
                   <div className="pt-2">
                     <Link href="/rh/employes">
                       <Button size="sm" style={{ backgroundColor: "#0B0F2E" }} className="text-white">
-                        <Plus className="h-4 w-4 mr-1" /> Ajouter un employé
+                        <Plus className="h-4 w-4 mr-1" /> {t('rhpl.add_employee', locale)}
                       </Button>
                     </Link>
                   </div>
@@ -1599,14 +1599,14 @@ export default function PlanningPage() {
                     <Users className="w-7 h-7 text-blue-600" />
                   </div>
                   <h3 className="text-lg font-semibold" style={{ color: "#0B0F2E" }}>
-                    Personne à afficher
+                    {t('rhpl.nobody_to_show', locale)}
                   </h3>
                   <p className="text-sm text-gray-500 max-w-md mx-auto">
-                    {allEmployes.length} employé(s) disponible(s) dans cette société. Choisissez ceux à planifier.
+                    {allEmployes.length} {t('rhpl.available_in_company', locale)}
                   </p>
                   <div className="pt-2">
                     <Button size="sm" onClick={() => setEmpFilterOpen(true)}>
-                      <Users className="h-4 w-4 mr-1" /> Choisir les collaborateurs
+                      <Users className="h-4 w-4 mr-1" /> {t('rhpl.choose_collaborators', locale)}
                     </Button>
                   </div>
                 </>
@@ -1617,11 +1617,10 @@ export default function PlanningPage() {
             <div className="text-center py-16 space-y-4">
               <Calendar className="w-12 h-12 mx-auto text-gray-300" />
               <h3 className="text-lg font-semibold text-[#0B0F2E]">
-                Aucun planning pour {MONTH_NAMES[month]} {year}
+                {t('rhpl.no_planning_for', locale)} {getMonthNames(locale)[month]} {year}
               </h3>
               <p className="text-sm text-gray-500 max-w-md mx-auto">
-                Créez le planning de vos {employes.length} employé(s) en quelques clics.
-                Vous pouvez aussi remplir cellule par cellule.
+                {t('rhpl.create_planning_prefix', locale)} {employes.length} {t('rhpl.create_planning_suffix', locale)}
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
                 <Button
@@ -1629,21 +1628,20 @@ export default function PlanningPage() {
                   className="bg-[#0B0F2E] text-white"
                 >
                   <Calendar className="w-4 h-4 mr-2" />
-                  Créer le planning
+                  {t('rhpl.create_planning_btn', locale)}
                 </Button>
                 {creneaux.length >= 3 && (
                   <Button
                     variant="outline"
                     onClick={() => { setWizardRotation(creneaux.slice(0, 3).map(c => c.id)); setWizardMode("rotation"); setWizardOpen(true) }}
                   >
-                    Rotation automatique ({creneaux.length} shifts)
+                    {t('rhpl.auto_rotation', locale)} ({creneaux.length} shifts)
                   </Button>
                 )}
               </div>
               {creneaux.length <= 1 && (
                 <p className="text-xs text-amber-600 mt-2">
-                  Un seul créneau configuré. Ajoutez des shifts dans la section « Créneaux » ci-dessous
-                  pour activer la rotation automatique.
+                  {t('rhpl.single_slot_hint', locale)}
                 </p>
               )}
             </div>
@@ -1654,12 +1652,12 @@ export default function PlanningPage() {
               <table className="w-full border-collapse text-xs">
                 <thead>
                   <tr>
-                    <th className="sticky left-0 bg-white z-10 border px-2 py-1 text-left min-w-[140px]" style={{ color: "#0B0F2E" }}>Employé</th>
+                    <th className="sticky left-0 bg-white z-10 border px-2 py-1 text-left min-w-[140px]" style={{ color: "#0B0F2E" }}>{t('rhpl.employee', locale)}</th>
                     {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
                       const dow = new Date(year, month, d).getDay()
                       return (
                         <th key={d} className={`border px-0 py-1 text-center min-w-[38px] ${dow === 0 || dow === 6 ? "bg-gray-100" : ""}`}>
-                          <div className="text-[9px] text-gray-400">{DAY_NAMES[dow]}</div>
+                          <div className="text-[9px] text-gray-400">{getDayNames(locale)[dow]}</div>
                           <div className="text-[11px]">{d}</div>
                         </th>
                       )
@@ -1676,15 +1674,15 @@ export default function PlanningPage() {
                         const leaveType = approvedLeaves[emp.id]?.get(d) || (cell?.creneau_id?.startsWith("conge_") ? cell.creneau_id.replace("conge_", "") : null)
                         const isLeave = !!leaveType || (cell && (cell.creneau_id === "conge" || cell.creneau_id?.startsWith("conge_")))
                         const leaveMonthColors: Record<string, { couleur: string; code: string; nom: string }> = {
-                          AL: { couleur: "bg-blue-200 text-blue-800", code: "AL", nom: "Local Leave" },
-                          SL: { couleur: "bg-orange-200 text-orange-800", code: "SL", nom: "Sick Leave" },
-                          MAT: { couleur: "bg-purple-200 text-purple-800", code: "MAT", nom: "Maternité" },
-                          PAT: { couleur: "bg-indigo-200 text-indigo-800", code: "PAT", nom: "Paternité" },
-                          SANS_SOLDE: { couleur: "bg-gray-300 text-gray-700", code: "SS", nom: "Sans solde" },
+                          AL: { couleur: "bg-blue-200 text-blue-800", code: "AL", nom: t('rhpl.local_leave', locale) },
+                          SL: { couleur: "bg-orange-200 text-orange-800", code: "SL", nom: t('rhpl.sick_leave', locale) },
+                          MAT: { couleur: "bg-purple-200 text-purple-800", code: "MAT", nom: t('rhpl.maternity', locale) },
+                          PAT: { couleur: "bg-indigo-200 text-indigo-800", code: "PAT", nom: t('rhpl.paternity', locale) },
+                          SANS_SOLDE: { couleur: "bg-gray-300 text-gray-700", code: "SS", nom: t('rhpl.unpaid', locale) },
                         }
                         const lt = leaveType || "AL"
                         const creneau = isLeave
-                          ? { ...CONGE_CRENEAU, couleur: leaveMonthColors[lt]?.couleur || CONGE_CRENEAU.couleur, code: leaveMonthColors[lt]?.code || "C", nom: leaveMonthColors[lt]?.nom || "Congé" }
+                          ? { ...CONGE_CRENEAU, couleur: leaveMonthColors[lt]?.couleur || CONGE_CRENEAU.couleur, code: leaveMonthColors[lt]?.code || "C", nom: leaveMonthColors[lt]?.nom || t('rhpl.leave_word', locale) }
                           : cell ? getCreneauById(cell.creneau_id) : REPOS_CRENEAU
                         const isEditing = editCell?.empId === emp.id && editCell?.day === d
                         const hasConflict = cellHasConflict(emp.id, d)
@@ -1693,7 +1691,7 @@ export default function PlanningPage() {
                           <td key={d}
                             className={`border p-0 text-center cursor-pointer relative ${hasConflict ? "ring-2 ring-inset ring-red-500" : ""} ${holiday ? "ring-1 ring-inset ring-amber-400" : ""} ${isEditing ? "ring-2 ring-inset ring-blue-500" : ""}`}
                             onClick={(e) => setEditCell(isEditing ? null : { empId: emp.id, day: d, rect: (e.currentTarget as HTMLElement).getBoundingClientRect() })}
-                            title={`${holiday ? `Jour férié : ${holiday}\n` : ""}${hasConflict ? `CONFLIT: Congé approuvé ce jour\n${cell ? `${creneau.nom} ${cell.heure_debut}—${cell.heure_fin}` : "Repos"}` : cell ? `${creneau.nom}\n${cell.heure_debut}—${cell.heure_fin}\nPause: ${cell.pause_debut || "—"}—${cell.pause_fin || "—"}\n${cell.heures_prevues}h eff.` : "Repos"}`}
+                            title={`${holiday ? `${t('rhpl.public_holiday', locale)} : ${holiday}\n` : ""}${hasConflict ? `${t('rhpl.conflict_leave_approved', locale)}\n${cell ? `${creneau.nom} ${cell.heure_debut}—${cell.heure_fin}` : t('rhpl.rest_word', locale)}` : cell ? `${creneau.nom}\n${cell.heure_debut}—${cell.heure_fin}\n${t('rhpl.break_word', locale)}: ${cell.pause_debut || "—"}—${cell.pause_fin || "—"}\n${cell.heures_prevues}h eff.` : t('rhpl.rest_word', locale)}`}
                           >
                             {holiday && (
                               <div className="absolute top-0 left-0 right-0 h-[3px] bg-amber-400" aria-hidden="true" />
@@ -1701,7 +1699,7 @@ export default function PlanningPage() {
                             <div className={`w-full py-0.5 leading-tight ${hasConflict ? "bg-red-100 text-red-700" : creneau.couleur}`}>
                               <div className="text-[10px] font-bold">{creneau.code}</div>
                               {cell && cell.heure_debut && <div className="text-[7px] opacity-80">{cell.heure_debut?.slice(0,5)}</div>}
-                              {holiday && <div className="text-[6px] font-bold text-amber-700 uppercase tracking-wide">Férié</div>}
+                              {holiday && <div className="text-[6px] font-bold text-amber-700 uppercase tracking-wide">{t('rhpl.holiday_short', locale)}</div>}
                             </div>
                           </td>
                         )
@@ -1713,12 +1711,12 @@ export default function PlanningPage() {
             </div>
             {/* Legend */}
             <div className="flex flex-wrap gap-3 mt-3 px-2">
-              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-blue-200 border border-blue-300" /><span className="text-xs text-gray-600 font-medium">AL - Local Leave</span></div>
-              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-orange-200 border border-orange-300" /><span className="text-xs text-gray-600 font-medium">SL - Sick Leave</span></div>
-              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-purple-200 border border-purple-300" /><span className="text-xs text-gray-600 font-medium">MAT - Maternité</span></div>
-              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-indigo-200 border border-indigo-300" /><span className="text-xs text-gray-600 font-medium">PAT - Paternité</span></div>
-              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-gray-200 border border-gray-300" /><span className="text-xs text-gray-600 font-medium">R - Repos</span></div>
-              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-white border-2 border-amber-400" /><span className="text-xs text-gray-600 font-medium">Jour férié (l'employé travaille — shift conservé)</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-blue-200 border border-blue-300" /><span className="text-xs text-gray-600 font-medium">AL - {t('rhpl.local_leave', locale)}</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-orange-200 border border-orange-300" /><span className="text-xs text-gray-600 font-medium">SL - {t('rhpl.sick_leave', locale)}</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-purple-200 border border-purple-300" /><span className="text-xs text-gray-600 font-medium">MAT - {t('rhpl.maternity', locale)}</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-indigo-200 border border-indigo-300" /><span className="text-xs text-gray-600 font-medium">PAT - {t('rhpl.paternity', locale)}</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-gray-200 border border-gray-300" /><span className="text-xs text-gray-600 font-medium">R - {t('rhpl.rest_word', locale)}</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-white border-2 border-amber-400" /><span className="text-xs text-gray-600 font-medium">{t('rhpl.holiday_legend', locale)}</span></div>
             </div>
             </>
           ) : (
@@ -1727,13 +1725,13 @@ export default function PlanningPage() {
               {/* Week navigation */}
               <div className="flex items-center justify-between">
                 <Button variant="outline" size="sm" disabled={weekOffset <= 0} onClick={() => setWeekOffset(w => w - 1)}>
-                  <ChevronLeft className="h-4 w-4 mr-1" /> Semaine préc.
+                  <ChevronLeft className="h-4 w-4 mr-1" /> {t('rhpl.prev_week', locale)}
                 </Button>
                 <span className="text-sm font-medium" style={{ color: "#0B0F2E" }}>
-                  Semaine du {currentWeek?.start} au {currentWeek?.end} {MONTH_NAMES[month]}
+                  {t('rhpl.week_of_label', locale)} {currentWeek?.start} {t('rhpl.to_word', locale)} {currentWeek?.end} {getMonthNames(locale)[month]}
                 </span>
                 <Button variant="outline" size="sm" disabled={weekOffset >= weeks.length - 1} onClick={() => setWeekOffset(w => w + 1)}>
-                  Semaine suiv. <ChevronRight className="h-4 w-4 ml-1" />
+                  {t('rhpl.next_week', locale)} <ChevronRight className="h-4 w-4 ml-1" />
                 </Button>
               </div>
               {/* Weekly grid */}
@@ -1741,7 +1739,7 @@ export default function PlanningPage() {
                 <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr>
-                      <th className="sticky left-0 bg-white z-10 border px-3 py-2 text-left min-w-[180px]" style={{ color: "#0B0F2E" }}>Employé</th>
+                      <th className="sticky left-0 bg-white z-10 border px-3 py-2 text-left min-w-[180px]" style={{ color: "#0B0F2E" }}>{t('rhpl.employee', locale)}</th>
                       {Array.from({ length: 7 }, (_, i) => {
                         const day = (currentWeek?.start || 1) + i
                         const valid = day <= daysInMonth
@@ -1752,7 +1750,7 @@ export default function PlanningPage() {
                           </th>
                         )
                       })}
-                      <th className="border px-2 py-2 text-center min-w-[80px] bg-gray-50" style={{ color: "#0B0F2E" }}>Total</th>
+                      <th className="border px-2 py-2 text-center min-w-[80px] bg-gray-50" style={{ color: "#0B0F2E" }}>{t('rhpl.total', locale)}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1777,25 +1775,25 @@ export default function PlanningPage() {
 
                             // Leave type colors — distinct and visible
                             const leaveColors: Record<string, { bg: string; label: string }> = {
-                              AL: { bg: "bg-blue-200 text-blue-800 font-bold", label: "Local Leave" },
-                              SL: { bg: "bg-orange-200 text-orange-800 font-bold", label: "Sick Leave" },
-                              MAT: { bg: "bg-purple-200 text-purple-800 font-bold", label: "Maternité" },
-                              PAT: { bg: "bg-indigo-200 text-indigo-800 font-bold", label: "Paternité" },
-                              SANS_SOLDE: { bg: "bg-gray-300 text-gray-700 font-bold", label: "Sans solde" },
+                              AL: { bg: "bg-blue-200 text-blue-800 font-bold", label: t('rhpl.local_leave', locale) },
+                              SL: { bg: "bg-orange-200 text-orange-800 font-bold", label: t('rhpl.sick_leave', locale) },
+                              MAT: { bg: "bg-purple-200 text-purple-800 font-bold", label: t('rhpl.maternity', locale) },
+                              PAT: { bg: "bg-indigo-200 text-indigo-800 font-bold", label: t('rhpl.paternity', locale) },
+                              SANS_SOLDE: { bg: "bg-gray-300 text-gray-700 font-bold", label: t('rhpl.unpaid', locale) },
                             }
 
                             let bgColor = "bg-gray-100 text-gray-500" // Repos
-                            let label = "Repos"
+                            let label = t('rhpl.rest_word', locale)
                             // Always check approvedLeaves first (source of truth)
                             if (isLeaveDay) {
-                              const lc = leaveColors[leaveType] || { bg: "bg-emerald-200 text-emerald-800 font-bold", label: "Congé" }
+                              const lc = leaveColors[leaveType] || { bg: "bg-emerald-200 text-emerald-800 font-bold", label: t('rhpl.leave_word', locale) }
                               bgColor = lc.bg
                               label = lc.label
                             } else if (cell) {
                               const isCongeCell = cell.creneau_id === "conge" || cell.creneau_id?.startsWith("conge_")
                               if (isCongeCell) {
                                 const cellType = cell.creneau_id?.startsWith("conge_") ? cell.creneau_id.replace("conge_", "") : "AL"
-                                const lc = leaveColors[cellType] || { bg: "bg-emerald-200 text-emerald-800 font-bold", label: "Congé" }
+                                const lc = leaveColors[cellType] || { bg: "bg-emerald-200 text-emerald-800 font-bold", label: t('rhpl.leave_word', locale) }
                                 bgColor = lc.bg
                                 label = lc.label
                               } else {
@@ -1812,7 +1810,7 @@ export default function PlanningPage() {
                               <td key={i}
                                 className={`border p-0 text-center cursor-pointer relative ${hasConflict ? "ring-2 ring-inset ring-red-500" : ""} ${wHoliday ? "ring-1 ring-inset ring-amber-400" : ""} ${isEditing ? "ring-2 ring-inset ring-blue-500" : ""}`}
                                 onClick={(e) => setEditCell(isEditing ? null : { empId: emp.id, day, rect: (e.currentTarget as HTMLElement).getBoundingClientRect() })}
-                                title={`${wHoliday ? `Jour férié : ${wHoliday}\n` : ""}${hasConflict ? "CONFLIT: Congé approuvé ce jour" : label}`}
+                                title={`${wHoliday ? `${t('rhpl.public_holiday', locale)} : ${wHoliday}\n` : ""}${hasConflict ? t('rhpl.conflict_leave_approved', locale) : label}`}
                               >
                                 {wHoliday && (
                                   <div className="absolute top-0 left-0 right-0 h-[3px] bg-amber-400 z-10" aria-hidden="true" />
@@ -1824,7 +1822,7 @@ export default function PlanningPage() {
                                       {getCreneauById(cell.creneau_id).nom} ({cell.heures_prevues}h)
                                     </div>
                                   )}
-                                  {wHoliday && <div className="text-[9px] font-bold text-amber-700 uppercase tracking-wide mt-0.5">Férié</div>}
+                                  {wHoliday && <div className="text-[9px] font-bold text-amber-700 uppercase tracking-wide mt-0.5">{t('rhpl.holiday_short', locale)}</div>}
                                   {hasConflict && <AlertTriangle className="inline h-3 w-3 text-red-500 mt-0.5" />}
                                 </div>
                               </td>
@@ -1839,10 +1837,10 @@ export default function PlanningPage() {
                             }`}
                             title={
                               hoursIllegal
-                                ? `Dépassement ILLÉGAL : ${weekHours}h > ${WEEKLY_OT_LIMIT}h max WRA`
+                                ? `${t('rhpl.illegal_overrun_label', locale)} : ${weekHours}h > ${WEEKLY_OT_LIMIT}h ${t('rhpl.max_wra', locale)}`
                                 : hoursOverLimit
-                                  ? `OT légal : ${weekHours}h (base ${weeklyLimit}h + ${weekHours - weeklyLimit}h OT ≤ ${WEEKLY_OT_LIMIT}h max WRA)`
-                                  : `${weekHours}h cette semaine`
+                                  ? `${t('rhpl.ot_legal_label', locale)} : ${weekHours}h (${t('rhpl.base_word', locale)} ${weeklyLimit}h + ${weekHours - weeklyLimit}h OT ≤ ${WEEKLY_OT_LIMIT}h ${t('rhpl.max_wra', locale)})`
+                                  : `${weekHours}h ${t('rhpl.this_week', locale)}`
                             }>
                             {weekHours}h
                             {hoursIllegal && <AlertTriangle className="inline h-3 w-3 text-red-500 ml-1" />}
@@ -1856,10 +1854,10 @@ export default function PlanningPage() {
               </div>
               {/* Color legend */}
               <div className="flex items-center gap-4 text-xs text-gray-500 pt-1">
-                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: "#4191FF" }} /> Travail</span>
-                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-gray-300" /> Repos</span>
-                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-emerald-400" /> Congé</span>
-                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-red-400" /> Conflit</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: "#4191FF" }} /> {t('rhpl.work_word', locale)}</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-gray-300" /> {t('rhpl.rest_word', locale)}</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-emerald-400" /> {t('rhpl.leave_word', locale)}</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-red-400" /> {t('rhpl.conflict_word', locale)}</span>
               </div>
             </div>
           )}
@@ -1870,16 +1868,16 @@ export default function PlanningPage() {
       <Dialog open={empFilterOpen} onOpenChange={setEmpFilterOpen}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle style={{ color: "#0B0F2E" }}>Collaborateurs dans le planning</DialogTitle>
+            <DialogTitle style={{ color: "#0B0F2E" }}>{t('rhpl.collabs_in_planning', locale)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <Input placeholder={t('rha.a.plan.search_collab', locale)} value={empSearch} onChange={e => setEmpSearch(e.target.value)} />
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => setIncludedEmpIds(new Set(allEmployes.map(e => e.id)))}>
-                Tout sélectionner
+                {t('rhpl.select_all', locale)}
               </Button>
               <Button variant="outline" size="sm" onClick={() => setIncludedEmpIds(new Set())}>
-                Tout désélectionner
+                {t('rhpl.deselect_all', locale)}
               </Button>
             </div>
             <div className="border rounded-lg divide-y max-h-[50vh] overflow-y-auto">
@@ -1909,12 +1907,12 @@ export default function PlanningPage() {
                       {emp.poste && <p className="text-xs text-gray-400">{emp.poste}</p>}
                     </div>
                     {includedEmpIds.has(emp.id) && (
-                      <Badge className="bg-green-100 text-green-700 text-[10px]">Inclus</Badge>
+                      <Badge className="bg-green-100 text-green-700 text-[10px]">{t('rhpl.included', locale)}</Badge>
                     )}
                   </label>
                 ))}
             </div>
-            <p className="text-xs text-gray-500">{includedEmpIds.size} collaborateur(s) sélectionné(s) sur {allEmployes.length}</p>
+            <p className="text-xs text-gray-500">{includedEmpIds.size} {t('rhpl.selected_of', locale)} {allEmployes.length}</p>
             <Button className="w-full text-white" style={{ backgroundColor: "#0B0F2E" }} onClick={() => {
               setEmployes(allEmployes.filter(e => includedEmpIds.has(e.id)))
               // Rebuild planning grid for newly included employees
@@ -1934,7 +1932,7 @@ export default function PlanningPage() {
               })
               setEmpFilterOpen(false)
             }}>
-              Appliquer
+              {t('rhpl.apply', locale)}
             </Button>
           </div>
         </DialogContent>
@@ -1944,13 +1942,13 @@ export default function PlanningPage() {
       <Dialog open={creneauConfigOpen} onOpenChange={setCreneauConfigOpen}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle style={{ color: "#0B0F2E" }}>Créneaux horaires</DialogTitle>
+            <DialogTitle style={{ color: "#0B0F2E" }}>{t('rhpl.time_slots', locale)}</DialogTitle>
           </DialogHeader>
           <div className="flex items-start gap-2 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-xs text-blue-900 mb-3">
             <Info className="w-4 h-4 shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium">Les créneaux sont partagés avec les règles de planning</p>
-              <p className="mt-0.5">Pour une édition complète, utilisez <Link href="/rh/planning/regles" className="underline font-medium">Règles de planning</Link>.</p>
+              <p className="font-medium">{t('rhpl.slots_shared_note', locale)}</p>
+              <p className="mt-0.5">{t('rhpl.full_edit_prefix', locale)} <Link href="/rh/planning/regles" className="underline font-medium">{t('rhpl.planning_rules_link', locale)}</Link>.</p>
             </div>
           </div>
           {!editingCreneau ? (
@@ -1960,12 +1958,12 @@ export default function PlanningPage() {
                   <span className={`inline-flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold ${c.couleur}`}>{c.code}</span>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm">{c.nom}</p>
-                    <p className="text-xs text-gray-500">{c.heure_debut} — {c.heure_fin} | Pause: {c.pause_debut || "—"} — {c.pause_fin || "—"} ({c.pause_minutes}min) | {c.heures_effectives}h eff.</p>
+                    <p className="text-xs text-gray-500">{c.heure_debut} — {c.heure_fin} | {t('rhpl.break_word', locale)}: {c.pause_debut || "—"} — {c.pause_fin || "—"} ({c.pause_minutes}min) | {c.heures_effectives}h eff.</p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => setEditingCreneau(c)}>Modifier</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setEditingCreneau(c)}>{t('rhpl.modify', locale)}</Button>
                 </div>
               ))}
-              <Button variant="outline" className="w-full" onClick={addCreneau}><Plus className="h-4 w-4 mr-1" /> Ajouter un créneau</Button>
+              <Button variant="outline" className="w-full" onClick={addCreneau}><Plus className="h-4 w-4 mr-1" /> {t('rhpl.add_slot', locale)}</Button>
             </div>
           ) : (
             <CreneauEditor creneau={editingCreneau} onSave={updateCreneau} onDelete={deleteCreneau} onCancel={() => setEditingCreneau(null)} />
@@ -1977,23 +1975,22 @@ export default function PlanningPage() {
       <Dialog open={confirmGenOpen} onOpenChange={setConfirmGenOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle style={{ color: "#0B0F2E" }}>Générer planning type</DialogTitle>
+            <DialogTitle style={{ color: "#0B0F2E" }}>{t('rhpl.generate_template', locale)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-gray-600">
-              Cette action va copier le planning de la semaine actuelle
-              {currentWeek ? ` (jours ${currentWeek.start}–${currentWeek.end})` : ""} vers toutes les
-              semaines restantes du mois de {MONTH_NAMES[month]}.
+              {t('rhpl.gen_template_desc1', locale)}
+              {currentWeek ? ` (${t('rhpl.days_word', locale)} ${currentWeek.start}–${currentWeek.end})` : ""} {t('rhpl.gen_template_desc2', locale)} {getMonthNames(locale)[month]}.
             </p>
             <p className="text-sm text-yellow-700 bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200">
               <AlertTriangle className="inline h-4 w-4 mr-1" />
-              Les données existantes des autres semaines seront écrasées.
+              {t('rhpl.gen_template_warn', locale)}
             </p>
             <div className="flex gap-2">
               <Button className="flex-1 text-white" style={{ backgroundColor: "#D4AF37" }} onClick={generateFromCurrentWeek}>
-                <Copy className="h-4 w-4 mr-1" /> Confirmer
+                <Copy className="h-4 w-4 mr-1" /> {t('rhpl.confirm', locale)}
               </Button>
-              <Button variant="outline" className="flex-1" onClick={() => setConfirmGenOpen(false)}>Annuler</Button>
+              <Button variant="outline" className="flex-1" onClick={() => setConfirmGenOpen(false)}>{t('rhpl.cancel', locale)}</Button>
             </div>
           </div>
         </DialogContent>
@@ -2006,24 +2003,23 @@ export default function PlanningPage() {
           <DialogHeader>
             <DialogTitle style={{ color: "#0B0F2E" }} className="flex items-center gap-2">
               <Send className="h-5 w-5 text-emerald-600" />
-              Publier ce planning ?
+              {t('rhpl.publish_this_planning', locale)}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 text-sm">
             <p className="text-gray-700">
-              En publiant ce planning, <strong>tous les employés concernés</strong> pourront
-              le consulter sur leur espace personnel (<code className="bg-gray-100 px-1 rounded text-xs">/salarie</code>).
+              {t('rhpl.publish_desc1', locale)} <strong>{t('rhpl.publish_desc_all_emp', locale)}</strong> {t('rhpl.publish_desc2', locale)} (<code className="bg-gray-100 px-1 rounded text-xs">/salarie</code>).
             </p>
             <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">
-              <p className="font-medium mb-1">⚠️ Avant de publier, vérifiez :</p>
+              <p className="font-medium mb-1">⚠️ {t('rhpl.before_publish_check', locale)}</p>
               <ul className="space-y-1 ml-4 list-disc">
-                <li>Toutes les affectations sont correctes</li>
-                <li>Les règles WRA (45h/semaine, repos) sont respectées</li>
-                <li>Aucun conflit avec les congés approuvés</li>
+                <li>{t('rhpl.check_assignments', locale)}</li>
+                <li>{t('rhpl.check_wra_rules', locale)}</li>
+                <li>{t('rhpl.check_no_conflict', locale)}</li>
               </ul>
             </div>
             <p className="text-xs text-gray-500">
-              Vous pourrez toujours republier après modification.
+              {t('rhpl.can_republish', locale)}
             </p>
           </div>
           <div className="flex justify-end gap-2 pt-3 border-t">
@@ -2032,7 +2028,7 @@ export default function PlanningPage() {
               onClick={() => setConfirmPublishOpen(false)}
               disabled={saving}
             >
-              Annuler
+              {t('rhpl.cancel', locale)}
             </Button>
             <Button
               onClick={async () => {
@@ -2043,7 +2039,7 @@ export default function PlanningPage() {
               className="bg-emerald-600 text-white hover:bg-emerald-700"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
-              Confirmer la publication
+              {t('rhpl.confirm_publication', locale)}
             </Button>
           </div>
         </DialogContent>
@@ -2053,13 +2049,13 @@ export default function PlanningPage() {
       <Dialog open={shiftAssignOpen} onOpenChange={setShiftAssignOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle style={{ color: "#0B0F2E" }}>Affecter un shift à des employés</DialogTitle>
+            <DialogTitle style={{ color: "#0B0F2E" }}>{t('rhpl.assign_shift_employees', locale)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Shift à appliquer</Label>
+              <Label>{t('rhpl.shift_to_apply', locale)}</Label>
               <Select value={shiftAssignCreneauId} onValueChange={setShiftAssignCreneauId}>
-                <SelectTrigger><SelectValue placeholder="Choisir un shift" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('rhpl.choose_shift', locale)} /></SelectTrigger>
                 <SelectContent>
                   {creneaux.filter(c => c.heures_effectives > 0).map(c => (
                     <SelectItem key={c.id} value={c.id}>
@@ -2071,7 +2067,7 @@ export default function PlanningPage() {
             </div>
 
             <div>
-              <Label>Employés concernés</Label>
+              <Label>{t('rhpl.employees_concerned', locale)}</Label>
               <div className="border rounded p-2 max-h-48 overflow-y-auto space-y-1 mt-1">
                 {employes.map(emp => (
                   <label
@@ -2098,7 +2094,7 @@ export default function PlanningPage() {
                   className="text-xs"
                   onClick={() => setShiftAssignEmployes(employes.map(e => e.id))}
                 >
-                  Tout sélectionner
+                  {t('rhpl.select_all', locale)}
                 </Button>
                 <Button
                   variant="ghost"
@@ -2106,7 +2102,7 @@ export default function PlanningPage() {
                   className="text-xs"
                   onClick={() => setShiftAssignEmployes([])}
                 >
-                  Tout désélectionner
+                  {t('rhpl.deselect_all', locale)}
                 </Button>
               </div>
             </div>
@@ -2114,8 +2110,7 @@ export default function PlanningPage() {
             <div className="flex items-start gap-2 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-xs text-blue-900">
               <Info className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
-                Le shift sera appliqué sur tous les jours ouvrés du mois pour les employés
-                sélectionnés. Les congés approuvés et jours de repos sont respectés.
+                {t('rhpl.assign_shift_info', locale)}
               </div>
             </div>
 
@@ -2125,7 +2120,7 @@ export default function PlanningPage() {
               onClick={applyShiftAssign}
               disabled={!shiftAssignCreneauId || shiftAssignEmployes.length === 0}
             >
-              Appliquer à {shiftAssignEmployes.length} employé{shiftAssignEmployes.length > 1 ? "s" : ""}
+              {t('rhpl.apply_to', locale)} {shiftAssignEmployes.length} {shiftAssignEmployes.length > 1 ? t('rhpl.employees_plain', locale) : t('rhpl.employee_plain', locale)}
             </Button>
           </div>
         </DialogContent>
@@ -2133,10 +2128,10 @@ export default function PlanningPage() {
 
       <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle style={{ color: "#0B0F2E" }}>Affectation multiple</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle style={{ color: "#0B0F2E" }}>{t('rhpl.multi_assign', locale)}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Employés</Label>
+              <Label>{t('rhpl.employees_label', locale)}</Label>
               <div className="border rounded p-2 max-h-40 overflow-y-auto space-y-1 mt-1">
                 {employes.map(emp => (
                   <label key={emp.id} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -2146,14 +2141,14 @@ export default function PlanningPage() {
                   </label>
                 ))}
               </div>
-              <Button variant="ghost" size="sm" className="mt-1 text-xs" onClick={() => setBulkEmployees(employes.map(e => e.id))}>Tout sélectionner</Button>
+              <Button variant="ghost" size="sm" className="mt-1 text-xs" onClick={() => setBulkEmployees(employes.map(e => e.id))}>{t('rhpl.select_all', locale)}</Button>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Du jour</Label><Input type="number" min={1} max={daysInMonth} value={bulkDateFrom} onChange={e => setBulkDateFrom(+e.target.value)} /></div>
-              <div><Label>Au jour</Label><Input type="number" min={1} max={daysInMonth} value={bulkDateTo} onChange={e => setBulkDateTo(+e.target.value)} /></div>
+              <div><Label>{t('rhpl.from_day', locale)}</Label><Input type="number" min={1} max={daysInMonth} value={bulkDateFrom} onChange={e => setBulkDateFrom(+e.target.value)} /></div>
+              <div><Label>{t('rhpl.to_day', locale)}</Label><Input type="number" min={1} max={daysInMonth} value={bulkDateTo} onChange={e => setBulkDateTo(+e.target.value)} /></div>
             </div>
             <div>
-              <Label>Créneau</Label>
+              <Label>{t('rhpl.slot_word', locale)}</Label>
               <Select value={bulkCreneauId} onValueChange={setBulkCreneauId}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -2165,9 +2160,9 @@ export default function PlanningPage() {
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={bulkWeekendOff} onCheckedChange={setBulkWeekendOff} />
-              <Label className="text-sm">Week-end = Repos automatique</Label>
+              <Label className="text-sm">{t('rhpl.weekend_auto_rest', locale)}</Label>
             </div>
-            <Button className="w-full text-white" style={{ backgroundColor: "#0B0F2E" }} onClick={applyBulk}>Appliquer</Button>
+            <Button className="w-full text-white" style={{ backgroundColor: "#0B0F2E" }} onClick={applyBulk}>{t('rhpl.apply', locale)}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -2175,38 +2170,38 @@ export default function PlanningPage() {
       <Dialog open={wizardOpen} onOpenChange={setWizardOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle style={{ color: "#0B0F2E" }}>Créer le planning — {MONTH_NAMES[month]} {year}</DialogTitle>
+            <DialogTitle style={{ color: "#0B0F2E" }}>{t('rhpl.create_planning_btn', locale)} — {getMonthNames(locale)[month]} {year}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
               <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
                 <input type="radio" checked={wizardMode === "standard"} onChange={() => setWizardMode("standard")} />
                 <div>
-                  <p className="text-sm font-medium">Planning standard</p>
-                  <p className="text-xs text-gray-500">Même shift tous les jours ouvrables</p>
+                  <p className="text-sm font-medium">{t('rhpl.standard_planning', locale)}</p>
+                  <p className="text-xs text-gray-500">{t('rhpl.same_shift_all_days', locale)}</p>
                 </div>
               </label>
               {creneaux.length >= 2 && (
                 <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
                   <input type="radio" checked={wizardMode === "rotation"} onChange={() => { setWizardMode("rotation"); setWizardRotation(creneaux.slice(0, Math.min(3, creneaux.length)).map(c => c.id)) }} />
                   <div>
-                    <p className="text-sm font-medium">Rotation automatique</p>
-                    <p className="text-xs text-gray-500">Alterner {creneaux.length} shifts par semaine</p>
+                    <p className="text-sm font-medium">{t('rhpl.auto_rotation', locale)}</p>
+                    <p className="text-xs text-gray-500">{t('rhpl.alternate_prefix', locale)} {creneaux.length} {t('rhpl.shifts_per_week', locale)}</p>
                   </div>
                 </label>
               )}
               <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
                 <input type="radio" checked={wizardMode === "manual"} onChange={() => setWizardMode("manual")} />
                 <div>
-                  <p className="text-sm font-medium">Mode manuel</p>
-                  <p className="text-xs text-gray-500">Remplir cellule par cellule</p>
+                  <p className="text-sm font-medium">{t('rhpl.manual_mode', locale)}</p>
+                  <p className="text-xs text-gray-500">{t('rhpl.fill_cell_by_cell', locale)}</p>
                 </div>
               </label>
             </div>
 
             {wizardMode === "standard" && (
               <div>
-                <Label>Shift à appliquer</Label>
+                <Label>{t('rhpl.shift_to_apply', locale)}</Label>
                 <Select value={wizardShift || creneaux[0]?.id || ""} onValueChange={setWizardShift}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -2220,7 +2215,7 @@ export default function PlanningPage() {
 
             {wizardMode === "rotation" && (
               <div className="space-y-2">
-                <Label>Shifts dans l'ordre de rotation</Label>
+                <Label>{t('rhpl.shifts_rotation_order', locale)}</Label>
                 {creneaux.map(c => (
                   <label key={c.id} className="flex items-center gap-2 text-sm">
                     <input
@@ -2235,25 +2230,24 @@ export default function PlanningPage() {
                   </label>
                 ))}
                 {wizardRotation.length < 2 && (
-                  <p className="text-xs text-amber-600">Sélectionnez au moins 2 shifts pour la rotation.</p>
+                  <p className="text-xs text-amber-600">{t('rhpl.select_min_2_shifts', locale)}</p>
                 )}
               </div>
             )}
 
             <p className="text-xs text-gray-500">
-              {employes.length} employé(s) concerné(s). Les congés approuvés seront respectés.
-              Les weekends restent en repos.
+              {employes.length} {t('rhpl.wizard_footer_note', locale)}
             </p>
 
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setWizardOpen(false)}>Annuler</Button>
+              <Button variant="outline" className="flex-1" onClick={() => setWizardOpen(false)}>{t('rhpl.cancel', locale)}</Button>
               <Button
                 className="flex-1 text-white"
                 style={{ backgroundColor: "#0B0F2E" }}
                 disabled={wizardMode === "rotation" && wizardRotation.length < 2}
                 onClick={applyWizard}
               >
-                {wizardMode === "manual" ? "Commencer" : "Générer"}
+                {wizardMode === "manual" ? t('rhpl.start', locale) : t('rhpl.generate', locale)}
               </Button>
             </div>
           </div>
@@ -2274,7 +2268,7 @@ export default function PlanningPage() {
         const empName = (allEmployes.find((e: any) => e.id === editCell.empId)
           || employes.find((e: any) => e.id === editCell.empId))
         const empLabel = empName ? `${empName.prenom} ${empName.nom}` : ""
-        const dateLabel = `${editCell.day} ${MONTH_NAMES[month]}`
+        const dateLabel = `${editCell.day} ${getMonthNames(locale)[month]}`
         return (
           <>
             <div className="fixed inset-0 z-[60]" onClick={() => setEditCell(null)} aria-hidden="true" />
@@ -2286,7 +2280,7 @@ export default function PlanningPage() {
             >
               <div className="px-2 py-1 mb-0.5 border-b sticky top-0 bg-white">
                 <div className="text-[11px] font-bold text-gray-800 truncate">{empLabel}</div>
-                <div className="text-[10px] text-gray-500">{dateLabel}{holidaysByDay[editCell.day] ? ` · Férié : ${holidaysByDay[editCell.day]}` : ""}</div>
+                <div className="text-[10px] text-gray-500">{dateLabel}{holidaysByDay[editCell.day] ? ` · ${t('rhpl.holiday_short', locale)} : ${holidaysByDay[editCell.day]}` : ""}</div>
               </div>
               {allCreneaux.map(c => {
                 const pendingSick = c.id === "sick" && sickPending.has(`${editCell.empId}-${editCell.day}`)
@@ -2319,6 +2313,7 @@ function CreneauEditor({ creneau, onSave, onDelete, onCancel }: {
   onDelete: (id: string) => void
   onCancel: () => void
 }) {
+  const locale = getLocale()
   const [c, setC] = useState<Creneau>({ ...creneau })
 
   const eff = computeEffective(c.heure_debut, c.heure_fin, c.pause_debut, c.pause_fin)
@@ -2327,34 +2322,34 @@ function CreneauEditor({ creneau, onSave, onDelete, onCancel }: {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <div><Label>Nom</Label><Input value={c.nom} onChange={e => setC(p => ({ ...p, nom: e.target.value }))} /></div>
-        <div><Label>Code (1-3 car.)</Label><Input value={c.code} maxLength={3} onChange={e => setC(p => ({ ...p, code: e.target.value.toUpperCase() }))} /></div>
+        <div><Label>{t('rhpl.name_label', locale)}</Label><Input value={c.nom} onChange={e => setC(p => ({ ...p, nom: e.target.value }))} /></div>
+        <div><Label>{t('rhpl.code_label', locale)}</Label><Input value={c.code} maxLength={3} onChange={e => setC(p => ({ ...p, code: e.target.value.toUpperCase() }))} /></div>
       </div>
 
       <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-        <p className="text-sm font-medium text-blue-800 mb-2 flex items-center gap-1"><Clock className="w-4 h-4" /> Horaires de travail</p>
+        <p className="text-sm font-medium text-blue-800 mb-2 flex items-center gap-1"><Clock className="w-4 h-4" /> {t('rhpl.work_hours', locale)}</p>
         <div className="grid grid-cols-2 gap-3">
-          <div><Label className="text-xs">Début</Label><Input type="time" value={c.heure_debut} onChange={e => setC(p => ({ ...p, heure_debut: e.target.value }))} /></div>
-          <div><Label className="text-xs">Fin</Label><Input type="time" value={c.heure_fin} onChange={e => setC(p => ({ ...p, heure_fin: e.target.value }))} /></div>
+          <div><Label className="text-xs">{t('rhpl.start_field', locale)}</Label><Input type="time" value={c.heure_debut} onChange={e => setC(p => ({ ...p, heure_debut: e.target.value }))} /></div>
+          <div><Label className="text-xs">{t('rhpl.end_field', locale)}</Label><Input type="time" value={c.heure_fin} onChange={e => setC(p => ({ ...p, heure_fin: e.target.value }))} /></div>
         </div>
       </div>
 
       <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
-        <p className="text-sm font-medium text-orange-800 mb-2 flex items-center gap-1"><Coffee className="w-4 h-4" /> Pause</p>
+        <p className="text-sm font-medium text-orange-800 mb-2 flex items-center gap-1"><Coffee className="w-4 h-4" /> {t('rhpl.break_word', locale)}</p>
         <div className="grid grid-cols-2 gap-3">
-          <div><Label className="text-xs">Début pause</Label><Input type="time" value={c.pause_debut} onChange={e => setC(p => ({ ...p, pause_debut: e.target.value }))} /></div>
-          <div><Label className="text-xs">Fin pause</Label><Input type="time" value={c.pause_fin} onChange={e => setC(p => ({ ...p, pause_fin: e.target.value }))} /></div>
+          <div><Label className="text-xs">{t('rhpl.break_start', locale)}</Label><Input type="time" value={c.pause_debut} onChange={e => setC(p => ({ ...p, pause_debut: e.target.value }))} /></div>
+          <div><Label className="text-xs">{t('rhpl.break_end', locale)}</Label><Input type="time" value={c.pause_fin} onChange={e => setC(p => ({ ...p, pause_fin: e.target.value }))} /></div>
         </div>
-        <p className="text-xs text-orange-600 mt-2">Durée pause : {pauseMin} minutes</p>
+        <p className="text-xs text-orange-600 mt-2">{t('rhpl.break_duration', locale)} {pauseMin} {t('rhpl.minutes_word', locale)}</p>
       </div>
 
       <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-        <p className="text-sm font-medium text-green-800">Heures effectives : <span className="text-lg">{eff}h</span></p>
-        <p className="text-xs text-green-600">= Horaires travail ({computeMinutes(c.heure_debut, c.heure_fin)} min) - Pause ({pauseMin} min)</p>
+        <p className="text-sm font-medium text-green-800">{t('rhpl.effective_hours', locale)} <span className="text-lg">{eff}h</span></p>
+        <p className="text-xs text-green-600">= {t('rhpl.work_hours_calc', locale)} ({computeMinutes(c.heure_debut, c.heure_fin)} min) - {t('rhpl.break_word', locale)} ({pauseMin} min)</p>
       </div>
 
       <div>
-        <Label>Couleur</Label>
+        <Label>{t('rhpl.color_label', locale)}</Label>
         <div className="flex gap-2 mt-1 flex-wrap">
           {COLORS.map(color => (
             <button key={color}
@@ -2366,9 +2361,9 @@ function CreneauEditor({ creneau, onSave, onDelete, onCancel }: {
 
       <div className="flex gap-2">
         <Button className="flex-1 text-white" style={{ backgroundColor: "#0B0F2E" }} onClick={() => onSave({ ...c, pause_minutes: pauseMin, heures_effectives: eff })}>
-          Enregistrer
+          {t('rhpl.save_word', locale)}
         </Button>
-        <Button variant="outline" onClick={onCancel}>Annuler</Button>
+        <Button variant="outline" onClick={onCancel}>{t('rhpl.cancel', locale)}</Button>
         <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => onDelete(c.id)}>
           <Trash2 className="w-4 h-4" />
         </Button>

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { PlanningShift, JourCode, ShiftType } from "@/types/planning"
+import { t, getLocale } from "@/lib/i18n"
 
 const JOURS: { code: JourCode; label: string; short: string }[] = [
   { code: "lun", label: "Lundi",    short: "Lu" },
@@ -23,14 +24,14 @@ const JOURS: { code: JourCode; label: string; short: string }[] = [
   { code: "dim", label: "Dimanche", short: "Di" },
 ]
 
-const SHIFT_TYPES: { value: ShiftType; label: string }[] = [
-  { value: "normal",       label: "Normal" },
-  { value: "nuit",         label: "Nuit" },
-  { value: "repos",        label: "Repos" },
-  { value: "astreinte",    label: "Astreinte" },
-  { value: "ferie",        label: "Férié" },
-  { value: "teletravail",  label: "Télétravail" },
-  { value: "garde",        label: "Garde" },
+const SHIFT_TYPES: { value: ShiftType; tkey: string }[] = [
+  { value: "normal",       tkey: "rhpl.typeNormal" },
+  { value: "nuit",         tkey: "rhpl.typeNuit" },
+  { value: "repos",        tkey: "rhpl.typeRepos" },
+  { value: "astreinte",    tkey: "rhpl.typeAstreinte" },
+  { value: "ferie",        tkey: "rhpl.typeFerie" },
+  { value: "teletravail",  tkey: "rhpl.typeTeletravail" },
+  { value: "garde",        tkey: "rhpl.typeGarde" },
 ]
 
 function genShiftId(): string {
@@ -84,6 +85,7 @@ interface Props {
 export function ShiftEditDialog({
   shift, open, onOpenChange, onSave, existingCodes, maxHeuresJour,
 }: Props) {
+  const locale = getLocale()
   const [form, setForm] = useState<PlanningShift>(() => shift || emptyShift())
   const [userEditedHeures, setUserEditedHeures] = useState(false)
 
@@ -155,9 +157,9 @@ export function ShiftEditDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{shift ? "Modifier le créneau" : "Nouveau créneau"}</DialogTitle>
+          <DialogTitle>{shift ? t('rhpl.modifierCreneau', locale) : t('rhpl.nouveauCreneau', locale)}</DialogTitle>
           <DialogDescription>
-            Configure le code, les horaires, la pause et les jours de ce créneau.
+            {t('rhpl.dialogDescription', locale)}
           </DialogDescription>
         </DialogHeader>
 
@@ -165,39 +167,39 @@ export function ShiftEditDialog({
           {/* Code + Label */}
           <div className="grid grid-cols-[100px_1fr] gap-3">
             <div>
-              <Label>Code</Label>
+              <Label>{t('rhpl.code', locale)}</Label>
               <Input
                 value={form.code}
                 maxLength={3}
                 onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))}
-                placeholder="J"
+                placeholder={t('rhpl.codePlaceholder', locale)}
                 className={cn(codeConflict && "border-red-500")}
               />
               {codeConflict && (
                 <p className="text-xs text-red-600 mt-1 flex items-start gap-1">
                   <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
-                  Code déjà utilisé
+                  {t('rhpl.codeDejaUtilise', locale)}
                 </p>
               )}
             </div>
             <div>
-              <Label>Libellé</Label>
+              <Label>{t('rhpl.libelle', locale)}</Label>
               <Input
                 value={form.label}
                 onChange={e => setForm(p => ({ ...p, label: e.target.value }))}
-                placeholder="Journée"
+                placeholder={t('rhpl.libellePlaceholder', locale)}
               />
             </div>
           </div>
 
           {/* Type */}
           <div>
-            <Label>Type</Label>
+            <Label>{t('rhpl.type', locale)}</Label>
             <Select value={form.type} onValueChange={(v) => setForm(p => ({ ...p, type: v as ShiftType }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {SHIFT_TYPES.map(t => (
-                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                {SHIFT_TYPES.map(st => (
+                  <SelectItem key={st.value} value={st.value}>{t(st.tkey, locale)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -207,7 +209,7 @@ export function ShiftEditDialog({
           {!isRepos && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Début</Label>
+                <Label>{t('rhpl.debut', locale)}</Label>
                 <Input
                   type="time"
                   value={form.debut || ""}
@@ -215,7 +217,7 @@ export function ShiftEditDialog({
                 />
               </div>
               <div>
-                <Label>Fin</Label>
+                <Label>{t('rhpl.fin', locale)}</Label>
                 <Input
                   type="time"
                   value={form.fin || ""}
@@ -230,9 +232,9 @@ export function ShiftEditDialog({
             <div className="rounded-lg border p-3 space-y-3 bg-slate-50">
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="font-medium">Horaires flexibles</Label>
+                  <Label className="font-medium">{t('rhpl.horairesFlexibles', locale)}</Label>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    L'employé peut commencer dans une fenêtre tant qu'il fait ses heures.
+                    {t('rhpl.horairesFlexiblesHint', locale)}
                   </p>
                 </div>
                 <Switch
@@ -243,7 +245,7 @@ export function ShiftEditDialog({
               {form.flexible && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs">Début min</Label>
+                    <Label className="text-xs">{t('rhpl.debutMin', locale)}</Label>
                     <Input
                       type="time"
                       value={form.debut_min || ""}
@@ -251,7 +253,7 @@ export function ShiftEditDialog({
                     />
                   </div>
                   <div>
-                    <Label className="text-xs">Début max</Label>
+                    <Label className="text-xs">{t('rhpl.debutMax', locale)}</Label>
                     <Input
                       type="time"
                       value={form.debut_max || ""}
@@ -267,7 +269,7 @@ export function ShiftEditDialog({
           {!isRepos && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Pause (minutes)</Label>
+                <Label>{t('rhpl.pauseMinutes', locale)}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -277,7 +279,7 @@ export function ShiftEditDialog({
                 />
               </div>
               <div>
-                <Label>Heures requises</Label>
+                <Label>{t('rhpl.heuresRequises', locale)}</Label>
                 <Input
                   type="number"
                   step={0.25}
@@ -290,7 +292,7 @@ export function ShiftEditDialog({
                   }}
                 />
                 <p className="text-[11px] text-gray-500 mt-1">
-                  Auto-calculé à partir des horaires ({autoHeures}h)
+                  {t('rhpl.autoCalcule', locale)} ({autoHeures}h)
                 </p>
               </div>
             </div>
@@ -299,19 +301,19 @@ export function ShiftEditDialog({
           {heuresOver && (
             <div className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-md p-2 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-              <span>Dépasse le maximum journalier configuré ({maxHeuresJour}h).</span>
+              <span>{t('rhpl.depasseMaxPrefix', locale)} ({maxHeuresJour}h).</span>
             </div>
           )}
           {heuresIncoherent && (
             <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-              <span>Heures requises incohérentes avec début/fin/pause (≈{autoHeures}h nettes).</span>
+              <span>{t('rhpl.heuresIncoherentPrefix', locale)} (≈{autoHeures}{t('rhpl.heuresNettesSuffix', locale)}).</span>
             </div>
           )}
 
           {/* Jours */}
           <div>
-            <Label>Jours appliqués</Label>
+            <Label>{t('rhpl.joursAppliques', locale)}</Label>
             <div className="flex flex-wrap gap-2 mt-1">
               {JOURS.map(j => {
                 const checked = form.jours.includes(j.code)
@@ -330,21 +332,21 @@ export function ShiftEditDialog({
               })}
             </div>
             {missingJours && (
-              <p className="text-xs text-red-600 mt-1">Sélectionnez au moins un jour.</p>
+              <p className="text-xs text-red-600 mt-1">{t('rhpl.selectionnezJour', locale)}</p>
             )}
           </div>
 
           {/* Couleur + Actif */}
           <div className="grid grid-cols-[1fr_auto] gap-4 items-center">
             <div>
-              <Label>Couleur</Label>
+              <Label>{t('rhpl.couleur', locale)}</Label>
               <div className="flex items-center gap-2 mt-1">
                 <input
                   type="color"
                   value={form.couleur}
                   onChange={e => setForm(p => ({ ...p, couleur: e.target.value }))}
                   className="h-9 w-12 rounded border cursor-pointer"
-                  aria-label="Couleur du créneau"
+                  aria-label={t('rhpl.couleurDuCreneau', locale)}
                 />
                 <Input
                   value={form.couleur}
@@ -355,7 +357,7 @@ export function ShiftEditDialog({
               </div>
             </div>
             <div>
-              <Label>Actif</Label>
+              <Label>{t('rhpl.actif', locale)}</Label>
               <div className="mt-2">
                 <Switch
                   checked={form.actif}
@@ -367,9 +369,9 @@ export function ShiftEditDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('rhpl.annuler', locale)}</Button>
           <Button disabled={!canSave} onClick={handleSave} className="text-white" style={{ backgroundColor: "#0B0F2E" }}>
-            Enregistrer
+            {t('rhpl.enregistrer', locale)}
           </Button>
         </DialogFooter>
       </DialogContent>

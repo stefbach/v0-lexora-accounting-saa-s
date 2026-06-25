@@ -20,7 +20,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { EmptyState } from "@/components/ui/empty-state"
-import { t, getLocale } from "@/lib/i18n"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 import { createClient } from "@/lib/supabase/client"
 import { countJoursOuvrablesSync, buildJoursFeriesSet } from "@/lib/rh/jours-ouvrables"
 import {
@@ -31,17 +31,17 @@ import { CashInLieuPanel } from "./_components/CashInLieuPanel"
 import { JustificatifBouton } from "@/components/rh/JustificatifDialog"
 
 // ─── Constants ───────────────────────────────────────────────────
-const TYPE_LABELS: Record<string, string> = {
-  AL: "Local Leave",
-  SL: "Sick Leave",
-  UL: "Leave Without Pay",
-  MAT: "Maternity Leave (14 wks)",
-  PAT: "Paternity Leave (5d)",
-  CAR: "Family Care Leave",
-  WI: "Work Injury Leave",
-  COM: "Bereavement Leave",
-  PH: "Jour férié travaillé",
-  ABS: "Absence",
+const TYPE_CODES = ['AL', 'SL', 'UL', 'MAT', 'PAT', 'CAR', 'WI', 'COM', 'PH', 'ABS'] as const
+
+function typeLabel(code: string, locale: Locale): string {
+  return TYPE_CODES.includes(code as typeof TYPE_CODES[number])
+    ? t(`rhc.type.${code}`, locale)
+    : code
+}
+
+function statutLabel(code: string, locale: Locale): string {
+  const known = ['en_attente', 'approuve', 'refuse', 'annule']
+  return known.includes(code) ? t(`rhc.statut.${code}`, locale) : code
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -55,13 +55,6 @@ const TYPE_COLORS: Record<string, string> = {
   WI: "bg-gray-100 text-gray-800",
   COM: "bg-gray-100 text-gray-600",
   PH: "bg-emerald-100 text-emerald-800",
-}
-
-const STATUT_LABELS: Record<string, string> = {
-  en_attente: "En attente",
-  approuve: "Approuve",
-  refuse: "Refuse",
-  annule: "Annule",
 }
 
 const STATUT_COLORS: Record<string, string> = {
@@ -84,11 +77,11 @@ const CALENDAR_BAR_COLORS: Record<string, string> = {
   PH: "bg-emerald-500",
 }
 
-const APPROVAL_LEVELS = [
-  { label: "Soumis", shortLabel: "Soumis" },
-  { label: "Niveau 1: Manager", shortLabel: "Manager" },
-  { label: "Niveau 2: DRH", shortLabel: "DRH" },
-  { label: "Valide", shortLabel: "Valide" },
+const APPROVAL_LEVEL_KEYS = [
+  'rhc.approval.soumis',
+  'rhc.approval.manager',
+  'rhc.approval.drh',
+  'rhc.approval.valide',
 ]
 
 const JOURS_FERIES_MU = [
@@ -232,6 +225,7 @@ function statusDot(color: string) {
 
 // ─── Approval Steps Component ───────────────────────────────────
 function ApprovalSteps({ niveau, approvals }: { niveau: number; approvals?: ApprovalEntry[] }) {
+  const locale = getLocale()
   const steps = [1, 2, 3]
   return (
     <div className="flex flex-col gap-1">
@@ -249,7 +243,7 @@ function ApprovalSteps({ niveau, approvals }: { niveau: number; approvals?: Appr
                 {niveau >= step ? "\u2713" : step}
               </div>
               <span className={`text-[9px] mt-0.5 whitespace-nowrap ${niveau >= step ? "text-[#0B0F2E] font-medium" : "text-gray-400"}`}>
-                {APPROVAL_LEVELS[step]?.shortLabel}
+                {APPROVAL_LEVEL_KEYS[step] ? t(APPROVAL_LEVEL_KEYS[step], locale) : ''}
               </span>
             </div>
             {i < steps.length - 1 && (
@@ -265,7 +259,7 @@ function ApprovalSteps({ niveau, approvals }: { niveau: number; approvals?: Appr
         <div className="mt-1 space-y-0.5">
           {approvals.map((a, i) => (
             <p key={i} className="text-[10px] text-gray-500">
-              {APPROVAL_LEVELS[a.niveau]?.shortLabel}: <span className="font-medium text-[#0B0F2E]">{a.par}</span>{" "}
+              {APPROVAL_LEVEL_KEYS[a.niveau] ? t(APPROVAL_LEVEL_KEYS[a.niveau], locale) : ''}: <span className="font-medium text-[#0B0F2E]">{a.par}</span>{" "}
               <span className="text-gray-400">({formatDate(a.date)})</span>
             </p>
           ))}
@@ -281,6 +275,7 @@ function CertificatUploadZone({ congeId, existingUrl, onUploaded }: {
   existingUrl?: string | null
   onUploaded?: () => void
 }) {
+  const locale = getLocale()
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
 
@@ -295,13 +290,13 @@ function CertificatUploadZone({ congeId, existingUrl, onUploaded }: {
         method: "POST",
         body: formData,
       })
-      if (!res.ok) throw new Error(`Upload échoué (${res.status})`)
+      if (!res.ok) throw new Error(`${t('rhc.cert.upload_failed', locale)} (${res.status})`)
       onUploaded?.()
     } catch (e: any) {
       // Sprint 1 — l'utilisateur doit savoir si l'upload a échoué.
       // Avant : console.error(e) silencieux, l'utilisateur croyait que ça
       // avait marché alors que le certificat n'était jamais arrivé.
-      alert(`Upload du certificat échoué : ${e?.message || 'erreur réseau'}. Réessayez ou contactez votre RH.`)
+      alert(t('rhc.cert.upload_failed_full', locale).replace('{msg}', e?.message || t('rhc.cert.network_error', locale)))
     } finally {
       setUploading(false)
     }
@@ -311,9 +306,9 @@ function CertificatUploadZone({ congeId, existingUrl, onUploaded }: {
     return (
       <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-md">
         <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
-        <span className="text-xs text-green-700">Certificat televerse</span>
+        <span className="text-xs text-green-700">{t('rhc.cert.uploaded', locale)}</span>
         <a href={existingUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-[#4191FF] underline ml-auto flex items-center gap-1">
-          <Eye className="w-3 h-3" />Voir
+          <Eye className="w-3 h-3" />{t('rhc.cert.view', locale)}
         </a>
       </div>
     )
@@ -339,8 +334,8 @@ function CertificatUploadZone({ congeId, existingUrl, onUploaded }: {
       ) : (
         <>
           <Upload className="w-5 h-5 text-gray-400 mx-auto mb-1" />
-          <p className="text-xs text-gray-500">Certificat medical requis (SL &gt; 3j)</p>
-          <p className="text-[10px] text-gray-400">PDF, JPG ou PNG</p>
+          <p className="text-xs text-gray-500">{t('rhc.cert.required_sl', locale)}</p>
+          <p className="text-[10px] text-gray-400">{t('rhc.cert.pdf_jpg_png', locale)}</p>
         </>
       )}
     </div>
@@ -353,6 +348,7 @@ function TeamCalendarView({ conges, employes, societeFilter }: {
   employes: { id: string; nom: string; prenom: string; societe_id?: string }[]
   societeFilter: string
 }) {
+  const locale = getLocale()
   const [calMonth, setCalMonth] = useState(() => {
     const now = new Date()
     return { year: now.getFullYear(), month: now.getMonth() }
@@ -401,7 +397,7 @@ function TeamCalendarView({ conges, employes, societeFilter }: {
         <div className="flex items-center justify-between">
           <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
             <Calendar className="w-5 h-5 text-[#4191FF]" />
-            Vue calendrier equipe
+            {t('rhc.cal.title', locale)}
           </CardTitle>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={prevMonth}>
@@ -415,11 +411,11 @@ function TeamCalendarView({ conges, employes, societeFilter }: {
         </div>
         <div className="flex gap-3 mt-2 flex-wrap">
           {[
-            { code: "AL", label: "Conge annuel", color: "bg-[#4191FF]" },
-            { code: "SL", label: "Maladie", color: "bg-orange-400" },
-            { code: "MAT", label: "Maternite", color: "bg-purple-500" },
-            { code: "PAT", label: "Paternite", color: "bg-green-500" },
-            { code: "FERIE", label: "Jour ferie", color: "bg-gray-400" },
+            { code: "AL", label: t('rhc.cal.legend_al', locale), color: "bg-[#4191FF]" },
+            { code: "SL", label: t('rhc.cal.legend_sl', locale), color: "bg-orange-400" },
+            { code: "MAT", label: t('rhc.cal.legend_mat', locale), color: "bg-purple-500" },
+            { code: "PAT", label: t('rhc.cal.legend_pat', locale), color: "bg-green-500" },
+            { code: "FERIE", label: t('rhc.cal.legend_ferie', locale), color: "bg-gray-400" },
           ].map(item => (
             <div key={item.code} className="flex items-center gap-1">
               <div className={`w-3 h-3 rounded-sm ${item.color}`} />
@@ -434,7 +430,7 @@ function TeamCalendarView({ conges, employes, societeFilter }: {
             <thead>
               <tr className="border-b">
                 <th className="sticky left-0 bg-white z-10 px-3 py-2 text-left font-medium text-[#0B0F2E] min-w-[140px] border-r">
-                  Employe
+                  {t('rhc.cal.employe', locale)}
                 </th>
                 {days.map(day => {
                   const ferie = isJourFerie(day)
@@ -456,7 +452,7 @@ function TeamCalendarView({ conges, employes, societeFilter }: {
               {filteredEmployes.length === 0 ? (
                 <tr>
                   <td colSpan={daysInMonth + 1} className="text-center py-8 text-gray-500">
-                    Aucun employe a afficher
+                    {t('rhc.cal.aucun_employe', locale)}
                   </td>
                 </tr>
               ) : (
@@ -473,7 +469,7 @@ function TeamCalendarView({ conges, employes, societeFilter }: {
                         <td
                           key={day}
                           className={`px-0 py-1.5 text-center ${ferie ? "bg-gray-200" : weekend ? "bg-gray-50" : ""}`}
-                          title={conge ? `${TYPE_LABELS[conge.type_conge] || conge.type_conge}: ${formatDate(conge.date_debut)} - ${formatDate(conge.date_fin)}` : ferie ? "Jour ferie" : ""}
+                          title={conge ? `${typeLabel(conge.type_conge, locale)}: ${formatDate(conge.date_debut)} - ${formatDate(conge.date_fin)}` : ferie ? t('rhc.cal.jour_ferie', locale) : ""}
                         >
                           {conge ? (
                             <div className={`mx-auto w-5 h-3 rounded-sm ${CALENDAR_BAR_COLORS[conge.type_conge] || "bg-gray-400"}`} />
@@ -682,10 +678,10 @@ export default function CongesPage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) { alert(data.error || "Erreur"); return }
+      if (!res.ok) { alert(data.error || t('rhc.err.generic', locale)); return }
       setEditingBalId(null)
       loadBalances()
-    } catch (e: any) { alert("Erreur: " + (e.message || "")) }
+    } catch (e: any) { alert(t('rhc.err.generic', locale) + ": " + (e.message || "")) }
     finally { setSavingBal(false) }
   }
 
@@ -797,11 +793,11 @@ export default function CongesPage() {
 
   const submitCollectif = async () => {
     setCollectifError(null)
-    if (!collectifForm.titre.trim()) return setCollectifError("Titre requis")
-    if (!collectifForm.societe_id) return setCollectifError("Société requise")
-    if (!collectifForm.date_debut || !collectifForm.date_fin) return setCollectifError("Dates requises")
-    if (collectifForm.date_fin < collectifForm.date_debut) return setCollectifError("date_fin doit être ≥ date_debut")
-    if (collectifForm.applique_a === 'groupe' && !collectifForm.groupe_id) return setCollectifError("Groupe requis")
+    if (!collectifForm.titre.trim()) return setCollectifError(t('rhc.coll.titre_requis', locale))
+    if (!collectifForm.societe_id) return setCollectifError(t('rhc.coll.societe_requise', locale))
+    if (!collectifForm.date_debut || !collectifForm.date_fin) return setCollectifError(t('rhc.coll.dates_requises', locale))
+    if (collectifForm.date_fin < collectifForm.date_debut) return setCollectifError(t('rhc.coll.date_fin_ge', locale))
+    if (collectifForm.applique_a === 'groupe' && !collectifForm.groupe_id) return setCollectifError(t('rhc.coll.groupe_requis', locale))
     setCollectifSaving(true)
     try {
       const res = await fetch("/api/rh/conges/collectif", {
@@ -845,15 +841,15 @@ export default function CongesPage() {
   // ─── Actions ──────────────────────────────────────────────────
   const handleCreate = async () => {
     if (!form.employe_id || !form.date_debut || !form.date_fin) {
-      setFormError("Champs requis manquants")
+      setFormError(t('rhc.new.champs_requis', locale))
       return
     }
     if (!form.demi_journee && form.date_fin < form.date_debut) {
-      setFormError("La date de fin doit être après la date de début")
+      setFormError(t('rhc.new.date_fin_apres', locale))
       return
     }
     if (form.demi_journee && !DEMI_JOURNEE_ALLOWED_TYPES.has(form.type_conge)) {
-      setFormError(`Ce type de congé (${TYPE_LABELS[form.type_conge] || form.type_conge}) ne permet pas les demi-journées.`)
+      setFormError(t('rhc.new.demi_interdit', locale).replace('{label}', typeLabel(form.type_conge, locale)))
       return
     }
     setSaving(true)
@@ -895,7 +891,7 @@ export default function CongesPage() {
         }))
         const failed = uploadResults.filter(ok => !ok).length
         if (failed > 0) {
-          setToast(`⚠ Demande créée mais ${failed} fichier(s) non uploadés — réessaie depuis l'onglet Documents.`)
+          setToast(t('rhc.toast.upload_partiel', locale).replace('{n}', String(failed)))
         }
       }
 
@@ -913,7 +909,7 @@ export default function CongesPage() {
         setToast(`⚠ ${data.warning}`)
         setTimeout(() => setToast(null), 8000)
       } else {
-        setToast(`Congé créé — ${data.conge?.type_conge || 'OK'}`)
+        setToast(t('rhc.toast.cree', locale).replace('{type}', data.conge?.type_conge || 'OK'))
         setTimeout(() => setToast(null), 3500)
       }
       // Reload current tab data
@@ -979,7 +975,7 @@ export default function CongesPage() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
       const nb = annulerTarget.nb_jours
-      setToast(`Congé annulé — ${nb}j re-crédité${nb > 1 ? 's' : ''} sur le solde AL.`)
+      setToast(t('rhc.toast.annule_recredit', locale).replace('{n}', String(nb)))
       setAnnulerTarget(null)
       setAnnulerMotif("")
       loadDemandes()
@@ -987,7 +983,7 @@ export default function CongesPage() {
       if (tab === "historique") loadHistorique()
       setTimeout(() => setToast(null), 4500)
     } catch (e: any) {
-      setToast(`⚠ Échec de l'annulation: ${e?.message || 'erreur'}`)
+      setToast(t('rhc.toast.annule_echec', locale).replace('{msg}', e?.message || t('rhc.err.generic', locale)))
       setTimeout(() => setToast(null), 6000)
     } finally {
       setActionLoading(null)
@@ -1009,7 +1005,7 @@ export default function CongesPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
-      setToast(data?.message || "Demande supprimée")
+      setToast(data?.message || t('rhc.toast.supprime', locale))
       setSupprimerTarget(null)
       setSupprimerMotif("")
       loadDemandes()
@@ -1017,7 +1013,7 @@ export default function CongesPage() {
       if (tab === "historique") loadHistorique()
       setTimeout(() => setToast(null), 4500)
     } catch (e: any) {
-      setToast(`⚠ Suppression échouée : ${e?.message || 'erreur'}`)
+      setToast(t('rhc.toast.suppr_echec', locale).replace('{msg}', e?.message || t('rhc.err.generic', locale)))
       setTimeout(() => setToast(null), 6000)
     } finally {
       setActionLoading(null)
@@ -1041,10 +1037,10 @@ export default function CongesPage() {
   const sauverEdition = async () => {
     if (!editTarget) return
     if (!editFields.date_debut || !editFields.date_fin) {
-      setToast("⚠ Dates requises"); setTimeout(() => setToast(null), 3500); return
+      setToast(t('rhc.toast.dates_requises', locale)); setTimeout(() => setToast(null), 3500); return
     }
     if (editFields.date_fin < editFields.date_debut) {
-      setToast("⚠ La date de fin doit être après la date de début"); setTimeout(() => setToast(null), 3500); return
+      setToast(t('rhc.toast.date_fin_apres', locale)); setTimeout(() => setToast(null), 3500); return
     }
     setEditLoading(true)
     try {
@@ -1064,14 +1060,14 @@ export default function CongesPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
-      setToast("Congé modifié")
+      setToast(t('rhc.toast.modifie', locale))
       setEditTarget(null)
       loadDemandes()
       loadBalances()
       if (tab === "historique") loadHistorique()
       setTimeout(() => setToast(null), 4000)
     } catch (e: any) {
-      setToast(`⚠ Modification échouée : ${e?.message || 'erreur'}`)
+      setToast(t('rhc.toast.modif_echec', locale).replace('{msg}', e?.message || t('rhc.err.generic', locale)))
       setTimeout(() => setToast(null), 6000)
     } finally {
       setEditLoading(false)
@@ -1090,7 +1086,7 @@ export default function CongesPage() {
           employe_id: empId,
           date_debut: today,
           date_fin: today,
-          motif: "Absence justifiee retroactivement (SL)",
+          motif: t('rhc.abs.motif_sl', locale),
         }),
       })
       loadAbsentsToday()
@@ -1111,7 +1107,7 @@ export default function CongesPage() {
           employe_id: empId,
           date_debut: today,
           date_fin: today,
-          motif: "Absence injustifiee - deduction salaire",
+          motif: t('rhc.abs.motif_injustifiee', locale),
         }),
       })
       loadAbsentsToday()
@@ -1328,40 +1324,40 @@ export default function CongesPage() {
                 </div>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                AL = Conge annuel (22j) | SL = Conge maladie (15j) | VL = Vacation Leave (30j/5a, workers WRA S.47) | Periode de 12 mois glissante basee sur la date d&apos;arrivee (WRA 2019)
+                {t('rhc.dash.legend', locale)}
               </p>
             </CardHeader>
             <CardContent className="p-0">
               {loadingBalances ? <Spinner /> : filteredBalances.length === 0 ? (
-                <EmptyState icon={Users} title="Aucun employé trouvé" size="md" />
+                <EmptyState icon={Users} title={t('rhc.dash.aucun_employe', locale)} size="md" />
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-8">Statut</TableHead>
-                        <TableHead>Employe</TableHead>
-                        <TableHead>Poste</TableHead>
-                        <TableHead className="text-xs">Arrivee</TableHead>
-                        <TableHead className="text-xs">Periode</TableHead>
-                        <TableHead className="text-xs">Eligibilite</TableHead>
-                        <TableHead className="text-xs" title="WRA 2019 S.2 : worker (basic ≤ 50k) ou hors_wra (basic > 50k)">Statut WRA</TableHead>
-                        <TableHead className="text-center" title="AL utilisable (après 12 mois) — source historique, inchangé.">AL Droit</TableHead>
+                        <TableHead className="w-8">{t('rhc.col.statut', locale)}</TableHead>
+                        <TableHead>{t('rhc.col.employe', locale)}</TableHead>
+                        <TableHead>{t('rhc.col.poste', locale)}</TableHead>
+                        <TableHead className="text-xs">{t('rhc.col.arrivee', locale)}</TableHead>
+                        <TableHead className="text-xs">{t('rhc.col.periode', locale)}</TableHead>
+                        <TableHead className="text-xs">{t('rhc.col.eligibilite', locale)}</TableHead>
+                        <TableHead className="text-xs" title={t('rhc.col.statut_wra_title', locale)}>{t('rhc.col.statut_wra', locale)}</TableHead>
+                        <TableHead className="text-center" title={t('rhc.col.al_droit_title', locale)}>{t('rhc.col.al_droit', locale)}</TableHead>
                         <TableHead
                           className="text-center text-teal-700"
-                          title="G5 Modèle C — jours accumulés au prorata mensuel (22/12 par mois). Base pour paiement compensatoire en cas de départ (WRA S.45(2)) et provisions IAS 19. Peut différer de 'AL Droit' avant le 12ème mois."
+                          title={t('rhc.col.al_acquis_title', locale)}
                         >
-                          AL Acquis
+                          {t('rhc.col.al_acquis', locale)}
                         </TableHead>
-                        <TableHead className="text-center">AL Pris</TableHead>
-                        <TableHead className="text-center">AL Solde</TableHead>
-                        <TableHead className="text-center">SL Droit</TableHead>
-                        <TableHead className="text-center">SL Pris</TableHead>
-                        <TableHead className="text-center">SL Solde</TableHead>
-                        <TableHead className="text-center text-purple-700" title="Vacation Leave WRA S.47 — 30j/5 ans, workers basic ≤ 50k">VL Droit</TableHead>
-                        <TableHead className="text-center text-purple-700">VL Solde</TableHead>
-                        <TableHead>Alertes</TableHead>
-                        <TableHead className="w-24 text-right">Actions</TableHead>
+                        <TableHead className="text-center">{t('rhc.col.al_pris', locale)}</TableHead>
+                        <TableHead className="text-center">{t('rhc.col.al_solde', locale)}</TableHead>
+                        <TableHead className="text-center">{t('rhc.col.sl_droit', locale)}</TableHead>
+                        <TableHead className="text-center">{t('rhc.col.sl_pris', locale)}</TableHead>
+                        <TableHead className="text-center">{t('rhc.col.sl_solde', locale)}</TableHead>
+                        <TableHead className="text-center text-purple-700" title={t('rhc.col.vl_droit_title', locale)}>{t('rhc.col.vl_droit', locale)}</TableHead>
+                        <TableHead className="text-center text-purple-700">{t('rhc.col.vl_solde', locale)}</TableHead>
+                        <TableHead>{t('rhc.col.alertes', locale)}</TableHead>
+                        <TableHead className="w-24 text-right">{t('rhc.col.actions', locale)}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1390,12 +1386,12 @@ export default function CongesPage() {
                           </TableCell>
                           <TableCell>
                             {b.statut_wra === 'hors_wra' ? (
-                              <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 text-[10px]" title="Basic > 50 000 MUR — droits via contrat + policy société">
-                                Hors WRA
+                              <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 text-[10px]" title={t('rhc.wra.hors_title', locale)}>
+                                {t('rhc.wra.hors', locale)}
                               </Badge>
                             ) : (
-                              <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[10px]" title="WRA 2019 intégral — basic ≤ 50 000 MUR">
-                                Worker
+                              <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[10px]" title={t('rhc.wra.worker_title', locale)}>
+                                {t('rhc.wra.worker', locale)}
                               </Badge>
                             )}
                           </TableCell>
@@ -1418,9 +1414,9 @@ export default function CongesPage() {
                                 <span className="font-semibold">{b.al_pris}</span>
                                 {((b.al_impose_societe || 0) > 0 || (b.al_impose_employe || 0) > 0) && (
                                   <span className="text-[9px] text-gray-500 mt-0.5">
-                                    <span title="Choisi par l'employé">emp: {b.al_impose_employe ?? b.al_pris}</span>
+                                    <span title={t('rhc.emp_choisi', locale)}>emp: {b.al_impose_employe ?? b.al_pris}</span>
                                     <span className="mx-1">·</span>
-                                    <span title="Imposé par la société" className={b.al_impose_societe && b.al_impose_societe > 0 ? "text-amber-700 font-medium" : ""}>soc: {b.al_impose_societe ?? 0}</span>
+                                    <span title={t('rhc.imp_societe', locale)} className={b.al_impose_societe && b.al_impose_societe > 0 ? "text-amber-700 font-medium" : ""}>soc: {b.al_impose_societe ?? 0}</span>
                                   </span>
                                 )}
                                 {/* Sprint 13 BUG 2 — indication visuelle si une partie
@@ -1428,8 +1424,8 @@ export default function CongesPage() {
                                     de poser). al_pris reste le compteur de suivi
                                     global indépendant du solde. */}
                                 {b.al_bascule_ul && b.al_bascule_ul > 0 && (
-                                  <span className="text-[9px] text-amber-700 mt-0.5" title="Jours posés mais basculés en Unpaid Leave (solde AL insuffisant)">
-                                    dont {b.al_bascule_ul}j UL
+                                  <span className="text-[9px] text-amber-700 mt-0.5" title={t('rhc.dont_ul_title', locale)}>
+                                    {t('rhc.dont_ul', locale).replace('{n}', String(b.al_bascule_ul))}
                                   </span>
                                 )}
                               </div>
@@ -1459,11 +1455,11 @@ export default function CongesPage() {
                           </TableCell>
                           <TableCell className="text-center text-sm">
                             {b.vl_eligibility_status === 'eligible' ? (
-                              <span className="font-semibold text-purple-700" title={`Cycle ${b.vl_cycle_debut || ''} → ${b.vl_cycle_fin || ''}`}>
+                              <span className="font-semibold text-purple-700" title={t('rhc.cycle_title', locale).replace('{debut}', b.vl_cycle_debut || '').replace('{fin}', b.vl_cycle_fin || '')}>
                                 {b.vl_droit ?? 30}
                               </span>
                             ) : b.vl_eligibility_status === 'en_acquisition' ? (
-                              <span className="text-[10px] text-gray-400">en acquisition</span>
+                              <span className="text-[10px] text-gray-400">{t('rhc.en_acquisition', locale)}</span>
                             ) : (
                               <span className="text-[10px] text-gray-300">—</span>
                             )}
@@ -1479,17 +1475,17 @@ export default function CongesPage() {
                             {b.sick_cert_alert && (
                               <Badge variant="destructive" className="text-xs whitespace-nowrap">
                                 <FileWarning className="w-3 h-3 mr-1" />
-                                Cert. medical requis
+                                {t('rhc.alert.cert_requis', locale)}
                               </Badge>
                             )}
                             {b.al_solde <= 0 && (
                               <Badge variant="outline" className="text-xs text-red-600 border-red-300 ml-1 whitespace-nowrap">
-                                AL epuise
+                                {t('rhc.alert.al_epuise', locale)}
                               </Badge>
                             )}
                             {b.sl_solde <= 0 && (
                               <Badge variant="outline" className="text-xs text-orange-600 border-orange-300 ml-1 whitespace-nowrap">
-                                SL epuise
+                                {t('rhc.alert.sl_epuise', locale)}
                               </Badge>
                             )}
                           </TableCell>
@@ -1525,25 +1521,25 @@ export default function CongesPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-[#0B0F2E]">
-                Demandes en attente de validation
+                {t('rhc.dem.title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {loadingConges ? <Spinner /> : conges.length === 0 ? (
-                <EmptyState icon={CheckCircle} title="Aucune demande en attente" description="Toutes les demandes de congés ont été traitées." size="md" />
+                <EmptyState icon={CheckCircle} title={t('rhc.dem.aucune', locale)} description={t('rhc.dem.aucune_desc', locale)} size="md" />
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employe</TableHead>
-                      <TableHead>Societe</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Dates</TableHead>
-                      <TableHead>Nb jours</TableHead>
-                      <TableHead>Approbation</TableHead>
-                      <TableHead>Motif</TableHead>
-                      <TableHead className="w-24 text-center">Justif.</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead>{t('rhc.col.employe', locale)}</TableHead>
+                      <TableHead>{t('rhc.col.societe', locale)}</TableHead>
+                      <TableHead>{t('rhc.col.type', locale)}</TableHead>
+                      <TableHead>{t('rhc.col.dates', locale)}</TableHead>
+                      <TableHead>{t('rhc.col.nb_jours', locale)}</TableHead>
+                      <TableHead>{t('rhc.col.approbation', locale)}</TableHead>
+                      <TableHead>{t('rhc.col.motif', locale)}</TableHead>
+                      <TableHead className="w-24 text-center">{t('rhc.col.justif', locale)}</TableHead>
+                      <TableHead>{t('rhc.col.actions', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1566,7 +1562,7 @@ export default function CongesPage() {
                           <TableCell>
                             <div className="flex items-center gap-1 flex-wrap">
                               <span className={`px-2 py-1 rounded-full text-xs font-medium ${TYPE_COLORS[c.type_conge] || "bg-gray-100 text-gray-800"}`}>
-                                {TYPE_LABELS[c.type_conge] || c.type_conge}
+                                {typeLabel(c.type_conge, locale)}
                               </span>
                               {c.demi_journee && (
                                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800 border border-purple-200">
@@ -1574,8 +1570,8 @@ export default function CongesPage() {
                                 </span>
                               )}
                               {c.impose_par_societe && (
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200" title="Imposé par la société">
-                                  Imposé
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200" title={t('rhc.badge.impose_title', locale)}>
+                                  {t('rhc.badge.impose', locale)}
                                 </span>
                               )}
                             </div>
@@ -1610,16 +1606,16 @@ export default function CongesPage() {
                                               window.open(c.certificat_url!, '_blank', 'noopener,noreferrer')
                                               return
                                             }
-                                            alert(data.error || `Impossible d'ouvrir le certificat (${res.status})`)
+                                            alert(data.error || t('rhc.cert.open_error', locale).replace('{status}', String(res.status)))
                                             return
                                           }
                                           window.open(data.signed_url, '_blank', 'noopener,noreferrer')
                                         } catch (e: any) {
-                                          alert(`Erreur : ${e?.message || 'réseau indisponible'}`)
+                                          alert(t('rhc.cert.error', locale).replace('{msg}', e?.message || t('rhc.cert.network_unavailable', locale)))
                                         }
                                       }}
                                       className="text-[10px] underline"
-                                    >📎 Voir certificat</button>
+                                    >{t('rhc.cert.voir', locale)}</button>
                                   </div>
                                 ) : (
                                   <Button
@@ -1628,7 +1624,7 @@ export default function CongesPage() {
                                     className="h-6 text-[10px] text-orange-600 border-orange-300"
                                     onClick={() => setCertDialog(c)}
                                   >
-                                    <Upload className="w-3 h-3 mr-1" />Certificat requis
+                                    <Upload className="w-3 h-3 mr-1" />{t('rhc.cert.requis_btn', locale)}
                                   </Button>
                                 )}
                               </div>
@@ -1666,7 +1662,7 @@ export default function CongesPage() {
                                 ) : (
                                   <CheckCircle className="w-4 h-4 mr-1" />
                                 )}
-                                Approuver
+                                {t('rhc.btn.approuver', locale)}
                               </Button>
                               <Button
                                 size="sm"
@@ -1674,7 +1670,7 @@ export default function CongesPage() {
                                 className="text-red-600 h-8"
                                 onClick={() => { setRefusDialog(c.id); setRefusMotif("") }}
                               >
-                                <XCircle className="w-4 h-4 mr-1" />Refuser
+                                <XCircle className="w-4 h-4 mr-1" />{t('rhc.btn.refuser', locale)}
                               </Button>
                               {/* Modifier le congé (dates + catégorie + demi) — RH/admin/team_leader */}
                               {canModifier && (
@@ -1682,10 +1678,10 @@ export default function CongesPage() {
                                   size="sm"
                                   variant="ghost"
                                   className="text-blue-600 hover:bg-blue-50 h-8"
-                                  title="Modifier les dates, la catégorie ou demi/full"
+                                  title={t('rhc.btn.modifier_title', locale)}
                                   onClick={() => ouvrirEdition(c)}
                                 >
-                                  <Pencil className="w-4 h-4 mr-1" />Modifier
+                                  <Pencil className="w-4 h-4 mr-1" />{t('rhc.btn.modifier', locale)}
                                 </Button>
                               )}
                               {/* S1 — Suppression definitive (RH/admin uniquement) */}
@@ -1694,7 +1690,7 @@ export default function CongesPage() {
                                   size="sm"
                                   variant="ghost"
                                   className="text-gray-500 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
-                                  title="Supprimer definitivement (audit trail conserve)"
+                                  title={t('rhc.btn.supprimer_title', locale)}
                                   onClick={() => { setSupprimerTarget(c); setSupprimerMotif("") }}
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -1731,20 +1727,20 @@ export default function CongesPage() {
               <CardHeader>
                 <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-blue-500" />
-                  En conge aujourd&apos;hui ({new Date().toLocaleDateString("fr-FR")})
+                  {t('rhc.abs.en_conge_today', locale).replace('{date}', new Date().toLocaleDateString("fr-FR"))}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 {loadingAbsents ? <Spinner /> : absentsAvecConge.length === 0 ? (
-                  <EmptyState icon={Calendar} title="Aucun employé en congé aujourd'hui" size="sm" />
+                  <EmptyState icon={Calendar} title={t('rhc.abs.aucun_today', locale)} size="sm" />
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Employe</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Periode</TableHead>
-                        <TableHead>Motif</TableHead>
+                        <TableHead>{t('rhc.col.employe', locale)}</TableHead>
+                        <TableHead>{t('rhc.col.type', locale)}</TableHead>
+                        <TableHead>{t('rhc.col.periode', locale)}</TableHead>
+                        <TableHead>{t('rhc.col.motif', locale)}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1755,7 +1751,7 @@ export default function CongesPage() {
                           </TableCell>
                           <TableCell>
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${TYPE_COLORS[c.type_conge] || ""}`}>
-                              {TYPE_LABELS[c.type_conge] || c.type_conge}
+                              {typeLabel(c.type_conge, locale)}
                             </span>
                           </TableCell>
                           <TableCell className="text-sm">
@@ -1775,22 +1771,22 @@ export default function CongesPage() {
               <CardHeader>
                 <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-yellow-500" />
-                  Employes sans conge approuve ({employesSansConge.length})
+                  {t('rhc.abs.sans_conge', locale).replace('{n}', String(employesSansConge.length))}
                 </CardTitle>
                 <p className="text-xs text-gray-400">
-                  Utilisez les actions pour justifier ou marquer les absences non planifiees
+                  {t('rhc.abs.sans_conge_hint', locale)}
                 </p>
               </CardHeader>
               <CardContent className="p-0">
                 {loadingAbsents ? <Spinner /> : employesSansConge.length === 0 ? (
-                  <EmptyState icon={CheckCircle} title="Tous les employés sont en congé approuvé" size="sm" />
+                  <EmptyState icon={CheckCircle} title={t('rhc.abs.tous_en_conge', locale)} size="sm" />
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Employe</TableHead>
-                        <TableHead>Poste</TableHead>
-                        <TableHead>Actions</TableHead>
+                        <TableHead>{t('rhc.col.employe', locale)}</TableHead>
+                        <TableHead>{t('rhc.col.poste', locale)}</TableHead>
+                        <TableHead>{t('rhc.col.actions', locale)}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1812,7 +1808,7 @@ export default function CongesPage() {
                                 ) : (
                                   <Thermometer className="w-3 h-3 mr-1" />
                                 )}
-                                Creer SL retroactif
+                                {t('rhc.abs.creer_sl', locale)}
                               </Button>
                               <Button
                                 size="sm"
@@ -1826,7 +1822,7 @@ export default function CongesPage() {
                                 ) : (
                                   <AlertTriangle className="w-3 h-3 mr-1" />
                                 )}
-                                Absence injustifiee
+                                {t('rhc.abs.absence_injustifiee', locale)}
                               </Button>
                             </div>
                           </TableCell>
@@ -1848,19 +1844,19 @@ export default function CongesPage() {
                 <CardTitle className="text-[#0B0F2E]">{t('rha.a.conges.history_title', locale)}</CardTitle>
                 <div className="flex gap-2">
                   <Input
-                    placeholder="Rechercher..."
+                    placeholder={t('rhc.histo.rechercher', locale)}
                     value={searchHisto}
                     onChange={e => setSearchHisto(e.target.value)}
                     className="w-48"
                   />
                   <Select value={histoFilter} onValueChange={setHistoFilter}>
                     <SelectTrigger className="w-44">
-                      <SelectValue placeholder="Filtrer par type" />
+                      <SelectValue placeholder={t('rhc.histo.filtrer_type', locale)} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Tous les types</SelectItem>
-                      {Object.entries(TYPE_LABELS).map(([k, v]) => (
-                        <SelectItem key={k} value={k}>{v}</SelectItem>
+                      <SelectItem value="all">{t('rhc.histo.tous_types', locale)}</SelectItem>
+                      {TYPE_CODES.map(k => (
+                        <SelectItem key={k} value={k}>{typeLabel(k, locale)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1869,22 +1865,22 @@ export default function CongesPage() {
             </CardHeader>
             <CardContent className="p-0">
               {loadingHisto ? <Spinner /> : filteredHisto.length === 0 ? (
-                <EmptyState icon={Clock} title="Aucun enregistrement" size="md" />
+                <EmptyState icon={Clock} title={t('rhc.histo.aucun', locale)} size="md" />
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Employe</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Dates</TableHead>
-                        <TableHead>Nb jours</TableHead>
-                        <TableHead>Statut</TableHead>
-                        <TableHead>Approbation</TableHead>
-                        <TableHead>Motif</TableHead>
-                        <TableHead>Commentaire</TableHead>
-                        <TableHead className="w-24 text-center">Justif.</TableHead>
-                        {canImposeCollectif && <TableHead className="text-right">Actions</TableHead>}
+                        <TableHead>{t('rhc.col.employe', locale)}</TableHead>
+                        <TableHead>{t('rhc.col.type', locale)}</TableHead>
+                        <TableHead>{t('rhc.col.dates', locale)}</TableHead>
+                        <TableHead>{t('rhc.col.nb_jours', locale)}</TableHead>
+                        <TableHead>{t('rhc.col.statut', locale)}</TableHead>
+                        <TableHead>{t('rhc.col.approbation', locale)}</TableHead>
+                        <TableHead>{t('rhc.col.motif', locale)}</TableHead>
+                        <TableHead>{t('rhc.col.commentaire', locale)}</TableHead>
+                        <TableHead className="w-24 text-center">{t('rhc.col.justif', locale)}</TableHead>
+                        {canImposeCollectif && <TableHead className="text-right">{t('rhc.col.actions', locale)}</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1905,7 +1901,7 @@ export default function CongesPage() {
                           <TableCell>
                             <div className="flex items-center gap-1 flex-wrap">
                               <span className={`px-2 py-1 rounded-full text-xs font-medium ${TYPE_COLORS[c.type_conge] || "bg-gray-100 text-gray-800"}`}>
-                                {TYPE_LABELS[c.type_conge] || c.type_conge}
+                                {typeLabel(c.type_conge, locale)}
                               </span>
                               {c.demi_journee && (
                                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800 border border-purple-200">
@@ -1913,8 +1909,8 @@ export default function CongesPage() {
                                 </span>
                               )}
                               {c.impose_par_societe && (
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200" title="Imposé par la société">
-                                  Imposé
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200" title={t('rhc.badge.impose_title', locale)}>
+                                  {t('rhc.badge.impose', locale)}
                                 </span>
                               )}
                             </div>
@@ -1929,7 +1925,7 @@ export default function CongesPage() {
                           </TableCell>
                           <TableCell>
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUT_COLORS[c.statut] || ""}`}>
-                              {STATUT_LABELS[c.statut] || c.statut}
+                              {statutLabel(c.statut, locale)}
                             </span>
                           </TableCell>
                           <TableCell>
@@ -1976,7 +1972,7 @@ export default function CongesPage() {
                                     ) : (
                                       <XCircle className="w-3 h-3 mr-1" />
                                     )}
-                                    Annuler
+                                    {t('rhc.btn.annuler', locale)}
                                   </Button>
                                 )}
                                 {/* Modifier le congé (dates + catégorie + demi) — RH/admin/team_leader */}
@@ -1988,7 +1984,7 @@ export default function CongesPage() {
                                     title="Modifier les dates, la catégorie ou demi/full"
                                     onClick={() => ouvrirEdition(c)}
                                   >
-                                    <Pencil className="w-3.5 h-3.5 mr-1" />Modifier
+                                    <Pencil className="w-3.5 h-3.5 mr-1" />{t('rhc.btn.modifier', locale)}
                                   </Button>
                                 )}
                                 {/* S1 — suppression definitive (RH/admin) */}
@@ -2026,7 +2022,7 @@ export default function CongesPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Nouvelle demande de conge</DialogTitle>
+            <DialogTitle>{t('rhc.new.title', locale)}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-2">
             {formError && (
@@ -2035,9 +2031,9 @@ export default function CongesPage() {
               </div>
             )}
             <div>
-              <Label>Employe *</Label>
+              <Label>{t('rhc.new.employe', locale)}</Label>
               <Select value={form.employe_id} onValueChange={v => setForm(f => ({ ...f, employe_id: v }))}>
-                <SelectTrigger><SelectValue placeholder="Choisir un employe..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('rhc.new.choisir_employe', locale)} /></SelectTrigger>
                 <SelectContent>
                   {employes.map((e: any) => {
                     const socName = societeMap.get(e.societe_id)
@@ -2051,71 +2047,71 @@ export default function CongesPage() {
               </Select>
             </div>
             <div>
-              <Label>Type de conge *</Label>
+              <Label>{t('rhc.new.type_conge', locale)}</Label>
               <Select value={form.type_conge} onValueChange={v => setForm(f => ({ ...f, type_conge: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {/* G4 — groupes WRA 2019 */}
-                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Principaux (WRA S.45-47)</div>
-                  <SelectItem value="AL">Annual Leave (22j/an)</SelectItem>
-                  <SelectItem value="SL">Sick Leave (15j/an)</SelectItem>
-                  <SelectItem value="VL">Vacation Leave (30j/5 ans, workers)</SelectItem>
-                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Familial (S.47A)</div>
-                  <SelectItem value="FML">Family Medical Leave (10j/an, déductible AL/SL/VL)</SelectItem>
-                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Exceptionnels (S.48)</div>
-                  <SelectItem value="SPC_MARIAGE_SELF">Mariage du salarié (6j)</SelectItem>
-                  <SelectItem value="SPC_MARIAGE_ENFANT">Mariage d'un enfant (3j)</SelectItem>
-                  <SelectItem value="SPC_DECES">Décès famille proche (3j)</SelectItem>
-                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Légaux (S.49-51)</div>
-                  <SelectItem value="JUR">Juré (durée service)</SelectItem>
-                  <SelectItem value="INT">Événement international (durée)</SelectItem>
-                  <SelectItem value="CRT">Convocation judiciaire</SelectItem>
-                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Maternité / Paternité (S.52-53)</div>
-                  <SelectItem value="MAT">Maternité (16 semaines)</SelectItem>
-                  <SelectItem value="PAT">Paternité (4 semaines)</SelectItem>
-                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Autres</div>
-                  <SelectItem value="UL">Sans solde (UL)</SelectItem>
-                  <SelectItem value="COM">Récupération (compensatoire)</SelectItem>
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">{t('rhc.grp.principaux', locale)}</div>
+                  <SelectItem value="AL">{t('rhc.opt.AL', locale)}</SelectItem>
+                  <SelectItem value="SL">{t('rhc.opt.SL', locale)}</SelectItem>
+                  <SelectItem value="VL">{t('rhc.opt.VL', locale)}</SelectItem>
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">{t('rhc.grp.familial', locale)}</div>
+                  <SelectItem value="FML">{t('rhc.opt.FML', locale)}</SelectItem>
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">{t('rhc.grp.exceptionnels', locale)}</div>
+                  <SelectItem value="SPC_MARIAGE_SELF">{t('rhc.opt.SPC_MARIAGE_SELF', locale)}</SelectItem>
+                  <SelectItem value="SPC_MARIAGE_ENFANT">{t('rhc.opt.SPC_MARIAGE_ENFANT', locale)}</SelectItem>
+                  <SelectItem value="SPC_DECES">{t('rhc.opt.SPC_DECES', locale)}</SelectItem>
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">{t('rhc.grp.legaux', locale)}</div>
+                  <SelectItem value="JUR">{t('rhc.opt.JUR', locale)}</SelectItem>
+                  <SelectItem value="INT">{t('rhc.opt.INT', locale)}</SelectItem>
+                  <SelectItem value="CRT">{t('rhc.opt.CRT', locale)}</SelectItem>
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">{t('rhc.grp.mat_pat', locale)}</div>
+                  <SelectItem value="MAT">{t('rhc.opt.MAT', locale)}</SelectItem>
+                  <SelectItem value="PAT">{t('rhc.opt.PAT', locale)}</SelectItem>
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">{t('rhc.grp.autres', locale)}</div>
+                  <SelectItem value="UL">{t('rhc.opt.UL', locale)}</SelectItem>
+                  <SelectItem value="COM">{t('rhc.opt.COM', locale)}</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-400 mt-1">
-                {form.type_conge === "AL" && "Annual Leave : 22 jours ouvrables / an (WRA S.45)."}
-                {form.type_conge === "SL" && "Sick Leave : 15 jours / an (WRA S.46). Certificat medical si ≥ 3 jours."}
-                {form.type_conge === "VL" && "Vacation Leave : 30 jours / 5 ans (WRA S.47). Workers (basic ≤ 50k) uniquement."}
-                {form.type_conge === "FML" && "Family Medical Leave : 10j/an pour soigner parent/enfant/grand-parent (WRA S.47A). Déductible AL/SL/VL."}
-                {form.type_conge === "SPC_MARIAGE_SELF" && "6j pour premier mariage du salarié (WRA S.48)."}
-                {form.type_conge === "SPC_MARIAGE_ENFANT" && "3j pour premier mariage d'un enfant (WRA S.48)."}
-                {form.type_conge === "SPC_DECES" && "3j pour décès conjoint/enfant/parent/frère/sœur (WRA S.48)."}
-                {form.type_conge === "JUR" && "Durée du service juré (WRA S.49). Convocation officielle requise."}
-                {form.type_conge === "INT" && "Durée événement sportif/culturel international (WRA S.50)."}
-                {form.type_conge === "CRT" && "Temps nécessaire convocation judiciaire (WRA S.51)."}
-                {form.type_conge === "MAT" && "Maternité : 16 semaines, +2 si multiple/prématurée (WRA S.52). Allocation 3 000 MUR."}
-                {form.type_conge === "PAT" && "Paternité : 4 semaines (WRA S.53). Payé si ≥ 12 mois de service."}
+                {form.type_conge === "AL" && t('rhc.help.AL', locale)}
+                {form.type_conge === "SL" && t('rhc.help.SL', locale)}
+                {form.type_conge === "VL" && t('rhc.help.VL', locale)}
+                {form.type_conge === "FML" && t('rhc.help.FML', locale)}
+                {form.type_conge === "SPC_MARIAGE_SELF" && t('rhc.help.SPC_MARIAGE_SELF', locale)}
+                {form.type_conge === "SPC_MARIAGE_ENFANT" && t('rhc.help.SPC_MARIAGE_ENFANT', locale)}
+                {form.type_conge === "SPC_DECES" && t('rhc.help.SPC_DECES', locale)}
+                {form.type_conge === "JUR" && t('rhc.help.JUR', locale)}
+                {form.type_conge === "INT" && t('rhc.help.INT', locale)}
+                {form.type_conge === "CRT" && t('rhc.help.CRT', locale)}
+                {form.type_conge === "MAT" && t('rhc.help.MAT', locale)}
+                {form.type_conge === "PAT" && t('rhc.help.PAT', locale)}
               </p>
             </div>
 
             {/* G4 — Champs conditionnels selon type (justificatifs) */}
             {form.type_conge === 'FML' && (
               <div className="space-y-2 p-3 bg-cyan-50 border border-cyan-200 rounded-md">
-                <Label className="text-xs text-cyan-900">Déduction du solde de :</Label>
+                <Label className="text-xs text-cyan-900">{t('rhc.fml.deduction', locale)}</Label>
                 <Select
                   value={form.deduction_source || 'AL'}
                   onValueChange={v => setForm(f => ({ ...f, deduction_source: v }))}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="AL">Annual Leave</SelectItem>
-                    <SelectItem value="SL">Sick Leave</SelectItem>
-                    <SelectItem value="VL">Vacation Leave (si éligible)</SelectItem>
+                    <SelectItem value="AL">{t('rhc.fml.opt_al', locale)}</SelectItem>
+                    <SelectItem value="SL">{t('rhc.fml.opt_sl', locale)}</SelectItem>
+                    <SelectItem value="VL">{t('rhc.fml.opt_vl', locale)}</SelectItem>
                   </SelectContent>
                 </Select>
                 <Input
-                  placeholder="URL certificat médical du parent malade (requis)"
+                  placeholder={t('rhc.ph.cert_parent', locale)}
                   value={form.certificat_medical_url || ''}
                   onChange={e => setForm(f => ({ ...f, certificat_medical_url: e.target.value }))}
                 />
                 <Input
-                  placeholder="URL acte de naissance / preuve parenté (requis)"
+                  placeholder={t('rhc.ph.acte_naissance', locale)}
                   value={form.acte_naissance_url || ''}
                   onChange={e => setForm(f => ({ ...f, acte_naissance_url: e.target.value }))}
                 />
@@ -2123,7 +2119,7 @@ export default function CongesPage() {
             )}
             {form.type_conge === 'SPC_MARIAGE_SELF' && (
               <Input
-                placeholder="URL certificat de mariage (requis)"
+                placeholder={t('rhc.ph.cert_mariage', locale)}
                 value={form.convocation_url || ''}
                 onChange={e => setForm(f => ({ ...f, convocation_url: e.target.value }))}
               />
@@ -2131,12 +2127,12 @@ export default function CongesPage() {
             {form.type_conge === 'SPC_MARIAGE_ENFANT' && (
               <div className="space-y-2">
                 <Input
-                  placeholder="URL certificat de mariage de l'enfant (requis)"
+                  placeholder={t('rhc.ph.cert_mariage_enfant', locale)}
                   value={form.convocation_url || ''}
                   onChange={e => setForm(f => ({ ...f, convocation_url: e.target.value }))}
                 />
                 <Input
-                  placeholder="URL acte de naissance de l'enfant (requis)"
+                  placeholder={t('rhc.ph.acte_naissance_enfant', locale)}
                   value={form.acte_naissance_url || ''}
                   onChange={e => setForm(f => ({ ...f, acte_naissance_url: e.target.value }))}
                 />
@@ -2144,7 +2140,7 @@ export default function CongesPage() {
             )}
             {form.type_conge === 'SPC_DECES' && (
               <Input
-                placeholder="URL acte de décès (requis)"
+                placeholder={t('rhc.ph.acte_deces', locale)}
                 value={form.acte_deces_url || ''}
                 onChange={e => setForm(f => ({ ...f, acte_deces_url: e.target.value }))}
               />
@@ -2152,9 +2148,9 @@ export default function CongesPage() {
             {['JUR', 'INT', 'CRT'].includes(form.type_conge) && (
               <Input
                 placeholder={
-                  form.type_conge === 'JUR' ? "URL convocation tribunal (requis)" :
-                  form.type_conge === 'INT' ? "URL documentation officielle événement (requis)" :
-                  "URL convocation judiciaire (requis)"
+                  form.type_conge === 'JUR' ? t('rhc.ph.convoc_tribunal', locale) :
+                  form.type_conge === 'INT' ? t('rhc.ph.doc_event', locale) :
+                  t('rhc.ph.convoc_judiciaire', locale)
                 }
                 value={form.convocation_url || ''}
                 onChange={e => setForm(f => ({ ...f, convocation_url: e.target.value }))}
@@ -2184,9 +2180,9 @@ export default function CongesPage() {
                 : 'bg-indigo-50 border-indigo-200 text-indigo-900'
               const labelText = form.type_conge === 'SL'
                 ? (slCourt
-                  ? `📎 Certificat médical recommandé (${slDays}j < 3j, pas obligatoire WRA S.46)`
-                  : `📎 Certificat médical requis (≥ 3 jours consécutifs — WRA S.46)`)
-                : '📎 Joindre des justificatifs (requis par WRA)'
+                  ? t('rhc.justif.cert_reco', locale).replace('{n}', String(slDays))
+                  : t('rhc.justif.cert_requis', locale))
+                : t('rhc.justif.joindre', locale)
               return (
                 <div className={`space-y-2 p-3 border rounded-md ${tone}`}>
                   <Label className="text-xs font-semibold">{labelText}</Label>
@@ -2200,14 +2196,12 @@ export default function CongesPage() {
                   {pendingFiles.length > 0 && (
                     <ul className="text-[11px] space-y-0.5">
                       {pendingFiles.map((f, i) => (
-                        <li key={i}>• {f.name} ({(f.size / 1024).toFixed(0)} KB)</li>
+                        <li key={i}>• {f.name} ({(f.size / 1024).toFixed(0)} {t('rhc.justif.kb', locale)})</li>
                       ))}
                     </ul>
                   )}
                   <p className="text-[11px] italic opacity-80">
-                    Max 10 MB/fichier. Les fichiers seront envoyés après création
-                    de la demande et rattachés automatiquement. Tu pourras aussi
-                    en joindre plus tard depuis l&apos;onglet Documents.
+                    {t('rhc.justif.hint', locale)}
                   </p>
                 </div>
               )
@@ -2229,12 +2223,12 @@ export default function CongesPage() {
                     }))}
                   />
                   <Label htmlFor="demi-journee-toggle" className="cursor-pointer text-sm font-medium">
-                    Demi-journée (0,5 jour)
+                    {t('rhc.demi.label', locale)}
                   </Label>
                 </div>
                 {form.demi_journee && (
                   <div className="pl-6">
-                    <Label className="text-xs text-gray-600">Moment de la journée</Label>
+                    <Label className="text-xs text-gray-600">{t('rhc.demi.moment', locale)}</Label>
                     <RadioGroup
                       value={form.matin_ou_apres_midi}
                       onValueChange={(v: string) => setForm(f => ({
@@ -2245,11 +2239,11 @@ export default function CongesPage() {
                     >
                       <div className="flex items-center gap-2">
                         <RadioGroupItem value="matin" id="demi-matin" />
-                        <Label htmlFor="demi-matin" className="cursor-pointer text-sm">Matin (AM)</Label>
+                        <Label htmlFor="demi-matin" className="cursor-pointer text-sm">{t('rhc.demi.matin', locale)}</Label>
                       </div>
                       <div className="flex items-center gap-2">
                         <RadioGroupItem value="apres_midi" id="demi-apresmidi" />
-                        <Label htmlFor="demi-apresmidi" className="cursor-pointer text-sm">Après-midi (PM)</Label>
+                        <Label htmlFor="demi-apresmidi" className="cursor-pointer text-sm">{t('rhc.demi.apresmidi', locale)}</Label>
                       </div>
                     </RadioGroup>
                   </div>
@@ -2259,7 +2253,7 @@ export default function CongesPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Date debut *</Label>
+                <Label>{t('rhc.new.date_debut', locale)}</Label>
                 <Input
                   type="date"
                   value={form.date_debut}
@@ -2272,7 +2266,7 @@ export default function CongesPage() {
                 />
               </div>
               <div>
-                <Label>Date fin *</Label>
+                <Label>{t('rhc.new.date_fin', locale)}</Label>
                 <Input
                   type="date"
                   value={form.demi_journee ? form.date_debut : form.date_fin}
@@ -2280,16 +2274,16 @@ export default function CongesPage() {
                   onChange={e => setForm(f => ({ ...f, date_fin: e.target.value }))}
                 />
                 {form.demi_journee && (
-                  <p className="text-[10px] text-gray-500 mt-1">Désactivé pour une demi-journée (même date que le début).</p>
+                  <p className="text-[10px] text-gray-500 mt-1">{t('rhc.new.demi_desactive', locale)}</p>
                 )}
               </div>
             </div>
             <div>
-              <Label>Motif</Label>
+              <Label>{t('rhc.new.motif', locale)}</Label>
               <Input
                 value={form.motif}
                 onChange={e => setForm(f => ({ ...f, motif: e.target.value }))}
-                placeholder="Raison du conge (optionnel)"
+                placeholder={t('rhc.new.motif_ph', locale)}
               />
             </div>
             {form.type_conge === "SL" && form.date_debut && form.date_fin && (() => {
@@ -2301,11 +2295,10 @@ export default function CongesPage() {
                   <div className="bg-orange-50 border border-orange-200 rounded-md p-3">
                     <div className="flex items-center gap-2 mb-1">
                       <FileWarning className="w-4 h-4 text-orange-500" />
-                      <span className="text-sm font-medium text-orange-800">Certificat medical requis</span>
+                      <span className="text-sm font-medium text-orange-800">{t('rhc.new.cert_requis_titre', locale)}</span>
                     </div>
                     <p className="text-xs text-orange-600">
-                      Un conge maladie de plus de 3 jours ({diffDays}j) necessite un certificat medical.
-                      Vous pourrez le telecharger apres la creation de la demande.
+                      {t('rhc.new.cert_requis_text', locale).replace('{n}', String(diffDays))}
                     </p>
                   </div>
                 )
@@ -2330,25 +2323,25 @@ export default function CongesPage() {
               return (
                 <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
                   <p className="text-sm font-medium text-blue-900">
-                    Estimation : <strong>{workDays} jour{workDays > 1 ? "s" : ""} ouvrable{workDays > 1 ? "s" : ""}</strong>
+                    {t('rhc.estim.label', locale)} <strong>{workDays} {workDays > 1 ? t('rhc.estim.ouvrables', locale) : t('rhc.estim.ouvrable', locale)}</strong>
                     <span className="text-xs text-blue-600 ml-2">
-                      ({calDays} calendaire{calDays > 1 ? "s" : ""}
-                      {feriesDansPlage > 0 ? ` · ${Math.round(feriesDansPlage)} férié${feriesDansPlage > 1 ? "s" : ""}` : ""}
-                      {form.demi_journee ? " · ½ journée" : ""})
+                      ({calDays} {calDays > 1 ? t('rhc.estim.calendaires', locale) : t('rhc.estim.calendaire', locale)}
+                      {feriesDansPlage > 0 ? ` · ${Math.round(feriesDansPlage)} ${feriesDansPlage > 1 ? t('rhc.estim.feries', locale) : t('rhc.estim.ferie', locale)}` : ""}
+                      {form.demi_journee ? ` · ${t('rhc.estim.demi', locale)}` : ""})
                     </span>
                   </p>
                   <p className="text-[10px] text-blue-600 mt-0.5">
-                    Aligné sur le calcul final (WRA 2019 + jours_feries Maurice).
+                    {t('rhc.estim.aligne', locale)}
                   </p>
                 </div>
               )
             })()}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('rhc.btn.annuler_dialog', locale)}</Button>
             <Button onClick={handleCreate} disabled={saving} className="bg-[#0B0F2E] text-white">
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Soumettre la demande
+              {t('rhc.btn.soumettre', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2360,7 +2353,7 @@ export default function CongesPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileWarning className="w-5 h-5 text-orange-500" />
-              Certificat medical - SL &gt; 3 jours
+              {t('rhc.certd.title', locale)}
             </DialogTitle>
           </DialogHeader>
           <div className="py-2">
@@ -2368,7 +2361,7 @@ export default function CongesPage() {
               <div className="space-y-3">
                 <div className="bg-orange-50 border border-orange-200 rounded-md p-3">
                   <p className="text-sm text-orange-800">
-                    <strong>{certDialog.employe?.prenom} {certDialog.employe?.nom}</strong> - {certDialog.nb_jours} jours de conge maladie
+                    <strong>{certDialog.employe?.prenom} {certDialog.employe?.nom}</strong> - {t('rhc.certd.subtitle', locale).replace('{n}', String(certDialog.nb_jours))}
                   </p>
                   <p className="text-xs text-orange-600 mt-1">
                     {formatDate(certDialog.date_debut)} &rarr; {formatDate(certDialog.date_fin)}
@@ -2383,7 +2376,7 @@ export default function CongesPage() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCertDialog(null)}>Fermer</Button>
+            <Button variant="outline" onClick={() => setCertDialog(null)}>{t('rhc.btn.fermer', locale)}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2392,27 +2385,27 @@ export default function CongesPage() {
       <Dialog open={!!refusDialog} onOpenChange={open => { if (!open) setRefusDialog(null) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Refuser la demande</DialogTitle>
+            <DialogTitle>{t('rhc.refus.title', locale)}</DialogTitle>
           </DialogHeader>
           <div className="py-2">
-            <Label>Motif de refus *</Label>
+            <Label>{t('rhc.refus.motif', locale)}</Label>
             <Textarea
               value={refusMotif}
               onChange={e => setRefusMotif(e.target.value)}
-              placeholder="Ex: Pas assez d'effectif ce jour, periode bloquee..."
+              placeholder={t('rhc.refus.ph', locale)}
               className="mt-1"
               rows={3}
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRefusDialog(null)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setRefusDialog(null)}>{t('rhc.btn.annuler_dialog', locale)}</Button>
             <Button
               onClick={refuser}
               disabled={!refusMotif.trim() || !!actionLoading}
               className="bg-red-600 text-white hover:bg-red-700"
             >
               {actionLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              <XCircle className="w-4 h-4 mr-2" />Confirmer le refus
+              <XCircle className="w-4 h-4 mr-2" />{t('rhc.refus.confirmer', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2422,20 +2415,20 @@ export default function CongesPage() {
       <Dialog open={!!editTarget} onOpenChange={open => { if (!open) setEditTarget(null) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Modifier le congé</DialogTitle>
+            <DialogTitle>{t('rhc.edit.title', locale)}</DialogTitle>
             <DialogDescription>
               {editTarget ? `${editTarget.employe?.prenom || ""} ${editTarget.employe?.nom || ""}` : ""}
-              {" — "}le nombre de jours est recalculé automatiquement. Si le congé est approuvé, le solde est recompté.
+              {t('rhc.edit.desc', locale)}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <Label>Catégorie</Label>
+              <Label>{t('rhc.edit.categorie', locale)}</Label>
               <Select value={editFields.type_conge} onValueChange={v => setEditFields(f => ({ ...f, type_conge: v, demi_journee: DEMI_JOURNEE_ALLOWED_TYPES.has(v) ? f.demi_journee : false }))}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {Object.entries(TYPE_LABELS).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>{v}</SelectItem>
+                  {TYPE_CODES.map(k => (
+                    <SelectItem key={k} value={k}>{typeLabel(k, locale)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -2456,7 +2449,7 @@ export default function CongesPage() {
                     }))}
                     className="h-4 w-4 rounded"
                   />
-                  Demi-journée (0,5 jour)
+                  {t('rhc.demi.label', locale)}
                 </label>
                 {editFields.demi_journee && (
                   <div className="pl-6 flex items-center gap-4">
@@ -2468,7 +2461,7 @@ export default function CongesPage() {
                         checked={editFields.matin_ou_apres_midi === 'matin'}
                         onChange={() => setEditFields(f => ({ ...f, matin_ou_apres_midi: 'matin' }))}
                       />
-                      Matin (AM)
+                      {t('rhc.demi.matin', locale)}
                     </label>
                     <label className="flex items-center gap-1.5 text-sm cursor-pointer">
                       <input
@@ -2478,7 +2471,7 @@ export default function CongesPage() {
                         checked={editFields.matin_ou_apres_midi === 'apres_midi'}
                         onChange={() => setEditFields(f => ({ ...f, matin_ou_apres_midi: 'apres_midi' }))}
                       />
-                      Après-midi (PM)
+                      {t('rhc.demi.apresmidi', locale)}
                     </label>
                   </div>
                 )}
@@ -2487,7 +2480,7 @@ export default function CongesPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Date de début</Label>
+                <Label>{t('rhc.edit.date_debut', locale)}</Label>
                 <Input type="date" className="mt-1" value={editFields.date_debut}
                   onChange={e => setEditFields(f => ({
                     ...f,
@@ -2497,7 +2490,7 @@ export default function CongesPage() {
                   }))} />
               </div>
               <div>
-                <Label>Date de fin {editFields.demi_journee && <span className="text-[10px] text-gray-400">(même date)</span>}</Label>
+                <Label>{t('rhc.edit.date_fin', locale)} {editFields.demi_journee && <span className="text-[10px] text-gray-400">{t('rhc.edit.meme_date', locale)}</span>}</Label>
                 <Input type="date" className="mt-1"
                   value={editFields.demi_journee ? editFields.date_debut : editFields.date_fin}
                   disabled={editFields.demi_journee}
@@ -2506,10 +2499,10 @@ export default function CongesPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditTarget(null)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>{t('rhc.btn.annuler_dialog', locale)}</Button>
             <Button onClick={sauverEdition} disabled={editLoading} className="bg-blue-600 text-white hover:bg-blue-700">
               {editLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              <Save className="w-4 h-4 mr-2" />Enregistrer
+              <Save className="w-4 h-4 mr-2" />{t('rhc.btn.enregistrer', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2521,12 +2514,10 @@ export default function CongesPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Megaphone className="w-4 h-4 text-amber-600" />
-              Imposer un congé collectif
+              {t('rhc.coll.title', locale)}
             </DialogTitle>
             <DialogDescription id="collectif-desc">
-              Crée une période de congé imposée pour tous les employés actifs (ou un groupe).
-              Les demandes sont créées automatiquement en statut "approuvé" et le solde AL
-              est décompté côté "imposé par la société".
+              {t('rhc.coll.desc', locale)}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-2">
@@ -2538,24 +2529,24 @@ export default function CongesPage() {
             {collectifFeedback && (
               <div className="bg-green-50 border border-green-200 rounded-md p-3 text-sm text-green-800">
                 <CheckCircle className="w-4 h-4 inline-block mr-1" />
-                Congé collectif créé : <strong>{collectifFeedback.nb}</strong> employé(s) · <strong>{collectifFeedback.jours}</strong> jour(s) imposé(s) au total.
+                {t('rhc.coll.feedback', locale).replace('{nb}', String(collectifFeedback.nb)).replace('{jours}', String(collectifFeedback.jours))}
               </div>
             )}
             <div>
-              <Label>Titre *</Label>
+              <Label>{t('rhc.coll.titre', locale)}</Label>
               <Input
                 value={collectifForm.titre}
                 onChange={e => setCollectifForm(f => ({ ...f, titre: e.target.value }))}
-                placeholder="Ex: Fermeture annuelle — décembre 2026"
+                placeholder={t('rhc.coll.titre_ph', locale)}
               />
             </div>
             <div>
-              <Label>Société *</Label>
+              <Label>{t('rhc.coll.societe', locale)}</Label>
               <Select
                 value={collectifForm.societe_id}
                 onValueChange={v => setCollectifForm(f => ({ ...f, societe_id: v, groupe_id: "" }))}
               >
-                <SelectTrigger><SelectValue placeholder="Choisir une société…" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('rhc.coll.choisir_societe', locale)} /></SelectTrigger>
                 <SelectContent>
                   {societes.map((s: any) => (
                     <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
@@ -2565,23 +2556,23 @@ export default function CongesPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Type de congé *</Label>
+                <Label>{t('rhc.coll.type', locale)}</Label>
                 <Select
                   value={collectifForm.type_conge}
                   onValueChange={v => setCollectifForm(f => ({ ...f, type_conge: v }))}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="AL">Congé annuel (AL)</SelectItem>
-                    <SelectItem value="UL">Sans solde (UL)</SelectItem>
+                    <SelectItem value="AL">{t('rhc.coll.opt_al', locale)}</SelectItem>
+                    <SelectItem value="UL">{t('rhc.opt.UL', locale)}</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-gray-500 mt-1">
-                  Seul AL décompte le solde au titre "imposé société".
+                  {t('rhc.coll.type_hint', locale)}
                 </p>
               </div>
               <div>
-                <Label>Appliquer à *</Label>
+                <Label>{t('rhc.coll.appliquer', locale)}</Label>
                 <Select
                   value={collectifForm.applique_a}
                   onValueChange={(v: string) => setCollectifForm(f => ({
@@ -2592,20 +2583,20 @@ export default function CongesPage() {
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Tous les employés actifs</SelectItem>
-                    <SelectItem value="groupe">Un groupe</SelectItem>
+                    <SelectItem value="all">{t('rhc.coll.tous', locale)}</SelectItem>
+                    <SelectItem value="groupe">{t('rhc.coll.un_groupe', locale)}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             {collectifForm.applique_a === 'groupe' && (
               <div>
-                <Label>Groupe *</Label>
+                <Label>{t('rhc.coll.groupe', locale)}</Label>
                 <Select
                   value={collectifForm.groupe_id}
                   onValueChange={v => setCollectifForm(f => ({ ...f, groupe_id: v }))}
                 >
-                  <SelectTrigger><SelectValue placeholder={groupes.length ? "Choisir un groupe…" : "Aucun groupe défini pour cette société"} /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={groupes.length ? t('rhc.coll.choisir_groupe', locale) : t('rhc.coll.aucun_groupe', locale)} /></SelectTrigger>
                   <SelectContent>
                     {groupes.map(g => (
                       <SelectItem key={g.id} value={g.id}>{g.nom}</SelectItem>
@@ -2616,7 +2607,7 @@ export default function CongesPage() {
             )}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Date début *</Label>
+                <Label>{t('rhc.coll.date_debut', locale)}</Label>
                 <Input
                   type="date"
                   value={collectifForm.date_debut}
@@ -2624,7 +2615,7 @@ export default function CongesPage() {
                 />
               </div>
               <div>
-                <Label>Date fin *</Label>
+                <Label>{t('rhc.new.date_fin', locale)}</Label>
                 <Input
                   type="date"
                   value={collectifForm.date_fin}
@@ -2633,24 +2624,24 @@ export default function CongesPage() {
               </div>
             </div>
             <div>
-              <Label>Motif</Label>
+              <Label>{t('rhc.coll.motif', locale)}</Label>
               <Textarea
                 rows={2}
                 value={collectifForm.motif}
                 onChange={e => setCollectifForm(f => ({ ...f, motif: e.target.value }))}
-                placeholder="Raison de l'imposition (optionnel)"
+                placeholder={t('rhc.coll.motif_ph', locale)}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCollectifOpen(false)}>Fermer</Button>
+            <Button variant="outline" onClick={() => setCollectifOpen(false)}>{t('rhc.btn.fermer', locale)}</Button>
             <Button
               onClick={submitCollectif}
               disabled={collectifSaving || !!collectifFeedback}
               className="bg-amber-600 text-white hover:bg-amber-700"
             >
               {collectifSaving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              <Megaphone className="w-4 h-4 mr-2" />Imposer
+              <Megaphone className="w-4 h-4 mr-2" />{t('rhc.coll.imposer', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2662,33 +2653,33 @@ export default function CongesPage() {
           <DialogHeader>
             <DialogTitle className="text-red-700 flex items-center gap-2">
               <XCircle className="w-5 h-5" />
-              Annuler ce congé imposé
+              {t('rhc.annd.title', locale)}
             </DialogTitle>
             <DialogDescription id="annuler-desc">
-              Le congé sera marqué "annulé" (soft-delete) et les jours seront re-crédités sur le solde AL de l'employé.
+              {t('rhc.annd.desc', locale)}
             </DialogDescription>
           </DialogHeader>
           {annulerTarget && (
             <div className="py-2 space-y-3">
               <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm">
                 <p className="font-medium text-amber-900">
-                  Annuler ce congé imposé pour <strong>{annulerTarget.employe?.prenom} {annulerTarget.employe?.nom}</strong> ?
+                  {t('rhc.annd.confirm', locale).replace('{name}', `${annulerTarget.employe?.prenom || ''} ${annulerTarget.employe?.nom || ''}`.trim())}
                 </p>
                 <p className="text-amber-800 mt-1">
-                  <strong>{annulerTarget.nb_jours}</strong> jour{annulerTarget.nb_jours > 1 ? 's' : ''} seront re-crédité{annulerTarget.nb_jours > 1 ? 's' : ''} sur son solde AL.
+                  {(annulerTarget.nb_jours > 1 ? t('rhc.annd.recredit_many', locale) : t('rhc.annd.recredit_one', locale)).replace('{n}', String(annulerTarget.nb_jours))}
                 </p>
                 <p className="text-xs text-amber-700 mt-1">
                   {formatDate(annulerTarget.date_debut)}
                   {annulerTarget.date_debut !== annulerTarget.date_fin && <> &rarr; {formatDate(annulerTarget.date_fin)}</>}
-                  {" · "}{TYPE_LABELS[annulerTarget.type_conge] || annulerTarget.type_conge}
+                  {" · "}{typeLabel(annulerTarget.type_conge, locale)}
                 </p>
               </div>
               <div>
-                <Label>Motif de l'annulation (optionnel)</Label>
+                <Label>{t('rhc.annd.motif', locale)}</Label>
                 <Textarea
                   value={annulerMotif}
                   onChange={e => setAnnulerMotif(e.target.value)}
-                  placeholder="Ex: Fermeture reportée, erreur de saisie…"
+                  placeholder={t('rhc.annd.motif_ph', locale)}
                   rows={2}
                 />
               </div>
@@ -2696,7 +2687,7 @@ export default function CongesPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => { setAnnulerTarget(null); setAnnulerMotif("") }}>
-              Fermer
+              {t('rhc.btn.fermer', locale)}
             </Button>
             <Button
               onClick={annulerImpose}
@@ -2704,7 +2695,7 @@ export default function CongesPage() {
               className="bg-red-600 text-white hover:bg-red-700"
             >
               {actionLoading === annulerTarget?.id && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              <XCircle className="w-4 h-4 mr-2" />Confirmer l'annulation
+              <XCircle className="w-4 h-4 mr-2" />{t('rhc.annd.confirmer', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2716,10 +2707,10 @@ export default function CongesPage() {
           <DialogHeader>
             <DialogTitle className="text-red-700 flex items-center gap-2">
               <Trash2 className="w-5 h-5" />
-              Supprimer cette demande de congé ?
+              {t('rhc.suppr.title', locale)}
             </DialogTitle>
             <DialogDescription id="supprimer-desc">
-              Action irréversible. Audit trail conservé dans la DB.
+              {t('rhc.suppr.desc', locale)}
             </DialogDescription>
           </DialogHeader>
           {supprimerTarget && (
@@ -2730,33 +2721,33 @@ export default function CongesPage() {
                 </div>
                 <div className="text-xs text-gray-600 mt-1">
                   <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium mr-2 ${TYPE_COLORS[supprimerTarget.type_conge] || "bg-gray-100 text-gray-800"}`}>
-                    {TYPE_LABELS[supprimerTarget.type_conge] || supprimerTarget.type_conge}
+                    {typeLabel(supprimerTarget.type_conge, locale)}
                   </span>
                   {formatDate(supprimerTarget.date_debut)} → {formatDate(supprimerTarget.date_fin)} — <strong>{supprimerTarget.nb_jours}j</strong>
                   <span className={`ml-2 inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${STATUT_COLORS[supprimerTarget.statut] || ""}`}>
-                    {STATUT_LABELS[supprimerTarget.statut] || supprimerTarget.statut}
+                    {statutLabel(supprimerTarget.statut, locale)}
                   </span>
                 </div>
               </div>
               <div className="text-xs text-gray-600 space-y-1">
-                <p>Cette action :</p>
+                <p>{t('rhc.suppr.action_intro', locale)}</p>
                 <ul className="list-disc list-inside space-y-0.5 ml-2">
-                  <li>Supprimera définitivement la demande de la base.</li>
-                  <li>Recomputera automatiquement le solde de l&apos;employé (si la demande était approuvée).</li>
-                  <li>Sera tracée dans <code className="text-[10px] bg-gray-100 px-1 rounded">demandes_conges_supprimees</code>.</li>
+                  <li>{t('rhc.suppr.li1', locale)}</li>
+                  <li>{t('rhc.suppr.li2', locale)}</li>
+                  <li>{t('rhc.suppr.li3_prefix', locale)} <code className="text-[10px] bg-gray-100 px-1 rounded">demandes_conges_supprimees</code>.</li>
                 </ul>
                 {supprimerTarget.statut === 'approuve' && (
                   <p className="text-orange-700 font-medium pt-1">
-                    ⚠️ Si cette demande approuvée avait déjà été comptée sur un bulletin verrouillé, celui-ci ne sera PAS modifié — retraiter manuellement.
+                    {t('rhc.suppr.warn_bulletin', locale)}
                   </p>
                 )}
               </div>
               <div>
-                <Label className="text-xs text-gray-600">Motif de la suppression (optionnel)</Label>
+                <Label className="text-xs text-gray-600">{t('rhc.suppr.motif', locale)}</Label>
                 <Textarea
                   value={supprimerMotif}
                   onChange={e => setSupprimerMotif(e.target.value)}
-                  placeholder="Ex : doublon, mauvaise saisie, test..."
+                  placeholder={t('rhc.suppr.motif_ph', locale)}
                   rows={2}
                   className="mt-1 text-sm"
                 />
@@ -2765,7 +2756,7 @@ export default function CongesPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => { setSupprimerTarget(null); setSupprimerMotif("") }}>
-              Annuler
+              {t('rhc.btn.annuler_dialog', locale)}
             </Button>
             <Button
               variant="destructive"
@@ -2777,7 +2768,7 @@ export default function CongesPage() {
               ) : (
                 <Trash2 className="w-4 h-4 mr-2" />
               )}
-              Supprimer définitivement
+              {t('rhc.suppr.confirmer', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>

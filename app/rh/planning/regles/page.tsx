@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/tooltip"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { ArrowLeft, Save, Shield, Loader2, Plus } from "lucide-react"
-import { t, getLocale } from "@/lib/i18n"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type {
   PlanningShift, PlanningConfig, PlanningRegleLegale, JourCode,
@@ -32,14 +32,14 @@ import { ShiftEditDialog } from "./_components/ShiftEditDialog"
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
 
-const JOURS: { code: JourCode; label: string }[] = [
-  { code: "lun", label: "Lundi" },
-  { code: "mar", label: "Mardi" },
-  { code: "mer", label: "Mercredi" },
-  { code: "jeu", label: "Jeudi" },
-  { code: "ven", label: "Vendredi" },
-  { code: "sam", label: "Samedi" },
-  { code: "dim", label: "Dimanche" },
+const JOURS: { code: JourCode; labelKey: string }[] = [
+  { code: "lun", labelKey: "rhpl.jour_lun" },
+  { code: "mar", labelKey: "rhpl.jour_mar" },
+  { code: "mer", labelKey: "rhpl.jour_mer" },
+  { code: "jeu", labelKey: "rhpl.jour_jeu" },
+  { code: "ven", labelKey: "rhpl.jour_ven" },
+  { code: "sam", labelKey: "rhpl.jour_sam" },
+  { code: "dim", labelKey: "rhpl.jour_dim" },
 ]
 
 function genShiftId(): string {
@@ -95,7 +95,7 @@ export default function ReglesPlanningPage() {
             : DEFAULT_REGLES_WRA,
         )
       })
-      .catch(() => notifyError("Charger les règles"))
+      .catch(() => notifyError(t('rhpl.err_charger', locale)))
       .finally(() => setLoading(false))
   }, [societe])
 
@@ -103,7 +103,7 @@ export default function ReglesPlanningPage() {
     const shiftsWithId: PlanningShift[] = preset.shifts.map(s => ({ ...s, id: genShiftId() }))
     setShifts(shiftsWithId)
     setConfig(prev => ({ ...prev, jours_travailles: preset.jours_travailles }))
-    toast.info(`Modèle "${preset.label}" chargé. N'oubliez pas d'enregistrer.`)
+    toast.info(`${t('rhpl.modele_prefix', locale)} "${preset.label}" ${t('rhpl.modele_charge', locale)}`)
   }
 
   const toggleJour = (code: JourCode) => {
@@ -147,15 +147,15 @@ export default function ReglesPlanningPage() {
       ...s,
       id: genShiftId(),
       code: newCode,
-      label: `${s.label} (copie)`,
+      label: `${s.label} ${t('rhpl.copie_suffix', locale)}`,
     }
     setShifts(prev => [...prev, dup])
-    toast.info(`Créneau "${s.label}" dupliqué`)
+    toast.info(`${t('rhpl.creneau_prefix', locale)} "${s.label}" ${t('rhpl.creneau_duplique', locale)}`)
   }
   const deleteShift = (id: string) => {
     const target = shifts.find(s => s.id === id)
     if (!target) return
-    if (!window.confirm(`Supprimer le créneau "${target.label}" ?`)) return
+    if (!window.confirm(`${t('rhpl.confirm_suppr_prefix', locale)} "${target.label}" ?`)) return
     setShifts(prev => prev.filter(s => s.id !== id))
   }
 
@@ -196,12 +196,12 @@ export default function ReglesPlanningPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        notifyError("Enregistrer les règles", data?.error || `HTTP ${res.status}`)
+        notifyError(t('rhpl.err_enregistrer', locale), data?.error || `HTTP ${res.status}`)
         return
       }
-      notifySuccess("✅ Règles de planning enregistrées")
+      notifySuccess(t('rhpl.regles_enregistrees', locale))
     } catch (e: unknown) {
-      notifyError("Erreur réseau", e)
+      notifyError(t('rhpl.err_reseau', locale), e)
     } finally {
       setSaving(false)
     }
@@ -221,18 +221,18 @@ export default function ReglesPlanningPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('rha.a.planr.title', locale)}</h1>
-              <p className="text-gray-500 text-sm">Créneaux, jours et règles par société</p>
+              <p className="text-gray-500 text-sm">{t('rhpl.subtitle', locale)}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Link href="/rh/planning">
               <Button variant="outline" size="sm">
-                <ArrowLeft className="h-4 w-4 mr-1" /> Retour au planning
+                <ArrowLeft className="h-4 w-4 mr-1" /> {t('rhpl.retour_planning', locale)}
               </Button>
             </Link>
             <Select value={societe} onValueChange={setSociete}>
               <SelectTrigger className="w-[220px]">
-                <SelectValue placeholder="Société" />
+                <SelectValue placeholder={t('rhpl.societe', locale)} />
               </SelectTrigger>
               <SelectContent>
                 {societes.map(s => (
@@ -254,10 +254,10 @@ export default function ReglesPlanningPage() {
               <Card className="border-2 border-dashed border-blue-300 bg-blue-50/40">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2" style={{ color: NAVY }}>
-                    <span aria-hidden>⚡</span> Commencez rapidement
+                    <span aria-hidden>⚡</span> {t('rhpl.demarrage_titre', locale)}
                   </CardTitle>
                   <p className="text-sm text-gray-600">
-                    Choisissez un modèle adapté à votre activité. Vous pourrez tout personnaliser après.
+                    {t('rhpl.demarrage_desc', locale)}
                   </p>
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -281,10 +281,10 @@ export default function ReglesPlanningPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2" style={{ color: NAVY }}>
-                  <span aria-hidden>📅</span> Jours travaillés
+                  <span aria-hidden>📅</span> {t('rhpl.jours_travailles', locale)}
                 </CardTitle>
                 <p className="text-sm text-gray-600">
-                  Cochez les jours de travail habituels. Utilisé pour calculer les absences et le prorata.
+                  {t('rhpl.jours_travailles_desc', locale)}
                 </p>
               </CardHeader>
               <CardContent>
@@ -305,13 +305,13 @@ export default function ReglesPlanningPage() {
                           checked={checked}
                           onCheckedChange={() => toggleJour(day.code)}
                         />
-                        <span className="text-sm font-medium">{day.label}</span>
+                        <span className="text-sm font-medium">{t(day.labelKey, locale)}</span>
                       </label>
                     )
                   })}
                 </div>
                 <p className="text-xs text-gray-500 mt-3">
-                  {config.jours_travailles.length} jour(s) travaillé(s) par semaine
+                  {config.jours_travailles.length} {t('rhpl.jours_par_semaine', locale)}
                 </p>
               </CardContent>
             </Card>
@@ -322,21 +322,21 @@ export default function ReglesPlanningPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <CardTitle className="flex items-center gap-2" style={{ color: NAVY }}>
-                      <span aria-hidden>🕐</span> Mes créneaux
+                      <span aria-hidden>🕐</span> {t('rhpl.mes_creneaux', locale)}
                     </CardTitle>
                     <p className="text-sm text-gray-600">
-                      Les types de journée disponibles pour planifier les employés.
+                      {t('rhpl.mes_creneaux_desc', locale)}
                     </p>
                   </div>
                   <Button size="sm" onClick={openAddShift}>
-                    <Plus className="w-4 h-4 mr-1" /> Ajouter
+                    <Plus className="w-4 h-4 mr-1" /> {t('rhpl.ajouter', locale)}
                   </Button>
                 </div>
               </CardHeader>
               <CardContent>
                 {shifts.length === 0 ? (
                   <div className="text-center py-10 text-sm text-gray-400">
-                    Aucun créneau. Utilisez un modèle dans « Démarrage rapide » ci-dessus ou cliquez sur « Ajouter ».
+                    {t('rhpl.aucun_creneau', locale)}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -358,10 +358,10 @@ export default function ReglesPlanningPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2" style={{ color: NAVY }}>
-                  <span aria-hidden>⚖️</span> Règles légales — Workers' Rights Act 2019
+                  <span aria-hidden>⚖️</span> {t('rhpl.regles_legales', locale)}
                 </CardTitle>
                 <p className="text-sm text-gray-600">
-                  Limites légales à Maurice. Les règles désactivées ne sont pas vérifiées lors de la validation du planning.
+                  {t('rhpl.regles_legales_desc', locale)}
                 </p>
               </CardHeader>
               <CardContent>
@@ -369,27 +369,31 @@ export default function ReglesPlanningPage() {
                   <Accordion type="multiple" defaultValue={["heures"]} className="w-full">
                     <WraCategoryItem
                       value="heures"
-                      label="🕐 Heures de travail"
+                      label={`🕐 ${t('rhpl.cat_heures', locale)}`}
                       regles={regles.filter(r => r.category === "heures")}
                       onChange={updateRegle}
+                      locale={locale}
                     />
                     <WraCategoryItem
                       value="repos"
-                      label="😴 Repos et rotation"
+                      label={`😴 ${t('rhpl.cat_repos', locale)}`}
                       regles={regles.filter(r => r.category === "repos")}
                       onChange={updateRegle}
+                      locale={locale}
                     />
                     <WraCategoryItem
                       value="ot"
-                      label="💰 Heures supplémentaires"
+                      label={`💰 ${t('rhpl.cat_ot', locale)}`}
                       regles={regles.filter(r => r.category === "ot")}
                       onChange={updateRegle}
+                      locale={locale}
                     />
                     <WraCategoryItem
                       value="equipe"
-                      label="👥 Équipe"
+                      label={`👥 ${t('rhpl.cat_equipe', locale)}`}
                       regles={regles.filter(r => r.category === "equipe")}
                       onChange={updateRegle}
+                      locale={locale}
                     />
                   </Accordion>
                 </TooltipProvider>
@@ -417,7 +421,7 @@ export default function ReglesPlanningPage() {
             style={{ backgroundColor: GOLD }}
           >
             <Save className="h-4 w-4 mr-2" />
-            {saving ? "Enregistrement..." : "Enregistrer"}
+            {saving ? t('rhpl.enregistrement', locale) : t('rhpl.enregistrer', locale)}
           </Button>
         </div>
       </div>
@@ -428,12 +432,13 @@ export default function ReglesPlanningPage() {
 // ─── Sous-composants WRA ─────────────────────────────────────────────
 
 function WraCategoryItem({
-  value, label, regles, onChange,
+  value, label, regles, onChange, locale,
 }: {
   value: string
   label: string
   regles: PlanningRegleLegale[]
   onChange: (key: string, field: "enabled" | "value", val: boolean | number | string) => void
+  locale: Locale
 }) {
   const nbActives = regles.filter(r => r.enabled).length
   return (
@@ -442,14 +447,14 @@ function WraCategoryItem({
         <div className="flex items-center gap-2 flex-1">
           <span>{label}</span>
           <Badge variant="outline" className="ml-auto mr-3 text-[10px] font-normal">
-            {nbActives}/{regles.length} actives
+            {nbActives}/{regles.length} {t('rhpl.actives', locale)}
           </Badge>
         </div>
       </AccordionTrigger>
       <AccordionContent>
         <div className="divide-y">
           {regles.map(r => (
-            <RegleRow key={r.key} regle={r} onChange={onChange} />
+            <RegleRow key={r.key} regle={r} onChange={onChange} locale={locale} />
           ))}
         </div>
       </AccordionContent>
@@ -458,10 +463,11 @@ function WraCategoryItem({
 }
 
 function RegleRow({
-  regle, onChange,
+  regle, onChange, locale,
 }: {
   regle: PlanningRegleLegale
   onChange: (key: string, field: "enabled" | "value", val: boolean | number | string) => void
+  locale: Locale
 }) {
   return (
     <div className={cn(
@@ -471,7 +477,7 @@ function RegleRow({
       <Switch
         checked={regle.enabled}
         onCheckedChange={(v) => onChange(regle.key, "enabled", v)}
-        aria-label={`Activer ${regle.label}`}
+        aria-label={`${t('rhpl.activer', locale)} ${regle.label}`}
       />
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium" style={{ color: NAVY }}>{regle.label}</div>
