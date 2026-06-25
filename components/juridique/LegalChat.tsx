@@ -114,9 +114,9 @@ export function LegalChat({
         }),
       })
       const data = await res.json()
-      setMessages([...next, { role: "assistant", content: data.reponse || data.error || "Aucune réponse.", sources: data.sources || [], docs: data.documents_analyses || [] }])
+      setMessages([...next, { role: "assistant", content: data.reponse || data.error || t('cdlg.chat.no_reply', locale), sources: data.sources || [], docs: data.documents_analyses || [] }])
     } catch {
-      setMessages([...next, { role: "assistant", content: "Erreur de connexion. Réessayez." }])
+      setMessages([...next, { role: "assistant", content: t('cdlg.chat.error_conn', locale) }])
     } finally { setLoading(false) }
   }
 
@@ -144,7 +144,7 @@ export function LegalChat({
           exchanges,
         }),
       })
-      if (!res.ok) { alert("Échec de génération du rapport."); return }
+      if (!res.ok) { alert(t('cdlg.chat.err_report', locale)); return }
       const blob = await res.blob()
       window.open(URL.createObjectURL(blob), "_blank")
     } finally { setExporting(false) }
@@ -267,11 +267,11 @@ export function LegalChat({
                   </div>
                 )}
                 {m.role === "assistant" && m.docs && m.docs.length > 0 && (
-                  <p className="mt-1.5 text-[11px] text-gray-400">Documents analysés : {m.docs.join(", ")}</p>
+                  <p className="mt-1.5 text-[11px] text-gray-400">{t('cdlg.chat.docs_analysed', locale)} {m.docs.join(", ")}</p>
                 )}
                 {m.role === "assistant" && m.sources && m.sources.length > 0 && (
                   <div className="mt-2 rounded-xl border border-gray-100 bg-white px-3 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Sources verrouillées (RAG)</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">{t('cdlg.chat.sources_label', locale)}</p>
                     <div className="flex flex-wrap gap-1.5">
                       {m.sources.map((s) => (
                         <span key={s.ref} title={`${s.titre} · revu ${s.maj}`} className="text-[11px] font-medium px-2 py-0.5 rounded-full border border-gray-200 text-gray-700">
@@ -312,23 +312,23 @@ export function LegalChat({
           </div>
         )}
         <div className="flex items-end gap-2">
-          <button onClick={() => setShowDocs((v) => !v)} className="rounded-xl p-2.5 border border-gray-200 text-gray-500 hover:text-[#0B0F2E]" aria-label="Joindre des documents">
+          <button onClick={() => setShowDocs((v) => !v)} className="rounded-xl p-2.5 border border-gray-200 text-gray-500 hover:text-[#0B0F2E]" aria-label={t('cdlg.chat.attach_aria', locale)}>
             <Paperclip className="w-4 h-4" />
           </button>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input) } }}
-            placeholder={placeholder || "Décrivez votre question…"}
+            placeholder={placeholder || t('cdlg.chat.placeholder_default', locale)}
             rows={1}
             className="flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-[#D4AF37] max-h-32"
           />
-          <button onClick={() => send(input)} disabled={loading || !input.trim()} className="rounded-xl px-4 py-2.5 text-white disabled:opacity-40 transition-opacity" style={{ background: NAVY }} aria-label="Envoyer">
+          <button onClick={() => send(input)} disabled={loading || !input.trim()} className="rounded-xl px-4 py-2.5 text-white disabled:opacity-40 transition-opacity" style={{ background: NAVY }} aria-label={t('cdlg.chat.send_aria', locale)}>
             <Send className="w-4 h-4" />
           </button>
         </div>
         <p className="text-[10px] text-gray-400 mt-2 text-center">
-          Projet de travail — ne remplace pas la consultation d'un avocat / attorney inscrit au barreau mauricien.
+          {t('cdlg.chat.footer_disclaimer', locale)}
         </p>
       </div>
     </div>
