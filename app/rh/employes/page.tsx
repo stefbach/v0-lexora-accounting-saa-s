@@ -69,6 +69,7 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
   const MAX_PRIMES_FIXES = 3
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const locale = getLocale()
   const u = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
   const addPrimeFixe = () => {
     if (primesFixes.length >= MAX_PRIMES_FIXES) return
@@ -106,28 +107,28 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
   const isManagerRole = form.role_rh === 'manager'
   const validate = () => {
     const errs: Record<string, string> = {}
-    if (!form.societe_id) errs.societe_id = "Societe requise"
-    if (!form.nom) errs.nom = "Nom requis"
-    if (!form.prenom) errs.prenom = "Prenom requis"
-    if (!form.salaire_base && !isManagerRole) errs.salaire_base = "Salaire requis"
-    if (!form.date_arrivee && !isManagerRole) errs.date_arrivee = "Date requise"
+    if (!form.societe_id) errs.societe_id = t('rhe.err.societe_requise', locale)
+    if (!form.nom) errs.nom = t('rhe.err.nom_requis', locale)
+    if (!form.prenom) errs.prenom = t('rhe.err.prenom_requis', locale)
+    if (!form.salaire_base && !isManagerRole) errs.salaire_base = t('rhe.err.salaire_requis', locale)
+    if (!form.date_arrivee && !isManagerRole) errs.date_arrivee = t('rhe.err.date_requise', locale)
     // Sprint 2 — validation email + téléphone (Maurice). Champs optionnels :
     // on ne valide QUE s'ils sont renseignés.
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      errs.email = "Format email invalide (ex: jean@example.com)"
+      errs.email = t('rhe.err.email_invalide', locale)
     }
     if (form.telephone) {
       // Mauritius : +230 suivi de 7 ou 8 chiffres, espaces tolérés.
       // Accepte aussi format local (5XXX XXXX, 8 chiffres sans préfixe).
       const cleaned = form.telephone.replace(/\s+/g, '')
       const okMu = /^\+230\d{7,8}$/.test(cleaned) || /^\d{7,8}$/.test(cleaned)
-      if (!okMu) errs.telephone = "Format invalide. Attendu : +230 XXXX XXXX ou XXXX XXXX"
+      if (!okMu) errs.telephone = t('rhe.err.telephone_invalide', locale)
     }
     // Validation compte Lexora : si toggle ON → email + password ≥ 8 chars
     // (aligné avec /api/rh/employes/[id]/create-account côté serveur).
     if (createAccess) {
-      if (!form.email) errs.email = errs.email || "Email requis pour créer un compte Lexora"
-      if (!accessPwd || accessPwd.length < 8) errs._access = "Mot de passe ≥ 8 caractères requis"
+      if (!form.email) errs.email = errs.email || t('rhe.err.email_requis_compte', locale)
+      if (!accessPwd || accessPwd.length < 8) errs._access = t('rhe.err.pwd_min8', locale)
     }
     setErrors(errs)
     return Object.keys(errs).length === 0
@@ -179,7 +180,7 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
       // requêtes /api/* sans user). On redirige vers /auth/login pour que
       // l'admin se reconnecte plutôt que d'afficher un message générique.
       if (res.status === 401) {
-        notifyError("Créer employé", "Session expirée — reconnexion requise")
+        notifyError(t('rhe.toast.creer_employe', locale), t('rhe.toast.session_expiree', locale))
         const next = typeof window !== "undefined" ? window.location.pathname : "/rh/employes"
         window.location.href = `/auth/login?next=${encodeURIComponent(next)}`
         return
@@ -192,13 +193,13 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
 
       // Base toast selon contrat_status (fiche employé)
       if (status === 'created') {
-        toast.success(`Employé créé. 📄 Contrat brouillon généré — voir /rh/juridique`, { duration: 5000 })
+        toast.success(t('rhe.toast.cree_contrat_ok', locale), { duration: 5000 })
       } else if (status === 'no_template') {
-        toast.warning(`Employé créé. ⚠️ Aucun template disponible — créer le contrat manuellement via /rh/juridique`, { duration: 6000 })
+        toast.warning(t('rhe.toast.cree_no_template', locale), { duration: 6000 })
       } else if (status === 'failed') {
-        toast.warning(`Employé créé. ⚠️ Génération contrat échouée — à créer manuellement`, { duration: 6000 })
+        toast.warning(t('rhe.toast.cree_contrat_failed', locale), { duration: 6000 })
       } else if (!createAccess) {
-        notifySuccess('✅ Employé créé. Compte Lexora à créer plus tard.')
+        notifySuccess(t('rhe.toast.cree_compte_later', locale))
       }
 
       // Création optionnelle du compte Lexora — enchaînée après la fiche
@@ -217,19 +218,19 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
           })
           const accessData = await accessRes.json().catch(() => ({}))
           if (!accessRes.ok || accessData.error) {
-            toast.warning(`Employé créé. ⚠️ Compte Lexora non créé : ${accessData.error || `HTTP ${accessRes.status}`}. Réessayez via le bouton "Créer compte" sur la fiche employé.`, { duration: 8000 })
+            toast.warning(t('rhe.toast.compte_non_cree', locale).replace('{err}', String(accessData.error || `HTTP ${accessRes.status}`)), { duration: 8000 })
           } else if (accessData.email_sent === false) {
-            toast.warning(`Employé créé + compte Lexora activé. ⚠️ Email NON envoyé : ${accessData.email_error || 'erreur SMTP'}. Communiquer le mot de passe manuellement à ${form.email}.`, { duration: 10000 })
+            toast.warning(t('rhe.toast.email_non_envoye', locale).replace('{err}', String(accessData.email_error || t('rhe.toast.erreur_smtp', locale))).replace('{email}', String(form.email)), { duration: 10000 })
           } else {
-            toast.success(`✅ Employé créé + compte activé. Identifiants envoyés à ${form.email}`, { duration: 6000 })
+            toast.success(t('rhe.toast.cree_compte_ok', locale).replace('{email}', String(form.email)), { duration: 6000 })
           }
         } catch (e: any) {
-          toast.warning(`Employé créé. ⚠️ Compte Lexora non créé : ${e?.message || 'erreur réseau'}. Réessayez plus tard.`, { duration: 8000 })
+          toast.warning(t('rhe.toast.compte_non_cree_reseau', locale).replace('{err}', String(e?.message || t('rhe.toast.erreur_reseau', locale))), { duration: 8000 })
         }
       }
 
       onClose(); onCreated()
-    } catch (e: unknown) { setErrors({ _global: e instanceof Error ? e.message : "Erreur" }) }
+    } catch (e: unknown) { setErrors({ _global: e instanceof Error ? e.message : t('rhe.err.generique', locale) }) }
     finally { setSaving(false) }
   }
 
@@ -240,12 +241,12 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
       {errors._global && <div className="text-sm text-red-600 bg-red-50 border border-red-200 p-3 rounded-xl">{errors._global}</div>}
 
       {/* Societe & Role */}
-      <FormSection icon={<Building2 className="w-4 h-4 text-[#4191FF]" />} title="Organisation" color="#4191FF">
-        <FormField label="Societe" required>
-          <Select value={form.societe_id} onValueChange={v=>u("societe_id",v)}><SelectTrigger className={selectTriggerClass}><SelectValue placeholder="Choisir la societe..."/></SelectTrigger><SelectContent>{societes.map(s=><SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent></Select>
+      <FormSection icon={<Building2 className="w-4 h-4 text-[#4191FF]" />} title={t('rhe.create.section_organisation', locale)} color="#4191FF">
+        <FormField label={t('rhe.create.field_societe', locale)} required>
+          <Select value={form.societe_id} onValueChange={v=>u("societe_id",v)}><SelectTrigger className={selectTriggerClass}><SelectValue placeholder={t('rhe.create.ph_choisir_societe', locale)}/></SelectTrigger><SelectContent>{societes.map(s=><SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent></Select>
           {fieldErr("societe_id")}
         </FormField>
-        <FormField label="Role">
+        <FormField label={t('rhe.create.field_role', locale)}>
           {/* Champ RH (employes.role_rh). À ne pas confondre avec le rôle
               Lexora qui vit dans profiles.role et est câblé séparément
               via le toggle "Accès Lexora" plus bas. */}
@@ -254,86 +255,86 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
       </FormSection>
 
       {/* Identite */}
-      <FormSection icon={<User className="w-4 h-4 text-[#4191FF]" />} title="Identite" color="#4191FF">
-        <FormField label="Nom" required>
+      <FormSection icon={<User className="w-4 h-4 text-[#4191FF]" />} title={t('rhe.create.section_identite', locale)} color="#4191FF">
+        <FormField label={t('rhe.create.field_nom', locale)} required>
           <Input className={inputClass} value={form.nom} onChange={e=>u("nom",e.target.value)} placeholder="DUPONT"/>
           {fieldErr("nom")}
         </FormField>
-        <FormField label="Prenom" required>
+        <FormField label={t('rhe.create.field_prenom', locale)} required>
           <Input className={inputClass} value={form.prenom} onChange={e=>u("prenom",e.target.value)} placeholder="Jean"/>
           {fieldErr("prenom")}
         </FormField>
-        <FormField label="Email">
+        <FormField label={t('rhe.create.field_email', locale)}>
           <Input className={inputClass} type="email" value={form.email} onChange={e=>u("email",e.target.value)} placeholder="jean@example.com"/>
           {fieldErr("email")}
         </FormField>
-        <FormField label="Telephone">
+        <FormField label={t('rhe.create.field_telephone', locale)}>
           <Input className={inputClass} value={form.telephone} onChange={e=>u("telephone",e.target.value)} placeholder="+230 5123 4567"/>
           {fieldErr("telephone")}
         </FormField>
-        <FormField label="Genre">
-          <Select value={form.genre} onValueChange={v=>u("genre",v)}><SelectTrigger className={selectTriggerClass}><SelectValue placeholder="Choisir..."/></SelectTrigger><SelectContent><SelectItem value="M">Masculin</SelectItem><SelectItem value="F">Feminin</SelectItem></SelectContent></Select>
+        <FormField label={t('rhe.create.field_genre', locale)}>
+          <Select value={form.genre} onValueChange={v=>u("genre",v)}><SelectTrigger className={selectTriggerClass}><SelectValue placeholder={t('rhe.create.ph_choisir', locale)}/></SelectTrigger><SelectContent><SelectItem value="M">{t('rhe.create.genre_m', locale)}</SelectItem><SelectItem value="F">{t('rhe.create.genre_f', locale)}</SelectItem></SelectContent></Select>
         </FormField>
-        <FormField label="Date de naissance">
+        <FormField label={t('rhe.create.field_date_naissance', locale)}>
           <Input className={inputClass} type="date" value={form.date_naissance} onChange={e=>u("date_naissance",e.target.value)}/>
         </FormField>
-        <FormField label="NIC">
+        <FormField label={t('rhe.create.field_nic', locale)}>
           <Input className={inputClass} value={form.nic} onChange={e=>u("nic",e.target.value)} placeholder="A1234567890123"/>
         </FormField>
-        <FormField label="TAN">
+        <FormField label={t('rhe.create.field_tan', locale)}>
           <Input className={inputClass} value={form.tan} onChange={e=>u("tan",e.target.value)} placeholder="A123456789"/>
         </FormField>
       </FormSection>
 
       {/* Emploi */}
-      <FormSection icon={<Briefcase className="w-4 h-4 text-[#D4AF37]" />} title="Emploi" color="#D4AF37">
-        <FormField label="Poste">
+      <FormSection icon={<Briefcase className="w-4 h-4 text-[#D4AF37]" />} title={t('rhe.create.section_emploi', locale)} color="#D4AF37">
+        <FormField label={t('rhe.create.field_poste', locale)}>
           <Input className={inputClass} value={form.poste} onChange={e=>u("poste",e.target.value)} placeholder="Comptable"/>
         </FormField>
-        <FormField label="Departement">
+        <FormField label={t('rhe.create.field_departement', locale)}>
           <Input className={inputClass} value={form.departement} onChange={e=>u("departement",e.target.value)} placeholder="Finance"/>
         </FormField>
-        <FormField label="Date d'arrivee" required={!isManagerRole}>
+        <FormField label={t('rhe.create.field_date_arrivee', locale)} required={!isManagerRole}>
           <Input className={inputClass} type="date" value={form.date_arrivee} onChange={e=>u("date_arrivee",e.target.value)}/>
           {fieldErr("date_arrivee")}
         </FormField>
-        <FormField label="Type de contrat">
+        <FormField label={t('rhe.create.field_type_contrat', locale)}>
           <Select value={form.type_contrat} onValueChange={v=>u("type_contrat",v)}><SelectTrigger className={selectTriggerClass}><SelectValue/></SelectTrigger><SelectContent><SelectItem value="CDI">CDI</SelectItem><SelectItem value="CDD">CDD</SelectItem><SelectItem value="Interim">Interim</SelectItem></SelectContent></Select>
         </FormField>
-        <FormField label="Categorie CSG">
+        <FormField label={t('rhe.create.field_csg', locale)}>
           <Select value={form.csg_categorie} onValueChange={v=>u("csg_categorie",v)}><SelectTrigger className={selectTriggerClass}><SelectValue/></SelectTrigger><SelectContent><SelectItem value="A">A</SelectItem><SelectItem value="B">B</SelectItem></SelectContent></Select>
         </FormField>
       </FormSection>
 
       {/* Rémunération — salaire de base */}
-      <FormSection icon={<Banknote className="w-4 h-4 text-green-600" />} title="Rémunération" color="#22c55e">
-        <FormField label="Salaire de base" required={!isManagerRole}>
-          <Input className={inputClass} type="number" value={form.salaire_base} onChange={e=>u("salaire_base",e.target.value)} placeholder={isManagerRole ? "Optionnel pour un manager" : "35 000"}/>
+      <FormSection icon={<Banknote className="w-4 h-4 text-green-600" />} title={t('rhe.create.section_remuneration', locale)} color="#22c55e">
+        <FormField label={t('rhe.create.field_salaire_base', locale)} required={!isManagerRole}>
+          <Input className={inputClass} type="number" value={form.salaire_base} onChange={e=>u("salaire_base",e.target.value)} placeholder={isManagerRole ? t('rhe.create.ph_salaire_manager', locale) : "35 000"}/>
           {fieldErr("salaire_base")}
           {form.salaire_base && parseFloat(form.salaire_base) > 0 && parseFloat(form.salaire_base) < 16500 && (
             <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
               <AlertTriangle className="w-3 h-3" />
-              Inférieur au minimum légal (16 500 MUR — Finance Act 2024)
+              {t('rhe.create.salaire_sous_minimum', locale)}
             </p>
           )}
         </FormField>
-        <FormField label="Devise">
+        <FormField label={t('rhe.create.field_devise', locale)}>
           <Select value={form.devise_salaire} onValueChange={v=>u("devise_salaire",v)}><SelectTrigger className={selectTriggerClass}><SelectValue/></SelectTrigger><SelectContent>{["MUR","EUR","USD","GBP"].map(d=><SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select>
         </FormField>
       </FormSection>
 
       {/* Compensations & Allowances — fixes + primes personnalisées */}
-      <FormSection icon={<Banknote className="w-4 h-4 text-emerald-600" />} title="Compensations & Allowances" color="#10b981">
-        <FormField label="Transport (MUR)">
+      <FormSection icon={<Banknote className="w-4 h-4 text-emerald-600" />} title={t('rhe.create.section_compensations', locale)} color="#10b981">
+        <FormField label={t('rhe.create.field_transport', locale)}>
           <Input className={inputClass} type="number" min="0" step="0.01" value={form.transport_allowance} onChange={e=>u("transport_allowance",e.target.value)} placeholder="0"/>
         </FormField>
-        <FormField label="Essence / Carburant (MUR)">
+        <FormField label={t('rhe.create.field_essence', locale)}>
           <Input className={inputClass} type="number" min="0" step="0.01" value={form.petrol_allowance} onChange={e=>u("petrol_allowance",e.target.value)} placeholder="0"/>
         </FormField>
-        <FormField label="Téléphone (MUR)">
+        <FormField label={t('rhe.create.field_telephone_allowance', locale)}>
           <Input className={inputClass} type="number" min="0" step="0.01" value={form.phone_allowance} onChange={e=>u("phone_allowance",e.target.value)} placeholder="0"/>
         </FormField>
-        <FormField label="Bus quotidien (MUR / jour)">
+        <FormField label={t('rhe.create.field_bus_quotidien', locale)}>
           <Input className={inputClass} type="number" min="0" step="0.01" value={form.daily_bus_fare} onChange={e=>u("daily_bus_fare",e.target.value)} placeholder="0"/>
         </FormField>
 
@@ -341,8 +342,8 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
         <div className="sm:col-span-2 space-y-2 pt-1 border-t border-gray-100">
           <div className="flex items-center justify-between">
             <Label className="text-xs font-medium text-gray-600">
-              Compensations personnalisées
-              <span className="ml-1 text-gray-400 font-normal">(ex: Electricité, Loyer…)</span>
+              {t('rhe.create.primes_label', locale)}
+              <span className="ml-1 text-gray-400 font-normal">{t('rhe.create.primes_hint', locale)}</span>
             </Label>
             <Button
               type="button"
@@ -351,20 +352,20 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
               className="h-8 text-xs"
               disabled={primesFixes.length >= MAX_PRIMES_FIXES}
               onClick={addPrimeFixe}
-              title={primesFixes.length >= MAX_PRIMES_FIXES ? "Maximum 3 compensations personnalisées" : "Ajouter"}
+              title={primesFixes.length >= MAX_PRIMES_FIXES ? t('rhe.create.primes_max', locale) : t('rhe.create.ajouter', locale)}
             >
               <Plus className="w-3 h-3 mr-1" />
-              Ajouter une compensation
+              {t('rhe.create.ajouter_compensation', locale)}
             </Button>
           </div>
           {primesFixes.length === 0 && (
             <p className="text-[11px] text-gray-400 italic">
-              Aucune compensation personnalisée. Cliquez sur « Ajouter » pour en créer une.
+              {t('rhe.create.primes_empty', locale)}
             </p>
           )}
           {primesFixes.length >= MAX_PRIMES_FIXES && (
             <p className="text-[11px] text-amber-600">
-              Maximum 3 compensations personnalisées atteint.
+              {t('rhe.create.primes_max_atteint', locale)}
             </p>
           )}
           {primesFixes.map((row, i) => (
@@ -373,14 +374,14 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
                 className={inputClass}
                 value={row.libelle}
                 onChange={e => updatePrimeFixe(i, "libelle", e.target.value)}
-                placeholder={`Libellé prime ${i + 1} (ex: Electricité)`}
+                placeholder={t('rhe.create.prime_libelle_ph', locale).replace('{n}', String(i + 1))}
               />
               <Input
                 className={`${inputClass} font-mono`}
                 type="number" min="0" step="0.01"
                 value={row.montant}
                 onChange={e => updatePrimeFixe(i, "montant", e.target.value)}
-                placeholder="Montant MUR"
+                placeholder={t('rhe.create.montant_mur', locale)}
               />
               <Button
                 type="button"
@@ -388,7 +389,7 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
                 size="sm"
                 className="h-9 w-9 p-0"
                 onClick={() => removePrimeFixe(i)}
-                title="Supprimer"
+                title={t('rhe.create.supprimer', locale)}
               >
                 <Trash2 className="w-4 h-4 text-red-500" />
               </Button>
@@ -407,19 +408,19 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
           const primes = primesFixes.reduce((s, r) => s + (parseFloat(r.montant) || 0), 0)
           const total = base + transport + petrol + phone + primes
           const lines: { label: string; value: number; sign?: "plus" }[] = []
-          if (base > 0) lines.push({ label: "Salaire de base", value: base })
-          if (transport > 0) lines.push({ label: "Transport", value: transport, sign: "plus" })
-          if (petrol > 0) lines.push({ label: "Essence", value: petrol, sign: "plus" })
-          if (phone > 0) lines.push({ label: "Téléphone", value: phone, sign: "plus" })
+          if (base > 0) lines.push({ label: t('rhe.create.line_salaire_base', locale), value: base })
+          if (transport > 0) lines.push({ label: t('rhe.create.line_transport', locale), value: transport, sign: "plus" })
+          if (petrol > 0) lines.push({ label: t('rhe.create.line_essence', locale), value: petrol, sign: "plus" })
+          if (phone > 0) lines.push({ label: t('rhe.create.line_telephone', locale), value: phone, sign: "plus" })
           for (const r of primesFixes) {
             const m = parseFloat(r.montant) || 0
-            if (m > 0) lines.push({ label: r.libelle.trim() || "Prime perso.", value: m, sign: "plus" })
+            if (m > 0) lines.push({ label: r.libelle.trim() || t('rhe.create.line_prime_perso', locale), value: m, sign: "plus" })
           }
           if (base <= 0) return null
           return (
             <div className="sm:col-span-2 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 mt-2">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800 mb-2">
-                Brut mensuel estimé
+                {t('rhe.create.brut_estime', locale)}
               </p>
               <div className="space-y-1">
                 {lines.map((l, i) => (
@@ -431,13 +432,13 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
                   </div>
                 ))}
                 <div className="flex justify-between text-sm font-mono font-bold pt-1 border-t border-emerald-200">
-                  <span className="text-emerald-900">Total brut estimé</span>
+                  <span className="text-emerald-900">{t('rhe.create.total_brut_estime', locale)}</span>
                   <span className="text-emerald-900">{total.toLocaleString("fr-FR")} {form.devise_salaire}</span>
                 </div>
               </div>
               {parseFloat(form.daily_bus_fare) > 0 && (
                 <p className="text-[10px] text-gray-500 italic mt-2">
-                  Le bus quotidien ({form.daily_bus_fare} MUR/jour) varie selon le nombre de jours travaillés — non inclus dans cette estimation mensuelle fixe.
+                  {t('rhe.create.bus_note', locale).replace('{n}', String(form.daily_bus_fare))}
                 </p>
               )}
             </div>
@@ -446,20 +447,20 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
       </FormSection>
 
       {/* Banque */}
-      <FormSection icon={<Building2 className="w-4 h-4 text-purple-600" />} title="Banque" color="#9333ea">
-        <FormField label="Banque">
-          <Select value={form.bank_name} onValueChange={v=>u("bank_name",v)}><SelectTrigger className={selectTriggerClass}><SelectValue placeholder="Choisir..."/></SelectTrigger><SelectContent>{BANQUES_MAURITIUS.map(b=><SelectItem key={b.code} value={b.code}>{b.nom}</SelectItem>)}</SelectContent></Select>
+      <FormSection icon={<Building2 className="w-4 h-4 text-purple-600" />} title={t('rhe.create.section_banque', locale)} color="#9333ea">
+        <FormField label={t('rhe.create.field_banque', locale)}>
+          <Select value={form.bank_name} onValueChange={v=>u("bank_name",v)}><SelectTrigger className={selectTriggerClass}><SelectValue placeholder={t('rhe.create.ph_choisir', locale)}/></SelectTrigger><SelectContent>{BANQUES_MAURITIUS.map(b=><SelectItem key={b.code} value={b.code}>{b.nom}</SelectItem>)}</SelectContent></Select>
         </FormField>
-        <FormField label="N. compte">
+        <FormField label={t('rhe.create.field_n_compte', locale)}>
           <Input className={inputClass} value={form.bank_account} onChange={e=>u("bank_account",e.target.value)} placeholder="000012345678"/>
         </FormField>
-        <FormField label="IBAN" className="sm:col-span-2">
+        <FormField label={t('rhe.create.field_iban', locale)} className="sm:col-span-2">
           <Input className={inputClass} value={form.iban} onChange={e=>u("iban",e.target.value)} placeholder="MU17BOMM..."/>
         </FormField>
       </FormSection>
 
       {/* Accès Lexora — création optionnelle du compte auth */}
-      <FormSection icon={<Key className="w-4 h-4 text-purple-600" />} title="Accès Lexora" color="#9333EA">
+      <FormSection icon={<Key className="w-4 h-4 text-purple-600" />} title={t('rhe.create.section_acces', locale)} color="#9333EA">
         <div className="sm:col-span-2 space-y-3">
           <label className="flex items-start gap-3 cursor-pointer">
             <input
@@ -470,10 +471,10 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
             />
             <div className="flex-1">
               <p className="text-sm font-medium text-[#0B0F2E]">
-                Créer un accès Lexora pour cet employé
+                {t('rhe.create.acces_toggle', locale)}
               </p>
               <p className="text-xs text-gray-500 mt-0.5">
-                L'employé pourra se connecter au portail pour consulter ses bulletins, poser des congés, etc. Peut être créé plus tard si besoin.
+                {t('rhe.create.acces_toggle_desc', locale)}
               </p>
             </div>
           </label>
@@ -481,19 +482,19 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
           {createAccess && (
             <div className="space-y-3 pl-7">
               <div>
-                <Label className="text-xs font-medium text-gray-600 mb-1 block">Email de connexion</Label>
+                <Label className="text-xs font-medium text-gray-600 mb-1 block">{t('rhe.create.email_connexion', locale)}</Label>
                 <Input
                   className={`${inputClass} bg-gray-50`}
                   value={form.email}
                   readOnly
-                  placeholder="Renseignez l'email dans la section Identité"
+                  placeholder={t('rhe.create.email_connexion_ph', locale)}
                 />
                 <p className="text-[11px] text-gray-400 mt-1">
-                  Identifiant = email de l'employé (éditable dans la section Identité).
+                  {t('rhe.create.email_connexion_hint', locale)}
                 </p>
               </div>
               <div>
-                <Label className="text-xs font-medium text-gray-600 mb-1 block">Mot de passe</Label>
+                <Label className="text-xs font-medium text-gray-600 mb-1 block">{t('rhe.create.mot_de_passe', locale)}</Label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Input
@@ -501,19 +502,19 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
                       value={accessPwd}
                       onChange={e => setAccessPwd(e.target.value)}
                       className={`${inputClass} font-mono pr-10`}
-                      placeholder="Mot de passe..."
+                      placeholder={t('rhe.create.mot_de_passe_ph', locale)}
                     />
                     <button
                       type="button"
                       onClick={() => setPwdVisible(v => !v)}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                      title={pwdVisible ? "Masquer" : "Afficher"}
+                      title={pwdVisible ? t('rhe.create.masquer', locale) : t('rhe.create.afficher', locale)}
                     >
                       {pwdVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                   <Button type="button" variant="outline" size="sm" onClick={() => setAccessPwd(genPwd())}>
-                    Générer
+                    {t('rhe.create.generer', locale)}
                   </Button>
                 </div>
                 {errors._access && <p className="text-xs text-red-500 mt-1">{errors._access}</p>}
@@ -521,8 +522,7 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
               <div className="flex items-start gap-2 p-2 rounded bg-amber-50 border border-amber-200">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-800">
-                  <span className="font-semibold">Important :</span> communiquez ce mot de passe
-                  à l'employé par un canal sécurisé. Il ne sera plus visible après la création.
+                  <span className="font-semibold">{t('rhe.create.important', locale)}</span> {t('rhe.create.pwd_warning', locale)}
                 </p>
               </div>
             </div>
@@ -532,10 +532,10 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
 
       {/* Actions */}
       <div className="flex flex-col sm:flex-row gap-2 pt-2">
-        <Button variant="outline" onClick={onClose} className="sm:flex-1 h-11 rounded-xl">Annuler</Button>
+        <Button variant="outline" onClick={onClose} className="sm:flex-1 h-11 rounded-xl">{t('rhe.create.annuler', locale)}</Button>
         <Button onClick={handleCreate} disabled={saving} className="sm:flex-[2] h-11 rounded-xl bg-[#D4AF37] hover:bg-[#c9a432] text-white font-semibold shadow-md" style={{ fontFamily: "Poppins, sans-serif" }}>
           {saving && <Loader2 className="w-4 h-4 animate-spin mr-2"/>}
-          Creer l'employe
+          {t('rhe.create.creer_employe', locale)}
         </Button>
       </div>
     </div>
@@ -548,9 +548,6 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
 // exclure_mra. Principe : tout ce qui est modifiable en DB est accessible
 // depuis la fiche. Le salaire est mis en avant dans une carte dédiée.
 const WORKING_DAYS_DEFAULT = { mon: true, tue: true, wed: true, thu: true, fri: true, sat: false, sun: false }
-const DAY_LABELS: Record<string, string> = {
-  mon: "Lun", tue: "Mar", wed: "Mer", thu: "Jeu", fri: "Ven", sat: "Sam", sun: "Dim",
-}
 
 function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => void; onClose: () => void }) {
   const [e, setE] = useState({
@@ -561,6 +558,11 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
       : WORKING_DAYS_DEFAULT,
   })
   const [saving, setSaving] = useState(false)
+  const locale = getLocale()
+  const DAY_LABELS_I18N: Record<string, string> = {
+    mon: t('rhe.edit.day_mon', locale), tue: t('rhe.edit.day_tue', locale), wed: t('rhe.edit.day_wed', locale),
+    thu: t('rhe.edit.day_thu', locale), fri: t('rhe.edit.day_fri', locale), sat: t('rhe.edit.day_sat', locale), sun: t('rhe.edit.day_sun', locale),
+  }
   const u = (k: string, v: any) => setE((p: any) => ({ ...p, [k]: v }))
   const toggleDay = (day: string) =>
     setE((p: any) => ({ ...p, working_days: { ...p.working_days, [day]: !p.working_days?.[day] } }))
@@ -571,7 +573,7 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
     // écrasait silencieusement le salaire à 0 en DB.
     const salaireSaisi = parseFloat(e.salaire_base)
     if (!Number.isFinite(salaireSaisi) || salaireSaisi <= 0) {
-      notifyError("Modifier salaire", "Renseignez un montant > 0")
+      notifyError(t('rhe.edit.toast_modif_salaire', locale), t('rhe.edit.toast_montant_positif', locale))
       return
     }
     setSaving(true)
@@ -603,26 +605,26 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || `Erreur ${res.status}`)
+      if (!res.ok) throw new Error(data?.error || t('rhe.edit.erreur_http', locale).replace('{n}', String(res.status)))
       // Sprint 9 BUG 2 — toast contextualisé selon les bulletins propagés.
       // L'API renvoie bulletins_updated / bulletins_locked du mois courant.
       if (data.salaire_changed) {
         const updated = Number(data.bulletins_updated) || 0
         const locked = Number(data.bulletins_locked) || 0
         if (updated > 0 && locked > 0) {
-          toast.success(`Salaire mis à jour ✅ ${updated} bulletin(s) du mois recalculé(s) — ${locked} verrouillé(s) inchangé(s).`, { duration: 6000 })
+          toast.success(t('rhe.edit.toast_sal_both', locale).replace('{u}', String(updated)).replace('{l}', String(locked)), { duration: 6000 })
         } else if (updated > 0) {
-          toast.success(`Salaire mis à jour ✅ ${updated} bulletin(s) non verrouillé(s) du mois recalculé(s).`, { duration: 6000 })
+          toast.success(t('rhe.edit.toast_sal_updated', locale).replace('{u}', String(updated)), { duration: 6000 })
         } else if (locked > 0) {
-          toast.success(`Salaire mis à jour ✅ ${locked} bulletin(s) verrouillé(s) du mois inchangé(s) (audit historique).`, { duration: 6000 })
+          toast.success(t('rhe.edit.toast_sal_locked', locale).replace('{l}', String(locked)), { duration: 6000 })
         } else {
-          notifySuccess("Salaire mis à jour ✅ (aucun bulletin du mois en cours)")
+          notifySuccess(t('rhe.edit.toast_sal_none', locale))
         }
       } else {
-        notifySuccess("Fiche employé mise à jour ✅")
+        notifySuccess(t('rhe.edit.toast_fiche_ok', locale))
       }
       onClose(); onSaved()
-    } catch (err: unknown) { notifyError("Modifier employé", err) }
+    } catch (err: unknown) { notifyError(t('rhe.edit.toast_modif_employe', locale), err) }
     finally { setSaving(false) }
   }
 
@@ -635,24 +637,24 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
   return (
     <div className="grid grid-cols-2 gap-3 py-2">
       {/* ── Identité ── */}
-      <SectionHeader>Identité</SectionHeader>
-      <div><Label>Nom *</Label><Input value={e.nom||""} onChange={ev=>u("nom",ev.target.value)}/></div>
-      <div><Label>Prénom *</Label><Input value={e.prenom||""} onChange={ev=>u("prenom",ev.target.value)}/></div>
-      <div><Label>Email</Label><Input type="email" value={e.email||""} onChange={ev=>u("email",ev.target.value)}/></div>
-      <div><Label>Téléphone</Label><Input value={e.telephone||""} onChange={ev=>u("telephone",ev.target.value)}/></div>
-      <div><Label>NIC</Label><Input value={e.nic_number||""} onChange={ev=>u("nic_number",ev.target.value)}/></div>
-      <div><Label>TAN</Label><Input value={e.tan_number||""} onChange={ev=>u("tan_number",ev.target.value)}/></div>
+      <SectionHeader>{t('rhe.edit.section_identite', locale)}</SectionHeader>
+      <div><Label>{t('rhe.edit.field_nom', locale)}</Label><Input value={e.nom||""} onChange={ev=>u("nom",ev.target.value)}/></div>
+      <div><Label>{t('rhe.edit.field_prenom', locale)}</Label><Input value={e.prenom||""} onChange={ev=>u("prenom",ev.target.value)}/></div>
+      <div><Label>{t('rhe.edit.field_email', locale)}</Label><Input type="email" value={e.email||""} onChange={ev=>u("email",ev.target.value)}/></div>
+      <div><Label>{t('rhe.edit.field_telephone', locale)}</Label><Input value={e.telephone||""} onChange={ev=>u("telephone",ev.target.value)}/></div>
+      <div><Label>{t('rhe.edit.field_nic', locale)}</Label><Input value={e.nic_number||""} onChange={ev=>u("nic_number",ev.target.value)}/></div>
+      <div><Label>{t('rhe.edit.field_tan', locale)}</Label><Input value={e.tan_number||""} onChange={ev=>u("tan_number",ev.target.value)}/></div>
 
       {/* ── Contrat / Poste ── */}
-      <SectionHeader>Contrat & Poste</SectionHeader>
-      <div><Label>Poste</Label><Input value={e.poste||""} onChange={ev=>u("poste",ev.target.value)}/></div>
-      <div><Label>Rôle</Label><Select value={e.role_rh||e.role||"salarie"} onValueChange={v=>u("role_rh",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{["salarie","manager","rh","admin","direction"].map(r=><SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
-      <div><Label>Date arrivée</Label><Input type="date" value={e.date_arrivee?.split("T")[0]||""} onChange={ev=>u("date_arrivee",ev.target.value)}/></div>
-      <div><Label>Date départ</Label><Input type="date" value={e.date_depart?.split("T")[0]||""} onChange={ev=>u("date_depart",ev.target.value)}/></div>
+      <SectionHeader>{t('rhe.edit.section_contrat', locale)}</SectionHeader>
+      <div><Label>{t('rhe.edit.field_poste', locale)}</Label><Input value={e.poste||""} onChange={ev=>u("poste",ev.target.value)}/></div>
+      <div><Label>{t('rhe.edit.field_role', locale)}</Label><Select value={e.role_rh||e.role||"salarie"} onValueChange={v=>u("role_rh",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{["salarie","manager","rh","admin","direction"].map(r=><SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
+      <div><Label>{t('rhe.edit.field_date_arrivee', locale)}</Label><Input type="date" value={e.date_arrivee?.split("T")[0]||""} onChange={ev=>u("date_arrivee",ev.target.value)}/></div>
+      <div><Label>{t('rhe.edit.field_date_depart', locale)}</Label><Input type="date" value={e.date_depart?.split("T")[0]||""} onChange={ev=>u("date_depart",ev.target.value)}/></div>
       <div className="col-span-2">
-        <Label>Jours travaillés <span className="text-xs text-gray-400 font-normal">(pour calcul pointage / congés)</span></Label>
+        <Label>{t('rhe.edit.field_jours_travailles', locale)} <span className="text-xs text-gray-400 font-normal">{t('rhe.edit.jours_hint', locale)}</span></Label>
         <div className="flex gap-1 mt-1 flex-wrap">
-          {Object.keys(DAY_LABELS).map(day => (
+          {Object.keys(DAY_LABELS_I18N).map(day => (
             <button
               key={day}
               type="button"
@@ -663,18 +665,18 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
                   : "bg-white text-gray-500 border-gray-300 hover:border-gray-400"
               }`}
             >
-              {DAY_LABELS[day]}
+              {DAY_LABELS_I18N[day]}
             </button>
           ))}
         </div>
       </div>
 
       {/* ── Rémunération (FIX 1 — mise en avant) ── */}
-      <SectionHeader>💰 Rémunération</SectionHeader>
+      <SectionHeader>{t('rhe.edit.section_remuneration', locale)}</SectionHeader>
       <div className="col-span-2 rounded-lg bg-amber-50/50 border border-amber-200 p-3 space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label className="font-semibold text-[#0B0F2E]">Salaire de base *</Label>
+            <Label className="font-semibold text-[#0B0F2E]">{t('rhe.edit.field_salaire_base', locale)}</Label>
             <Input
               type="number"
               value={e.salaire_base||""}
@@ -683,14 +685,14 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
               placeholder="Ex: 60000"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Actuel : <span className="font-mono">{Number(emp.salaire_base || 0).toLocaleString("fr-FR")} {emp.devise_salaire || "MUR"}</span>
+              {t('rhe.edit.actuel', locale)} <span className="font-mono">{Number(emp.salaire_base || 0).toLocaleString("fr-FR")} {emp.devise_salaire || "MUR"}</span>
               {Number(e.salaire_base) !== Number(emp.salaire_base) && (
-                <span className="text-amber-700 ml-2">→ <span className="font-mono">{Number(e.salaire_base || 0).toLocaleString("fr-FR")} {e.devise_salaire || "MUR"}</span> (modifié)</span>
+                <span className="text-amber-700 ml-2">→ <span className="font-mono">{Number(e.salaire_base || 0).toLocaleString("fr-FR")} {e.devise_salaire || "MUR"}</span> {t('rhe.edit.modifie', locale)}</span>
               )}
             </p>
           </div>
           <div>
-            <Label>Devise</Label>
+            <Label>{t('rhe.edit.field_devise', locale)}</Label>
             <Select value={e.devise_salaire||"MUR"} onValueChange={v=>u("devise_salaire",v)}>
               <SelectTrigger><SelectValue/></SelectTrigger>
               <SelectContent>{["MUR","EUR","USD","GBP"].map(d=><SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
@@ -700,29 +702,29 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
       </div>
 
       {/* ── Compensations & Allowances (Sprint 11 BUG 9B) ── */}
-      <SectionHeader>🧾 Compensations & Allowances</SectionHeader>
+      <SectionHeader>{t('rhe.edit.section_compensations', locale)}</SectionHeader>
       <div className="col-span-2 rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-3">
         <p className="text-xs text-gray-500 -mt-1">
-          Montants mensuels inclus dans le salaire brut et repris sur le bulletin de paie.
+          {t('rhe.edit.compensations_desc', locale)}
         </p>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label>Transport</Label>
+            <Label>{t('rhe.edit.field_transport', locale)}</Label>
             <Input type="number" min="0" step="0.01" value={e.transport_allowance??""}
               onChange={ev=>u("transport_allowance",ev.target.value)} placeholder="0"/>
           </div>
           <div>
-            <Label>Essence / Carburant</Label>
+            <Label>{t('rhe.edit.field_essence', locale)}</Label>
             <Input type="number" min="0" step="0.01" value={e.petrol_allowance??""}
               onChange={ev=>u("petrol_allowance",ev.target.value)} placeholder="0"/>
           </div>
           <div>
-            <Label>Téléphone</Label>
+            <Label>{t('rhe.edit.field_telephone_allowance', locale)}</Label>
             <Input type="number" min="0" step="0.01" value={e.phone_allowance??""}
               onChange={ev=>u("phone_allowance",ev.target.value)} placeholder="0"/>
           </div>
           <div>
-            <Label>Bus quotidien <span className="text-xs text-gray-400 font-normal">(par jour)</span></Label>
+            <Label>{t('rhe.edit.field_bus_quotidien', locale)} <span className="text-xs text-gray-400 font-normal">{t('rhe.edit.par_jour', locale)}</span></Label>
             <Input type="number" min="0" step="0.01" value={e.daily_bus_fare??""}
               onChange={ev=>u("daily_bus_fare",ev.target.value)} placeholder="0"/>
           </div>
@@ -730,7 +732,7 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
 
         {/* Primes personnalisées — libellé libre + montant (mig 117) */}
         <div className="pt-2 border-t border-slate-200">
-          <p className="text-xs font-semibold text-[#0B0F2E] mb-2">Primes personnalisées</p>
+          <p className="text-xs font-semibold text-[#0B0F2E] mb-2">{t('rhe.edit.primes_perso', locale)}</p>
           <div className="space-y-2">
             {[1,2,3].map(n => {
               const libKey = `prime_fixe_${n}_libelle`
@@ -740,13 +742,13 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
                   <Input
                     value={(e as unknown as Record<string, string | number | null>)[libKey]||""}
                     onChange={ev=>u(libKey,ev.target.value)}
-                    placeholder={`Libellé prime ${n} (ex: Electricity, Loyer...)`}
+                    placeholder={t('rhe.edit.prime_libelle_ph', locale).replace('{n}', String(n))}
                   />
                   <Input
                     type="number" min="0" step="0.01"
                     value={(e as unknown as Record<string, string | number | null>)[montantKey]??""}
                     onChange={ev=>u(montantKey,ev.target.value)}
-                    placeholder="Montant MUR"
+                    placeholder={t('rhe.edit.montant_mur', locale)}
                     className="font-mono"
                   />
                 </div>
@@ -757,8 +759,8 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
       </div>
 
       {/* ── Fiscal & Bancaire ── */}
-      <SectionHeader>Fiscal & Bancaire</SectionHeader>
-      <div><Label>Catégorie CSG</Label><Select value={e.csg_categorie||"A"} onValueChange={v=>u("csg_categorie",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="A">A</SelectItem><SelectItem value="B">B</SelectItem></SelectContent></Select></div>
+      <SectionHeader>{t('rhe.edit.section_fiscal', locale)}</SectionHeader>
+      <div><Label>{t('rhe.edit.field_csg', locale)}</Label><Select value={e.csg_categorie||"A"} onValueChange={v=>u("csg_categorie",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="A">A</SelectItem><SelectItem value="B">B</SelectItem></SelectContent></Select></div>
       <div className="flex items-center gap-2 pt-5">
         <input
           id="exclure_mra"
@@ -768,18 +770,18 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
           className="h-4 w-4"
         />
         <Label htmlFor="exclure_mra" className="cursor-pointer">
-          Exclure des déclarations MRA
-          <span className="block text-xs text-gray-500 font-normal">Ne figure pas dans CSG/NSF/PAYE Return</span>
+          {t('rhe.edit.exclure_mra', locale)}
+          <span className="block text-xs text-gray-500 font-normal">{t('rhe.edit.exclure_mra_desc', locale)}</span>
         </Label>
       </div>
-      <div><Label>Banque</Label><Select value={e.bank_name||""} onValueChange={v=>u("bank_name",v)}><SelectTrigger><SelectValue placeholder="Choisir..."/></SelectTrigger><SelectContent>{BANQUES_MAURITIUS.map(b=><SelectItem key={b.code} value={b.code}>{b.nom}</SelectItem>)}</SelectContent></Select></div>
-      <div><Label>N° compte</Label><Input value={e.bank_account||""} onChange={ev=>u("bank_account",ev.target.value)}/></div>
-      <div className="col-span-2"><Label>IBAN</Label><Input value={e.iban||""} onChange={ev=>u("iban",ev.target.value)}/></div>
+      <div><Label>{t('rhe.edit.field_banque', locale)}</Label><Select value={e.bank_name||""} onValueChange={v=>u("bank_name",v)}><SelectTrigger><SelectValue placeholder={t('rhe.edit.choisir', locale)}/></SelectTrigger><SelectContent>{BANQUES_MAURITIUS.map(b=><SelectItem key={b.code} value={b.code}>{b.nom}</SelectItem>)}</SelectContent></Select></div>
+      <div><Label>{t('rhe.edit.field_n_compte', locale)}</Label><Input value={e.bank_account||""} onChange={ev=>u("bank_account",ev.target.value)}/></div>
+      <div className="col-span-2"><Label>{t('rhe.edit.field_iban', locale)}</Label><Input value={e.iban||""} onChange={ev=>u("iban",ev.target.value)}/></div>
 
       <DialogFooter className="col-span-2 pt-4">
-        <Button variant="outline" onClick={onClose}>Annuler</Button>
+        <Button variant="outline" onClick={onClose}>{t('rhe.edit.annuler', locale)}</Button>
         <Button onClick={handleSave} disabled={saving} className="bg-[#0B0F2E] text-white">
-          {saving&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}Enregistrer
+          {saving&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}{t('rhe.edit.enregistrer', locale)}
         </Button>
       </DialogFooter>
     </div>
@@ -850,7 +852,7 @@ export default function EmployesPage() {
   }
 
   const handleCreateAccess = async () => {
-    if (!accessEmp || !accessEmp.email) { alert("L'employé doit avoir un email"); return }
+    if (!accessEmp || !accessEmp.email) { alert(t('rhe.page.alert_email_requis', locale)); return }
     setAccessSaving(true)
     try {
       // Sprint 12 FEATURE 1 — pour le rôle "employe" on utilise l'endpoint
@@ -868,7 +870,7 @@ export default function EmployesPage() {
         })
         const data = await res.json()
         if (!res.ok || data.error) {
-          alert("Erreur: " + (data.error || `HTTP ${res.status}`))
+          alert(t('rhe.page.alert_erreur', locale) + (data.error || `HTTP ${res.status}`))
         } else {
           setAccessResult({ email: data.result?.email || accessEmp.email, password: accessPassword })
           load()
@@ -887,10 +889,10 @@ export default function EmployesPage() {
           }),
         })
         const data = await res.json()
-        if (data.error) { alert("Erreur: " + data.error) }
+        if (data.error) { alert(t('rhe.page.alert_erreur', locale) + data.error) }
         else { setAccessResult({ email: accessEmp.email, password: accessPassword }); load() }
       }
-    } catch { alert("Erreur réseau") }
+    } catch { alert(t('rhe.page.alert_erreur_reseau', locale)) }
     setAccessSaving(false)
   }
 
@@ -907,7 +909,7 @@ export default function EmployesPage() {
 
   const handleBulkCreate = async () => {
     const selected = employes.filter(e => bulkSelected.has(e.id))
-    if (selected.length === 0) { alert("Aucun employé sélectionné"); return }
+    if (selected.length === 0) { alert(t('rhe.page.alert_aucun_selection', locale)); return }
     setBulkSaving(true)
     try {
       const res = await fetch("/api/admin/create-user-employee", {
@@ -923,10 +925,10 @@ export default function EmployesPage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) { alert("Erreur: " + (data.error || `HTTP ${res.status}`)); return }
+      if (!res.ok) { alert(t('rhe.page.alert_erreur', locale) + (data.error || `HTTP ${res.status}`)); return }
       setBulkResults(data.results || [])
       load()
-    } catch { alert("Erreur réseau") }
+    } catch { alert(t('rhe.page.alert_erreur_reseau', locale)) }
     finally { setBulkSaving(false) }
   }
 
@@ -959,13 +961,13 @@ export default function EmployesPage() {
       const res = await fetch(`/api/rh/employes/${deleteEmp.id}?mode=${mode}`, { method: "DELETE" })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        throw new Error(data.error || "Erreur lors de la suppression")
+        throw new Error(data.error || t('rhe.page.erreur_suppression', locale))
       }
       setDeleteOpen(false)
       setDeleteEmp(null)
       load()
     } catch (e: unknown) {
-      setDeleteError(e instanceof Error ? e.message : "Erreur")
+      setDeleteError(e instanceof Error ? e.message : t('rhe.page.erreur_generique', locale))
     } finally {
       setDeleting(null)
     }
@@ -987,7 +989,7 @@ export default function EmployesPage() {
   useEffect(() => { load() }, [load])
 
   const handleImport = async () => {
-    if (!importFile || !importSociete) { setImportError("Fichier et société requis"); return }
+    if (!importFile || !importSociete) { setImportError(t('rhe.page.import_fichier_requis', locale)); return }
     setImporting(true); setImportError(null); setImportResult(null)
     try {
       const fd = new FormData()
@@ -998,7 +1000,7 @@ export default function EmployesPage() {
       if (!res.ok) throw new Error(data.error)
       setImportResult(data)
       if (data.imported > 0) load()
-    } catch (e: unknown) { setImportError(e instanceof Error ? e.message : "Erreur import") }
+    } catch (e: unknown) { setImportError(e instanceof Error ? e.message : t('rhe.page.erreur_import', locale)) }
     finally { setImporting(false) }
   }
 
@@ -1015,9 +1017,9 @@ export default function EmployesPage() {
 
   const getInitials = (e: any) => `${(e.prenom||"")[0]||""}${(e.nom||"")[0]||""}`.toUpperCase()
   const getStatusBadge = (e: any) => {
-    if (e.date_depart) return <Badge className="bg-red-100 text-red-700 border-red-200 text-xs font-medium">Sorti</Badge>
-    if (e.statut === "essai" || e.type_contrat === "CDD") return <Badge className="bg-purple-100 text-purple-700 border-purple-200 text-xs font-medium">Periode essai</Badge>
-    return <Badge className="bg-green-100 text-green-700 border-green-200 text-xs font-medium">Actif</Badge>
+    if (e.date_depart) return <Badge className="bg-red-100 text-red-700 border-red-200 text-xs font-medium">{t('rhe.page.badge_sorti', locale)}</Badge>
+    if (e.statut === "essai" || e.type_contrat === "CDD") return <Badge className="bg-purple-100 text-purple-700 border-purple-200 text-xs font-medium">{t('rhe.page.badge_essai', locale)}</Badge>
+    return <Badge className="bg-green-100 text-green-700 border-green-200 text-xs font-medium">{t('rhe.page.badge_actif', locale)}</Badge>
   }
 
   return (
@@ -1139,27 +1141,27 @@ export default function EmployesPage() {
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
                           <span className="text-xs text-gray-400 font-mono">{e.code || "—"}</span>
                           <span className="text-xs text-gray-300">|</span>
-                          <span className="text-sm font-medium text-[#0B0F2E]" title="Salaire de base (hors allowances/primes)">{fmt(e.salaire_base)}</span>
+                          <span className="text-sm font-medium text-[#0B0F2E]" title={t('rhe.page.tip_salaire_base', locale)}>{fmt(e.salaire_base)}</span>
                           {/* Sprint 10 BUG 3 — afficher "Brut: X" uniquement si différent du base */}
                           {(() => {
                             const brut = computeTotalBrut(e)
                             return brut !== Number(e.salaire_base) ? (
                               <span
                                 className="text-xs text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded"
-                                title="Total brut mensuel = base + transport + petrol + primes fixes"
+                                title={t('rhe.page.tip_brut', locale)}
                               >
-                                Brut : {fmt(brut)}
+                                {t('rhe.page.brut', locale)} {fmt(brut)}
                               </span>
                             ) : null
                           })()}
                           {/* Sprint 12 FEATURE 4 — badge compte Lexora */}
                           {e.auth_user_id ? (
                             <span className="text-[10px] text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3" /> Compte Lexora
+                              <CheckCircle2 className="w-3 h-3" /> {t('rhe.page.compte_lexora', locale)}
                             </span>
                           ) : !e.date_depart ? (
                             <span className="text-[10px] text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
-                              <XCircle className="w-3 h-3" /> Pas de compte
+                              <XCircle className="w-3 h-3" /> {t('rhe.page.pas_de_compte', locale)}
                             </span>
                           ) : null}
                         </div>
@@ -1167,11 +1169,11 @@ export default function EmployesPage() {
                       <div className="flex flex-col gap-1 shrink-0">
                         {/* Sprint 12 FEATURE 1+4 — bouton conditionnel compte Lexora */}
                         {!e.auth_user_id ? (
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openAccess(e)}} title="Créer le compte Lexora"><Key className="w-4 h-4 text-purple-600"/></Button>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openAccess(e)}} title={t('rhe.page.tip_creer_compte', locale)}><Key className="w-4 h-4 text-purple-600"/></Button>
                         ) : (
-                          <span title="Compte Lexora actif" className="h-8 w-8 inline-flex items-center justify-center"><CheckCircle2 className="w-4 h-4 text-green-600"/></span>
+                          <span title={t('rhe.page.tip_compte_actif', locale)} className="h-8 w-8 inline-flex items-center justify-center"><CheckCircle2 className="w-4 h-4 text-green-600"/></span>
                         )}
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openDelete(e)}} title="Supprimer"><Trash2 className="w-4 h-4 text-red-600"/></Button>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openDelete(e)}} title={t('rhe.page.tip_supprimer', locale)}><Trash2 className="w-4 h-4 text-red-600"/></Button>
                       </div>
                     </div>
                   </div>
@@ -1213,12 +1215,12 @@ export default function EmployesPage() {
                         <TableCell className="text-right text-sm">
                           {/* Sprint 10 BUG 3 — Base + Brut (si différent) */}
                           <div className="flex flex-col items-end leading-tight">
-                            <span className="font-medium text-[#0B0F2E]" title="Salaire de base (hors allowances)">{fmt(e.salaire_base)}</span>
+                            <span className="font-medium text-[#0B0F2E]" title={t('rhe.page.tip_salaire_base2', locale)}>{fmt(e.salaire_base)}</span>
                             {(() => {
                               const brut = computeTotalBrut(e)
                               return brut !== Number(e.salaire_base) ? (
-                                <span className="text-[10px] text-emerald-700" title="Total brut mensuel = base + transport + petrol + primes fixes">
-                                  Brut : {fmt(brut)}
+                                <span className="text-[10px] text-emerald-700" title={t('rhe.page.tip_brut', locale)}>
+                                  {t('rhe.page.brut', locale)} {fmt(brut)}
                                 </span>
                               ) : null
                             })()}
@@ -1229,7 +1231,7 @@ export default function EmployesPage() {
                           {e.auth_user_id ? (
                             <Badge className="bg-green-100 text-green-700 border-green-200 text-[11px] font-medium gap-1">
                               <CheckCircle2 className="w-3 h-3" />
-                              Actif
+                              {t('rhe.page.badge_actif', locale)}
                             </Badge>
                           ) : !e.date_depart ? (
                             <Button
@@ -1239,7 +1241,7 @@ export default function EmployesPage() {
                               onClick={(ev) => { ev.stopPropagation(); openAccess(e) }}
                             >
                               <Key className="w-3 h-3 mr-1" />
-                              Créer
+                              {t('rhe.page.creer', locale)}
                             </Button>
                           ) : (
                             <span className="text-[11px] text-gray-400">—</span>
@@ -1247,8 +1249,8 @@ export default function EmployesPage() {
                         </TableCell>
                         <TableCell className="text-right pr-5">
                           <div className="flex items-center justify-end gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();router.push(`/rh/employes/${e.id}`)}} title="Voir fiche"><ExternalLink className="w-4 h-4 text-[#0B0F2E]"/></Button>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openDelete(e)}} title="Supprimer"><Trash2 className="w-4 h-4 text-red-600"/></Button>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();router.push(`/rh/employes/${e.id}`)}} title={t('rhe.page.tip_voir_fiche', locale)}><ExternalLink className="w-4 h-4 text-[#0B0F2E]"/></Button>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(ev)=>{ev.stopPropagation();openDelete(e)}} title={t('rhe.page.tip_supprimer', locale)}><Trash2 className="w-4 h-4 text-red-600"/></Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1264,7 +1266,7 @@ export default function EmployesPage() {
       {/* Dialog edition employe */}
       <Dialog open={editOpen} onOpenChange={o => { setEditOpen(o); if (!o) setEditEmp(null) }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" onOpenAutoFocus={e => e.preventDefault()}>
-          <DialogHeader><DialogTitle className="text-[#0B0F2E] text-lg font-bold flex items-center gap-2" style={{ fontFamily: "Poppins, sans-serif" }}><Pencil className="w-5 h-5 text-[#D4AF37]"/>Modifier — {editEmp?.prenom} {editEmp?.nom}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-[#0B0F2E] text-lg font-bold flex items-center gap-2" style={{ fontFamily: "Poppins, sans-serif" }}><Pencil className="w-5 h-5 text-[#D4AF37]"/>{t('rhe.page.edit_dialog_prefix', locale)} {editEmp?.prenom} {editEmp?.nom}</DialogTitle></DialogHeader>
           {editEmp && <EditEmployeForm emp={editEmp} onSaved={load} onClose={() => { setEditOpen(false); setEditEmp(null) }} />}
         </DialogContent>
       </Dialog>
@@ -1275,37 +1277,37 @@ export default function EmployesPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
               <Key className="w-5 h-5 text-purple-600" />
-              Créer un accès utilisateur
+              {t('rhe.page.access_dialog_title', locale)}
             </DialogTitle>
           </DialogHeader>
           {accessEmp && !accessResult && (
             <div className="space-y-4">
               <div className="p-3 bg-gray-50 rounded-lg">
                 <p className="font-medium">{accessEmp.prenom} {accessEmp.nom}</p>
-                <p className="text-sm text-gray-500">{accessEmp.poste || "—"} • {accessEmp.email || "Pas d'email"}</p>
+                <p className="text-sm text-gray-500">{accessEmp.poste || "—"} • {accessEmp.email || t('rhe.page.pas_email', locale)}</p>
               </div>
               {!accessEmp.email && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                  Cet employé n'a pas d'email. Modifiez sa fiche pour ajouter un email avant de créer un accès.
+                  {t('rhe.page.no_email_warning', locale)}
                 </div>
               )}
               <div>
-                <Label>Rôle / Fonction</Label>
+                <Label>{t('rhe.page.role_fonction', locale)}</Label>
                 <Select value={accessRole} onValueChange={setAccessRole}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="employe">Employé (portail salarié)</SelectItem>
-                    <SelectItem value="manager">Manager (supervision équipe)</SelectItem>
-                    <SelectItem value="rh">RH (gestion complète)</SelectItem>
-                    <SelectItem value="rh_manager">RH Manager</SelectItem>
-                    <SelectItem value="comptable">Comptable</SelectItem>
-                    <SelectItem value="direction">Direction</SelectItem>
-                    <SelectItem value="client_admin">Administrateur</SelectItem>
+                    <SelectItem value="employe">{t('rhe.page.role_employe', locale)}</SelectItem>
+                    <SelectItem value="manager">{t('rhe.page.role_manager', locale)}</SelectItem>
+                    <SelectItem value="rh">{t('rhe.page.role_rh', locale)}</SelectItem>
+                    <SelectItem value="rh_manager">{t('rhe.page.role_rh_manager', locale)}</SelectItem>
+                    <SelectItem value="comptable">{t('rhe.page.role_comptable', locale)}</SelectItem>
+                    <SelectItem value="direction">{t('rhe.page.role_direction', locale)}</SelectItem>
+                    <SelectItem value="client_admin">{t('rhe.page.role_admin', locale)}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Mot de passe</Label>
+                <Label>{t('rhe.page.mot_de_passe', locale)}</Label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Input
@@ -1313,26 +1315,25 @@ export default function EmployesPage() {
                       value={accessPassword}
                       onChange={e => setAccessPassword(e.target.value)}
                       className="font-mono pr-10"
-                      placeholder="Mot de passe..."
+                      placeholder={t('rhe.page.mot_de_passe_ph', locale)}
                     />
                     <button
                       type="button"
                       onClick={() => setAccessPasswordVisible(v => !v)}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                      title={accessPasswordVisible ? "Masquer" : "Afficher"}
+                      title={accessPasswordVisible ? t('rhe.page.masquer', locale) : t('rhe.page.afficher', locale)}
                     >
                       {accessPasswordVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => setAccessPassword(genPwd())} title="Générer automatiquement">
-                    Générer
+                  <Button variant="outline" size="sm" onClick={() => setAccessPassword(genPwd())} title={t('rhe.page.generer_auto', locale)}>
+                    {t('rhe.page.generer', locale)}
                   </Button>
                 </div>
                 <div className="mt-2 p-2 rounded bg-amber-50 border border-amber-200 flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <p className="text-xs text-amber-800">
-                    <span className="font-semibold">Important :</span> communiquez ce mot de passe à l'employé
-                    par un canal sécurisé (en main propre, SMS). Il ne sera plus visible après confirmation.
+                    <span className="font-semibold">{t('rhe.page.important', locale)}</span> {t('rhe.page.pwd_warning2', locale)}
                   </p>
                 </div>
               </div>
@@ -1342,22 +1343,22 @@ export default function EmployesPage() {
                 className="w-full bg-[#0B0F2E] text-white"
               >
                 {accessSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Key className="w-4 h-4 mr-2" />}
-                {accessRole === "employe" ? "Créer le compte Lexora" : "Créer le compte"}
+                {accessRole === "employe" ? t('rhe.page.creer_compte_lexora', locale) : t('rhe.page.creer_compte', locale)}
               </Button>
             </div>
           )}
           {accessResult && (
             <div className="space-y-4">
               <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                <p className="font-semibold text-green-800 mb-2">Compte créé avec succès</p>
+                <p className="font-semibold text-green-800 mb-2">{t('rhe.page.compte_cree_succes', locale)}</p>
                 <div className="space-y-1">
-                  <p className="text-sm">Email : <span className="font-mono font-bold">{accessResult.email}</span></p>
-                  <p className="text-sm">Mot de passe : <span className="font-mono font-bold text-lg">{accessResult.password}</span></p>
-                  <p className="text-sm">Rôle : <span className="font-semibold">{accessRole}</span></p>
+                  <p className="text-sm">{t('rhe.page.label_email', locale)} <span className="font-mono font-bold">{accessResult.email}</span></p>
+                  <p className="text-sm">{t('rhe.page.label_mdp', locale)} <span className="font-mono font-bold text-lg">{accessResult.password}</span></p>
+                  <p className="text-sm">{t('rhe.page.label_role', locale)} <span className="font-semibold">{accessRole}</span></p>
                 </div>
               </div>
-              <p className="text-xs text-gray-500">Communiquez ces identifiants à l'employé de manière sécurisée.</p>
-              <Button variant="outline" className="w-full" onClick={() => { setAccessOpen(false); setAccessResult(null) }}>Fermer</Button>
+              <p className="text-xs text-gray-500">{t('rhe.page.communiquez_ids', locale)}</p>
+              <Button variant="outline" className="w-full" onClick={() => { setAccessOpen(false); setAccessResult(null) }}>{t('rhe.page.fermer', locale)}</Button>
             </div>
           )}
         </DialogContent>
@@ -1369,15 +1370,14 @@ export default function EmployesPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
               <Mail className="w-5 h-5 text-purple-600" />
-              Créer les comptes Lexora manquants
+              {t('rhe.page.bulk_dialog_title', locale)}
             </DialogTitle>
           </DialogHeader>
 
           {!bulkResults && (
             <div className="space-y-4 pt-2">
               <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg text-sm text-purple-900">
-                Sélectionnez les employés à créer en lot. Seuls les employés avec un email,
-                sans compte actif, et en poste apparaissent ci-dessous.
+                {t('rhe.page.bulk_intro', locale)}
               </div>
 
               {/* Mode mot de passe */}
@@ -1389,7 +1389,7 @@ export default function EmployesPage() {
                       checked={!bulkUsePerEmp}
                       onChange={() => setBulkUsePerEmp(false)}
                     />
-                    <span>Mot de passe par défaut (commun à tous)</span>
+                    <span>{t('rhe.page.bulk_mode_commun', locale)}</span>
                   </label>
                   <label className="flex items-center gap-2 text-sm">
                     <input
@@ -1397,7 +1397,7 @@ export default function EmployesPage() {
                       checked={bulkUsePerEmp}
                       onChange={() => setBulkUsePerEmp(true)}
                     />
-                    <span>Un mot de passe par employé</span>
+                    <span>{t('rhe.page.bulk_mode_per_emp', locale)}</span>
                   </label>
                 </div>
                 {!bulkUsePerEmp && (
@@ -1408,12 +1408,12 @@ export default function EmployesPage() {
                       className="font-mono"
                       placeholder="Lexora2026!"
                     />
-                    <Button variant="outline" size="sm" onClick={() => setBulkDefaultPwd(genPwd())}>Générer</Button>
+                    <Button variant="outline" size="sm" onClick={() => setBulkDefaultPwd(genPwd())}>{t('rhe.page.generer', locale)}</Button>
                   </div>
                 )}
                 <p className="text-[11px] text-amber-700 flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3" />
-                  Notez le(s) mot(s) de passe avant de lancer — ils ne seront plus affichés après.
+                  {t('rhe.page.bulk_note_pwd', locale)}
                 </p>
               </div>
 
@@ -1424,7 +1424,7 @@ export default function EmployesPage() {
                   return (
                     <div className="text-center py-8 text-gray-500">
                       <CheckCircle2 className="w-10 h-10 mx-auto mb-2 text-green-500" />
-                      Tous les employés actifs ont déjà un compte Lexora.
+                      {t('rhe.page.bulk_all_have', locale)}
                     </div>
                   )
                 }
@@ -1444,7 +1444,7 @@ export default function EmployesPage() {
                         }}
                       />
                       <span className="text-sm font-medium">
-                        {bulkSelected.size} / {eligibles.length} sélectionné(s)
+                        {bulkSelected.size} / {eligibles.length} {t('rhe.page.selectionnes', locale)}
                       </span>
                     </div>
                     {eligibles.map(e => {
@@ -1468,13 +1468,13 @@ export default function EmployesPage() {
                           <div className="flex-1 min-w-0">
                             <p className="font-medium truncate">{e.prenom} {e.nom}</p>
                             <p className="text-xs text-gray-500 truncate">
-                              {hasEmail ? e.email : <span className="text-red-600">Email manquant — renseignez avant création</span>}
+                              {hasEmail ? e.email : <span className="text-red-600">{t('rhe.page.email_manquant', locale)}</span>}
                             </p>
                           </div>
                           {bulkUsePerEmp && hasEmail && checked && (
                             <Input
                               className="font-mono w-40 h-8 text-sm"
-                              placeholder="Mot de passe"
+                              placeholder={t('rhe.page.mot_de_passe_col', locale)}
                               value={bulkPerEmpPwd[e.id] ?? ""}
                               onChange={(ev) => setBulkPerEmpPwd(p => ({ ...p, [e.id]: ev.target.value }))}
                             />
@@ -1487,7 +1487,7 @@ export default function EmployesPage() {
               })()}
 
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => setBulkOpen(false)}>Annuler</Button>
+                <Button variant="outline" className="flex-1" onClick={() => setBulkOpen(false)}>{t('rhe.page.annuler', locale)}</Button>
                 <Button
                   onClick={handleBulkCreate}
                   disabled={
@@ -1498,7 +1498,7 @@ export default function EmployesPage() {
                   className="flex-1 bg-[#0B0F2E] text-white"
                 >
                   {bulkSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Key className="w-4 h-4 mr-2" />}
-                  Créer les comptes sélectionnés
+                  {t('rhe.page.bulk_creer_selection', locale)}
                 </Button>
               </div>
             </div>
@@ -1509,15 +1509,15 @@ export default function EmployesPage() {
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="p-3 bg-green-50 border border-green-200 rounded">
                   <p className="text-2xl font-bold text-green-700">{bulkResults.filter(r => r.status === "created").length}</p>
-                  <p className="text-xs text-green-700">Créés</p>
+                  <p className="text-xs text-green-700">{t('rhe.page.bulk_crees', locale)}</p>
                 </div>
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded">
                   <p className="text-2xl font-bold text-blue-700">{bulkResults.filter(r => r.status === "already_linked").length}</p>
-                  <p className="text-xs text-blue-700">Déjà liés</p>
+                  <p className="text-xs text-blue-700">{t('rhe.page.bulk_deja_lies', locale)}</p>
                 </div>
                 <div className="p-3 bg-red-50 border border-red-200 rounded">
                   <p className="text-2xl font-bold text-red-700">{bulkResults.filter(r => r.status === "error").length}</p>
-                  <p className="text-xs text-red-700">Erreurs</p>
+                  <p className="text-xs text-red-700">{t('rhe.page.bulk_erreurs', locale)}</p>
                 </div>
               </div>
               <div className="border rounded-lg max-h-[300px] overflow-y-auto">
@@ -1536,7 +1536,7 @@ export default function EmployesPage() {
                           <p className="text-xs text-red-700 truncate">{r.error}</p>
                         )}
                         {r.status === "already_linked" && (
-                          <p className="text-xs text-blue-700">Compte déjà existant</p>
+                          <p className="text-xs text-blue-700">{t('rhe.page.bulk_compte_existant', locale)}</p>
                         )}
                         {r.status === "created" && r.email && (
                           <p className="text-xs text-green-700 truncate">✅ {r.email}</p>
@@ -1547,7 +1547,7 @@ export default function EmployesPage() {
                 })}
               </div>
               <Button className="w-full bg-[#0B0F2E] text-white" onClick={() => setBulkOpen(false)}>
-                Fermer
+                {t('rhe.page.fermer', locale)}
               </Button>
             </div>
           )}
@@ -1560,7 +1560,7 @@ export default function EmployesPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
               <Trash2 className="w-5 h-5 text-red-600" />
-              Supprimer l'employe
+              {t('rhe.page.delete_dialog_title', locale)}
             </DialogTitle>
           </DialogHeader>
           {deleteEmp && (
@@ -1577,7 +1577,7 @@ export default function EmployesPage() {
                 </div>
               )}
 
-              <p className="text-sm text-gray-600">Choisissez le type de suppression :</p>
+              <p className="text-sm text-gray-600">{t('rhe.page.delete_choose', locale)}</p>
 
               <div className="space-y-2">
                 <Button
@@ -1592,8 +1592,8 @@ export default function EmployesPage() {
                     <UserPlus className="w-4 h-4 mr-2 shrink-0 rotate-180" />
                   )}
                   <div className="text-left">
-                    <div className="font-semibold">Marquer comme sorti</div>
-                    <div className="text-xs text-orange-700 font-normal">Conserve l'historique et les bulletins</div>
+                    <div className="font-semibold">{t('rhe.page.delete_soft_title', locale)}</div>
+                    <div className="text-xs text-orange-700 font-normal">{t('rhe.page.delete_soft_desc', locale)}</div>
                   </div>
                 </Button>
 
@@ -1609,14 +1609,14 @@ export default function EmployesPage() {
                     <Trash2 className="w-4 h-4 mr-2 shrink-0" />
                   )}
                   <div className="text-left">
-                    <div className="font-semibold">Supprimer definitivement</div>
-                    <div className="text-xs text-red-700 font-normal">Impossible si des bulletins existent</div>
+                    <div className="font-semibold">{t('rhe.page.delete_hard_title', locale)}</div>
+                    <div className="text-xs text-red-700 font-normal">{t('rhe.page.delete_hard_desc', locale)}</div>
                   </div>
                 </Button>
               </div>
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleting !== null}>Annuler</Button>
+                <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleting !== null}>{t('rhe.page.annuler', locale)}</Button>
               </DialogFooter>
             </div>
           )}

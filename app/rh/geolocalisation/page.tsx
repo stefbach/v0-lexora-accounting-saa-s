@@ -379,13 +379,13 @@ export default function GeolocalisationPage() {
       })
       const data = await res.json()
       if (!res.ok || data.error) {
-        setClaudeError(data.error || "Erreur lors de l'appel a l'IA")
+        setClaudeError(data.error || t('rhpl.err_ai_call', locale))
         setClaudeData(null)
       } else {
         setClaudeData(data)
       }
     } catch (e: any) {
-      setClaudeError(e?.message || "Erreur reseau")
+      setClaudeError(e?.message || t('rhpl.err_network', locale))
     } finally {
       setClaudeLoading(false)
     }
@@ -408,13 +408,13 @@ export default function GeolocalisationPage() {
       })
       const data = await res.json()
       if (!res.ok || data.error) {
-        setNlError(data.error || "Erreur lors de l'appel a l'IA")
+        setNlError(data.error || t('rhpl.err_ai_call', locale))
         setNlData(null)
       } else {
         setNlData(data)
       }
     } catch (e: any) {
-      setNlError(e?.message || "Erreur reseau")
+      setNlError(e?.message || t('rhpl.err_network', locale))
     } finally {
       setNlLoading(false)
     }
@@ -745,10 +745,10 @@ export default function GeolocalisationPage() {
             {/* Suggestion chips */}
             <div className="flex gap-2 flex-wrap mt-3">
               {[
-                "Qui peut couvrir le shift de nuit ce soir ?",
-                "Proposez une rotation optimale pour demain",
-                "Quels employes sont a risque de fatigue ?",
-                "Quelle est la zone la moins couverte ?",
+                t('rhpl.nlchip_night_shift', locale),
+                t('rhpl.nlchip_rotation', locale),
+                t('rhpl.nlchip_fatigue', locale),
+                t('rhpl.nlchip_least_covered', locale),
               ].map((q) => (
                 <button
                   key={q}
@@ -972,7 +972,7 @@ export default function GeolocalisationPage() {
             <Input
               value={aiQuery}
               onChange={e => setAiQuery(e.target.value)}
-              placeholder="Ex: Combien de vehicules faut-il pour demain ?"
+              placeholder={t('rhpl.ai_planning_ph', locale)}
               className="flex-1 text-sm border-0 text-white placeholder:text-gray-500"
               style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
             />
@@ -981,7 +981,7 @@ export default function GeolocalisationPage() {
             </Button>
           </form>
           <div className="flex gap-1 flex-wrap">
-            {["Optimiser les trajets", "Plan de ramassage 06:00", "Plan de ramassage 14:00", "Employes sans adresse"].map(q => (
+            {[t('rhpl.chip_optimize', locale), t('rhpl.chip_pickup_0600', locale), t('rhpl.chip_pickup_1400', locale), t('rhpl.chip_no_addr', locale)].map(q => (
               <button key={q} onClick={() => { setAiQuery(q); setAiResponse(generateAIResponse(q, filteredPositions, ramassageGroups)) }} className="px-2 py-1 rounded-md text-[10px] font-medium transition-colors" style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}>
                 {q}
               </button>

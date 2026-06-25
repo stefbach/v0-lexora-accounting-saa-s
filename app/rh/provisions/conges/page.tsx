@@ -489,14 +489,8 @@ export default function ProvisionsCongesPage() {
             <div className="flex items-center gap-2 font-medium" style={{ color: NAVY }}>
               <AlertTriangle className="h-3 w-3" /> {t('rha.b.provc.reminder_title', locale)}
             </div>
-            <div>
-              Les congés payés accumulés doivent être provisionnés au fur et à mesure de leur acquisition.
-              Montant = jours acquis non pris × (salaire base × (1 + charges patronales) / 22).
-            </div>
-            <div>
-              La provision est extournée le mois suivant (contre-passation) et remplacée par la nouvelle :
-              le solde du compte 4287 reflète à tout moment la dette envers les employés.
-            </div>
+            <div>{t('rhc.prov.reminder_body1', locale)}</div>
+            <div>{t('rhc.prov.reminder_body2', locale)}</div>
           </CardContent>
         </Card>
       </div>
