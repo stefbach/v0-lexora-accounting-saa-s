@@ -112,6 +112,11 @@ export default function EmailAccountsPage() {
     try {
       const r = await fetch(`/api/client/email-accounts/test?id=${id}`, { method: 'POST' })
       const j = await r.json()
+      // Domaine Resend non vérifié : surface l'avertissement même si l'API a répondu.
+      const ds = j.domain_status
+      if (ds?.checked && !ds.verified) {
+        throw new Error(ds.message || t('acct.email.domain_unverified', locale))
+      }
       if (!r.ok) throw new Error(j.error || t('acct.email.test_failed', locale))
       setSuccess(t('acct.email.test_success', locale))
       await load()

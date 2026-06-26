@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
 import { encryptSecret } from '@/lib/crypto/symmetric'
+import { fromEmailMatchesDomain, normalizeResendDomain } from '@/lib/email/router'
 import { ensureGmailEmailAccounts } from '@/lib/email/gmail-backfill'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 
@@ -144,8 +145,15 @@ export async function POST(req: NextRequest) {
       if (!body.resend_api_key || !body.resend_domain) {
         return NextResponse.json({ error: 'resend_api_key et resend_domain requis' }, { status: 400 })
       }
+      const domain = normalizeResendDomain(String(body.resend_domain))
+      if (!fromEmailMatchesDomain(fromEmail, domain)) {
+        return NextResponse.json({
+          error: `from_email (${fromEmail}) doit appartenir au domaine Resend vérifié (@${domain}). ` +
+                 `Resend rejette tout envoi dont l'expéditeur n'est pas sur le domaine vérifié.`,
+        }, { status: 400 })
+      }
       row.resend_api_key_enc = encryptSecret(String(body.resend_api_key))
-      row.resend_domain = String(body.resend_domain)
+      row.resend_domain = domain
     }
   } catch (e: any) {
     return NextResponse.json({ error: `Chiffrement impossible : ${e.message}. Configure CRYPT_KEY.` }, { status: 500 })
@@ -197,6 +205,23 @@ export async function PATCH(req: NextRequest) {
   const updates: Record<string, any> = {}
   for (const k of ['label', 'from_email', 'from_name', 'reply_to', 'active', 'smtp_host', 'smtp_port', 'smtp_secure', 'smtp_user', 'resend_domain']) {
     if (body[k] !== undefined) updates[k] = body[k]
+  }
+  if (updates.from_email !== undefined) {
+    updates.from_email = String(updates.from_email).trim().toLowerCase()
+  }
+  if (updates.resend_domain !== undefined) {
+    updates.resend_domain = normalizeResendDomain(String(updates.resend_domain))
+  }
+  // Pour un compte Resend, l'expéditeur effectif doit rester sur le domaine vérifié,
+  // que l'on change l'un, l'autre ou les deux champs.
+  if (existing.provider === 'resend') {
+    const effectiveEmail = (updates.from_email ?? existing.from_email) as string
+    const effectiveDomain = (updates.resend_domain ?? existing.resend_domain) as string
+    if (effectiveDomain && effectiveEmail && !fromEmailMatchesDomain(effectiveEmail, effectiveDomain)) {
+      return NextResponse.json({
+        error: `from_email (${effectiveEmail}) doit appartenir au domaine Resend vérifié (@${effectiveDomain}).`,
+      }, { status: 400 })
+    }
   }
   try {
     if (body.smtp_password) updates.smtp_password_enc = encryptSecret(String(body.smtp_password))

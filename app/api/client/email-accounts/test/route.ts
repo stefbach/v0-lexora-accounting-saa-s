@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
-import { testEmailAccount, type EmailAccount } from '@/lib/email/router'
+import { testEmailAccount, checkResendDomainStatus, type EmailAccount } from '@/lib/email/router'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 
 /**
@@ -23,12 +23,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Pas autorisé sur ce compte' }, { status: 403 })
   }
 
+  // Pour Resend, on vérifie d'abord l'état du domaine (DKIM/SPF) : si le domaine
+  // n'est pas "verified", l'envoi échouera — autant le diagnostiquer clairement.
+  const domainStatus = await checkResendDomainStatus(acc as EmailAccount)
+
   const result = await testEmailAccount(acc as EmailAccount)
   await admin.from('email_accounts').update({
     last_test_at: new Date().toISOString(),
     last_test_status: result.ok ? 'success' : 'failed',
-    last_test_error: result.ok ? null : (result.error || 'inconnu'),
+    last_test_error: result.ok ? null : (result.error || domainStatus.message || 'inconnu'),
   }).eq('id', id)
 
-  return NextResponse.json(result, { status: result.ok ? 200 : 500 })
+  return NextResponse.json({ ...result, domain_status: domainStatus }, { status: result.ok ? 200 : 500 })
 }
