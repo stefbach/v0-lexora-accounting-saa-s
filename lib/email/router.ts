@@ -230,6 +230,72 @@ async function sendViaResend(account: EmailAccount, msg: EmailMessage): Promise<
   return { ok: true, message_id: data?.id }
 }
 
+/** Normalise un domaine Resend : minuscules, sans @ ni espaces de tête. */
+export function normalizeResendDomain(domain: string): string {
+  return String(domain || '').trim().toLowerCase().replace(/^@/, '')
+}
+
+/**
+ * Vérifie que l'adresse d'expéditeur appartient bien au domaine Resend vérifié.
+ * Resend rejette tout envoi dont le from_email n'est pas sur le domaine vérifié,
+ * donc on valide à la création/édition plutôt qu'à l'exécution.
+ */
+export function fromEmailMatchesDomain(fromEmail: string, resendDomain: string): boolean {
+  const email = String(fromEmail || '').trim().toLowerCase()
+  const domain = normalizeResendDomain(resendDomain)
+  if (!email || !domain) return false
+  return email.endsWith('@' + domain)
+}
+
+export type ResendDomainStatus = {
+  checked: boolean
+  found: boolean
+  verified: boolean
+  status?: string // not_started | pending | verified | failed | temporary_failure
+  message?: string
+}
+
+/**
+ * Interroge l'API Resend pour connaître l'état de vérification du domaine d'un
+ * compte (DKIM/SPF). Permet de prévenir la société AVANT l'envoi si le domaine
+ * n'est pas encore "verified" — sinon Resend rejette silencieusement.
+ * Ne jette jamais : renvoie checked:false si la clé/API échoue.
+ */
+export async function checkResendDomainStatus(account: EmailAccount): Promise<ResendDomainStatus> {
+  if (account.provider !== 'resend' || !account.resend_api_key_enc || !account.resend_domain) {
+    return { checked: false, found: false, verified: false }
+  }
+  try {
+    const apiKey = decryptSecret(account.resend_api_key_enc)
+    const { Resend } = await import('resend')
+    const resend = new Resend(apiKey)
+    const { data, error } = await resend.domains.list()
+    if (error) return { checked: false, found: false, verified: false, message: error.message }
+    // Le SDK renvoie soit { data: [...] } soit un tableau direct selon la version.
+    const list: any[] = Array.isArray(data) ? data : ((data as any)?.data ?? [])
+    const target = account.resend_domain.toLowerCase()
+    const match = list.find((d) => String(d?.name || '').toLowerCase() === target)
+    if (!match) {
+      return {
+        checked: true, found: false, verified: false,
+        message: `Domaine "${account.resend_domain}" introuvable dans ce compte Resend — ajoute-le et vérifie les DNS.`,
+      }
+    }
+    const status = String(match.status || '')
+    return {
+      checked: true,
+      found: true,
+      verified: status === 'verified',
+      status,
+      message: status === 'verified'
+        ? undefined
+        : `Domaine "${account.resend_domain}" en statut "${status}" — les envois échoueront tant qu'il n'est pas "verified".`,
+    }
+  } catch (e: any) {
+    return { checked: false, found: false, verified: false, message: e?.message }
+  }
+}
+
 /** Teste un compte en envoyant un email à l'adresse from_email lui-même. */
 export async function testEmailAccount(account: EmailAccount): Promise<SendResult> {
   return sendEmail(account, {

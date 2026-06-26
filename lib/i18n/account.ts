@@ -102,6 +102,7 @@ export const accountChunk = {
     "acct.email.generic_error": "Erreur",
     "acct.email.routing_title": "Comment sont sélectionnés les comptes :",
     "acct.email.routing_desc": "quand l'agent Telegram envoie un email, il choisit le compte dans cet ordre : 1. compte précisé par l'utilisateur (account_id) → 2. mon défaut personnel → 3. défaut société → 4. fallback Resend Lexora. L'agent peut aussi te proposer un choix via Telegram (commande \"envoie depuis quel email ?\").",
+    "acct.email.domain_unverified": "Domaine Resend non vérifié — les envois échoueront tant que les DNS (DKIM/SPF) ne sont pas validés dans Resend.",
   } as Record<string, string>,
   en: {
     "acct.profil.save_title": "Save profile",
@@ -201,5 +202,6 @@ export const accountChunk = {
     "acct.email.generic_error": "Error",
     "acct.email.routing_title": "How accounts are selected:",
     "acct.email.routing_desc": "when the Telegram agent sends an email, it picks the account in this order: 1. account specified by the user (account_id) → 2. my personal default → 3. company default → 4. Lexora Resend fallback. The agent can also offer a choice via Telegram (command \"send from which email?\").",
+    "acct.email.domain_unverified": "Resend domain not verified — sending will fail until the DNS records (DKIM/SPF) are validated in Resend.",
   } as Record<string, string>,
 }
