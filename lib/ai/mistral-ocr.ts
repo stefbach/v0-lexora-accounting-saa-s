@@ -15,6 +15,10 @@
  */
 
 const MISTRAL_OCR_ENDPOINT = 'https://api.mistral.ai/v1/ocr'
+// `mistral-ocr-latest` pointe sur la dernière version OCR de Mistral — à juin 2026
+// c'est OCR 4.0 (`mistral-ocr-4`, sortie le 23/06/2026). On garde l'alias `-latest`
+// plutôt qu'un id figé : toujours la version courante, chaîne garantie valide.
+// Pour épingler une version précise : MISTRAL_OCR_MODEL=mistral-ocr-4
 const DEFAULT_MODEL = process.env.MISTRAL_OCR_MODEL || 'mistral-ocr-latest'
 // L'OCR d'un PDF multi-pages peut être long : timeout généreux mais borné.
 const DEFAULT_TIMEOUT_MS = Number.parseInt(process.env.MISTRAL_OCR_TIMEOUT_MS || '', 10) || 60_000
