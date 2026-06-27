@@ -45,6 +45,10 @@ export default function AuditReadinessPage() {
   const [data, setData] = useState<any>(null)
   const [memo, setMemo] = useState<string | null>(null)
   const [memoLoading, setMemoLoading] = useState(false)
+  const [verdicts, setVerdicts] = useState<Record<string, any> | null>(null)
+  const [verdictsLoading, setVerdictsLoading] = useState(false)
+  const [disclosures, setDisclosures] = useState<string | null>(null)
+  const [disclosuresLoading, setDisclosuresLoading] = useState(false)
 
   const regime = (societe as any)?.regime as string | undefined
   const isDomestic = regime === "domestic" || regime == null
@@ -59,6 +63,8 @@ export default function AuditReadinessPage() {
       if (!res.ok) throw new Error(json?.error || "error")
       setData(json)
       setMemo(null)
+      setVerdicts(null)
+      setDisclosures(null)
     } catch (e: any) {
       setError(e?.message || t("aud.error", locale))
     } finally {
@@ -123,6 +129,44 @@ export default function AuditReadinessPage() {
     } finally {
       setMemoLoading(false)
     }
+  }
+
+  async function generateJudge() {
+    if (!societeId) return
+    setVerdictsLoading(true)
+    try {
+      const res = await fetch(`/api/comptable/gbc/audit/judge?societe_id=${societeId}&exercice=${exercice}&locale=${locale}`)
+      const json = await res.json()
+      if (!res.ok) throw new Error(json?.error || "error")
+      const map: Record<string, any> = {}
+      for (const v of json.verdicts || []) map[v.key] = v
+      setVerdicts(map)
+    } catch {
+      setVerdicts({})
+    } finally {
+      setVerdictsLoading(false)
+    }
+  }
+
+  async function generateDisclosures() {
+    if (!societeId) return
+    setDisclosuresLoading(true)
+    try {
+      const res = await fetch(`/api/comptable/gbc/audit/disclosures?societe_id=${societeId}&exercice=${exercice}&locale=${locale}`)
+      const json = await res.json()
+      if (!res.ok) throw new Error(json?.error || "error")
+      setDisclosures(json.disclosures)
+    } catch (e: any) {
+      setDisclosures(`⚠️ ${e?.message || t("aud.error", locale)}`)
+    } finally {
+      setDisclosuresLoading(false)
+    }
+  }
+
+  const VERDICT_META: Record<string, { color: string; key: string }> = {
+    confirmed: { color: "#DC2626", key: "aud.verdict_confirmed" },
+    likely_false_positive: { color: "#16A34A", key: "aud.verdict_likely_false_positive" },
+    needs_info: { color: "#D97706", key: "aud.verdict_needs_info" },
   }
 
   if (loadingSociete) {
@@ -225,6 +269,14 @@ export default function AuditReadinessPage() {
                 {memoLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                 {t("aud.memo_generate", locale)}
               </Button>
+              <Button size="sm" variant="outline" onClick={generateJudge} disabled={verdictsLoading}>
+                {verdictsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                {t("aud.judge_generate", locale)}
+              </Button>
+              <Button size="sm" variant="outline" onClick={generateDisclosures} disabled={disclosuresLoading}>
+                {disclosuresLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSearch className="mr-2 h-4 w-4" />}
+                {t("aud.disclosures_generate", locale)}
+              </Button>
             </div>
 
             {/* Synthèse exécutive IA */}
@@ -237,6 +289,19 @@ export default function AuditReadinessPage() {
                 {memoLoading
                   ? <div className="flex items-center gap-2 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin" />{t("aud.memo_loading", locale)}</div>
                   : <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{memo}</div>}
+              </CardContent></Card>
+            )}
+
+            {/* Notes Full IFRS (brouillon) */}
+            {(disclosuresLoading || disclosures) && (
+              <Card><CardContent className="p-4">
+                <h2 className="mb-1 flex items-center gap-2 text-lg font-semibold" style={{ color: NAVY }}>
+                  <FileSearch className="h-4 w-4" style={{ color: GOLD }} />{t("aud.disclosures_title", locale)}
+                </h2>
+                <p className="mb-3 text-xs text-slate-400">{t("aud.disclosures_hint", locale)}</p>
+                {disclosuresLoading
+                  ? <div className="flex items-center gap-2 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin" />{t("aud.disclosures_loading", locale)}</div>
+                  : <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{disclosures}</div>}
               </CardContent></Card>
             )}
 
@@ -268,6 +333,18 @@ export default function AuditReadinessPage() {
                             </select>
                           </div>
                           <p className="mt-0.5 text-sm text-slate-600">{f.explication}</p>
+                          {verdicts && verdicts[f.key] && (() => {
+                            const v = verdicts[f.key]
+                            const vm = VERDICT_META[v.verdict] || VERDICT_META.needs_info
+                            return (
+                              <div className="mt-1 flex items-center gap-2 text-xs">
+                                <Badge variant="outline" style={{ borderColor: vm.color, color: vm.color }}>
+                                  {t(vm.key, locale)}{v.confidence != null ? ` · ${Math.round(v.confidence * 100)}%` : ""}
+                                </Badge>
+                                {v.comment && <span className="text-slate-500">{v.comment}</span>}
+                              </div>
+                            )
+                          })()}
                         </div>
                       </div>
                     )
