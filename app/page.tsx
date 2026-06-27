@@ -62,6 +62,11 @@ import {
   HeartPulse,
 } from "lucide-react"
 
+// Affichage des tarifs sur la page d'accueil. Masqué volontairement (juin 2026) :
+// lancement trop tôt + repositionnement tarifaire à la hausse en cours.
+// Repasser à `true` pour réafficher la section Offres + le comparateur de prix.
+const SHOW_PRICING = false
+
 export default function HomePage() {
   const locale = getLocale()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -223,18 +228,22 @@ export default function HomePage() {
             <a href="#pcm-claude" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
               PCM × Claude
             </a>
+            {SHOW_PRICING && (
             <a href="#offres" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
               {locale === "fr" ? "Offres" : "Offers"}
             </a>
+            )}
             <a href="#compliance" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.compliance', locale)}
             </a>
             <Link href="/pilotage-telegram" className="text-sm font-medium transition-colors hover:text-[#E8EAFC] inline-flex items-center gap-1" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
               {locale === 'fr' ? 'Assistant IA' : 'AI Assistant'}
             </Link>
+            {SHOW_PRICING && (
             <Link href="/tarifs" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}>
               Tarifs
             </Link>
+            )}
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3">
@@ -278,7 +287,7 @@ export default function HomePage() {
                     {[
                       { href: "#features", label: t('home.modules', locale) },
                       { href: "#ai", label: t('home.ai_intelligence', locale) },
-                      { href: "#offres", label: locale === "fr" ? "Offres" : "Offers" },
+                      ...(SHOW_PRICING ? [{ href: "#offres", label: locale === "fr" ? "Offres" : "Offers" }] : []),
                       { href: "#compliance", label: t('home.compliance', locale) },
                     ].map((link) => (
                       <a
@@ -299,6 +308,7 @@ export default function HomePage() {
                     >
                       {locale === 'fr' ? 'Assistant IA' : 'AI Assistant'}
                     </Link>
+                    {SHOW_PRICING && (
                     <Link
                       href="/tarifs"
                       onClick={() => setMobileMenuOpen(false)}
@@ -307,6 +317,7 @@ export default function HomePage() {
                     >
                       Tarifs
                     </Link>
+                    )}
                   </nav>
 
                   <div className="mt-auto flex flex-col gap-3 pt-8">
@@ -1496,6 +1507,7 @@ export default function HomePage() {
         <NewFeatures2026 locale={locale === "fr" ? "fr" : "en"} />
 
         {/* OFFRES — Deux offres claires : Client direct + Expert-Comptable */}
+        {SHOW_PRICING && (
         <section id="offres" className="py-20 md:py-28" style={{ backgroundColor: "#FFFFFF" }}>
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
             {/* Header */}
@@ -1841,9 +1853,12 @@ export default function HomePage() {
             </StaggerGroup>
           </div>
         </section>
+        )}
 
         {/* PRICING — modern 4-tier showcase */}
-        <PricingShowcase locale={locale === "fr" ? "fr" : "en"} />
+        {SHOW_PRICING && (
+          <PricingShowcase locale={locale === "fr" ? "fr" : "en"} />
+        )}
 
         {/* COMPLIANCE — light grey (pills stagger in) */}
         <section id="compliance" className="py-20 md:py-28" style={{ backgroundColor: "#F0F2F8" }}>
@@ -1952,8 +1967,12 @@ export default function HomePage() {
               <ul className="space-y-2.5 text-sm" style={{ fontFamily: "'Poppins', sans-serif" }}>
                 <li><a href="#features" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Modules" : "Modules"}</a></li>
                 <li><a href="#ai" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Agents IA" : "AI Agents"}</a></li>
+                {SHOW_PRICING && (
                 <li><a href="#offres" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Offres" : "Offers"}</a></li>
+                )}
+                {SHOW_PRICING && (
                 <li><Link href="/tarifs" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>Tarifs</Link></li>
+                )}
                 <li><Link href="/pilotage-telegram" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === 'fr' ? 'Assistant IA' : 'AI Assistant'}</Link></li>
               </ul>
             </div>
