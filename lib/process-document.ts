@@ -34,6 +34,21 @@ export async function processDocument(params: {
   const base64 = Buffer.from(await fileData.arrayBuffer()).toString('base64')
   const mediaType = ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : 'image/jpeg'
 
+  // --- Pré-passe Mistral OCR (si configuré) sur les documents visuels :
+  // PDF/image → markdown, que Claude classe ensuite. Fallback transparent sur
+  // la vision Claude si Mistral est indisponible ou échoue.
+  let ocrMarkdown: string | null = null
+  if (isVisual) {
+    const { mistralOcrAvailable, ocrToMarkdown } = await import('@/lib/ai/mistral-ocr')
+    if (mistralOcrAvailable()) {
+      const ocr = await ocrToMarkdown({ data: base64, mimeType: mediaType })
+      if (ocr.ok && ocr.markdown.trim().length > 30) {
+        ocrMarkdown = ocr.markdown
+        console.warn(`[processDocument] Mistral OCR: ${ocr.markdown.length} chars, ${ocr.pagesProcessed} pages`)
+      }
+    }
+  }
+
   // Call Anthropic
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -61,9 +76,11 @@ export async function processDocument(params: {
 Règles : pas de markdown, pas de backticks, JSON strict uniquement. Si illisible, tous null + confidence < 0.3.`,
     messages: [{
       role: 'user',
-      content: isVisual
-        ? [contentBlock, { type: 'text' as const, text: 'Analyse ce document comptable.' }]
-        : `Analyse ce document: ${await fileData.text()}`
+      content: ocrMarkdown
+        ? `Analyse ce document comptable. Voici son texte OCR (extrait via Mistral OCR) :\n\n---DEBUT_DOCUMENT---\n${ocrMarkdown}\n---FIN_DOCUMENT---`
+        : isVisual
+          ? [contentBlock, { type: 'text' as const, text: 'Analyse ce document comptable.' }]
+          : `Analyse ce document: ${await fileData.text()}`
     }],
   })
 

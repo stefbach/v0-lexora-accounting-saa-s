@@ -141,6 +141,23 @@ export async function extractBankStatement(
     console.warn('[bank-extract] unpdf failed, falling back to PDF base64:', e?.message)
   }
 
+  // --- Phase 0b : si unpdf n'a rien donné (PDF scanné / image), tenter Mistral OCR.
+  // unpdf ne lit que le texte embarqué ; sur un relevé scanné il échoue et on
+  // retombait sur la vision Claude (peu fiable sur tableaux denses). Mistral OCR
+  // produit du markdown structuré même sur un scan → on l'utilise comme texte source.
+  if (!extractedText) {
+    const { mistralOcrAvailable, ocrToMarkdown } = await import('./mistral-ocr')
+    if (mistralOcrAvailable()) {
+      const ocr = await ocrToMarkdown({ data: base64, mimeType: 'application/pdf' })
+      if (ocr.ok && ocr.markdown.trim().length > 200) {
+        extractedText = ocr.markdown
+        console.warn(`[bank-extract] Mistral OCR success: ${ocr.markdown.length} chars, ${ocr.pagesProcessed} pages, ${ocr.duration_ms}ms`)
+      } else {
+        console.warn(`[bank-extract] Mistral OCR insufficient, falling back to PDF base64: ${ocr.ok ? 'too little text' : ocr.error}`)
+      }
+    }
+  }
+
   // --- Initial extraction ---
   // Si on a réussi à extraire le texte, on envoie le texte (plus fiable).
   // Sinon on envoie le PDF base64 (fallback vision Claude).
