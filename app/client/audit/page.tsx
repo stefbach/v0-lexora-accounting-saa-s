@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table"
 import {
   Loader2, ShieldCheck, AlertTriangle, AlertCircle, Info, CheckCircle2, XCircle, FileSearch,
+  FileDown, Sheet, Sparkles,
 } from "lucide-react"
 
 const NAVY = "#0B0F2E"
@@ -42,6 +43,8 @@ export default function AuditReadinessPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<any>(null)
+  const [memo, setMemo] = useState<string | null>(null)
+  const [memoLoading, setMemoLoading] = useState(false)
 
   const regime = (societe as any)?.regime as string | undefined
   const isDomestic = regime === "domestic" || regime == null
@@ -55,10 +58,48 @@ export default function AuditReadinessPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error || "error")
       setData(json)
+      setMemo(null)
     } catch (e: any) {
       setError(e?.message || t("aud.error", locale))
     } finally {
       setLoading(false)
+    }
+  }
+
+  function exportCsv() {
+    if (!data) return
+    const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`
+    const rows: string[] = []
+    rows.push(["Rubrique", "Solde N", "Solde N-1", "Variation", "Variation %", "A investiguer"].map(esc).join(","))
+    for (const ls of data.leadSchedules || []) {
+      rows.push([ls.caption, ls.total_n, ls.total_n1, ls.variation, ls.variation_pct ?? "", ls.flagged ? "oui" : ""].map(esc).join(","))
+    }
+    rows.push("")
+    rows.push(["Test", "Sévérité", "Constat", "Explication"].map(esc).join(","))
+    for (const f of data.findings || []) {
+      rows.push([f.test, f.severity, f.titre, f.explication].map(esc).join(","))
+    }
+    const blob = new Blob(["﻿" + rows.join("\n")], { type: "text/csv;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `audit-readiness_${data.societe?.nom || "societe"}_${data.exercice}.csv`.replace(/\s+/g, "_")
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function generateMemo() {
+    if (!societeId) return
+    setMemoLoading(true)
+    try {
+      const res = await fetch(`/api/comptable/gbc/audit/memo?societe_id=${societeId}&exercice=${exercice}&locale=${locale}`)
+      const json = await res.json()
+      if (!res.ok) throw new Error(json?.error || "error")
+      setMemo(json.memo)
+    } catch (e: any) {
+      setMemo(`⚠️ ${e?.message || t("aud.error", locale)}`)
+    } finally {
+      setMemoLoading(false)
     }
   }
 
@@ -147,6 +188,35 @@ export default function AuditReadinessPage() {
                 <div className="mt-1 font-semibold" style={{ color: NAVY }}>{data.resume?.pbc_fournis} / {data.resume?.pbc_total}</div>
               </CardContent></Card>
             </div>
+
+            {/* Barre d'export + mémo IA */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <a href={`/api/comptable/gbc/audit/export-pdf?societe_id=${societeId}&exercice=${exercice}`} target="_blank" rel="noopener noreferrer">
+                  <FileDown className="mr-2 h-4 w-4" />{t("aud.export_pdf", locale)}
+                </a>
+              </Button>
+              <Button variant="outline" size="sm" onClick={exportCsv}>
+                <Sheet className="mr-2 h-4 w-4" />{t("aud.export_csv", locale)}
+              </Button>
+              <Button size="sm" onClick={generateMemo} disabled={memoLoading} style={{ backgroundColor: GOLD, color: NAVY }}>
+                {memoLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                {t("aud.memo_generate", locale)}
+              </Button>
+            </div>
+
+            {/* Synthèse exécutive IA */}
+            {(memoLoading || memo) && (
+              <Card><CardContent className="p-4">
+                <h2 className="mb-1 flex items-center gap-2 text-lg font-semibold" style={{ color: NAVY }}>
+                  <Sparkles className="h-4 w-4" style={{ color: GOLD }} />{t("aud.memo_title", locale)}
+                </h2>
+                <p className="mb-3 text-xs text-slate-400">{t("aud.memo_hint", locale)}</p>
+                {memoLoading
+                  ? <div className="flex items-center gap-2 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin" />{t("aud.memo_loading", locale)}</div>
+                  : <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{memo}</div>}
+              </CardContent></Card>
+            )}
 
             {/* Tests de cohérence */}
             <Card><CardContent className="p-4">
