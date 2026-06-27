@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSystemPrompt, injectTauxChange, injectSocietes, CLAUDE_CONFIG, SYSTEM_PROMPT_GENERIC_EXTRACTION } from '@/lib/ai/prompts'
-import { extractBankStatement } from '@/lib/ai/bank-statement-extraction'
+import { extractBankStatement, extractBankPdfText } from '@/lib/ai/bank-statement-extraction'
 import { findTiersInAnnuaire, incrementTiersUsage, createTiersFromOcr } from '@/lib/tiers-annuaire'
 import { createHash } from 'crypto'
 import { isBankName, validateAndCleanExtraction, computeConfidence } from '@/lib/utils/bank-utils'
@@ -486,15 +486,26 @@ Respond with ONLY the type word. Nothing else.`,
       console.warn('[upload] Skipping AI call — already parsed locally')
     } else if (isLikelyBankStatement && isPdf) {
       const bankSystemPrompt = injectSocietes(getSystemPrompt('releve_bancaire', tauxChange), societeDetailsForPrompt)
+
+      // Phase 0/0b : extraire le TEXTE du relevé (unpdf → Mistral OCR) avant
+      // d'appeler Claude. Envoyer du texte (vs le PDF en image) divise le temps
+      // de traitement et évite le timeout 300 s sur les relevés denses/scannés.
+      // null → fallback vision (PDF base64) comme avant.
+      const bankSourceText: string | null = await extractBankPdfText(base64)
+      const bankUserPrompt = 'Retourne UNIQUEMENT un JSON valide (pas de markdown). Lis TOUTES les lignes du releve sans exception.'
+      const bankInitialContent = bankSourceText
+        ? `Voici le contenu texte d'un relevé bancaire (extrait côté serveur). Lis TOUTES les lignes du tableau de transactions et retourne le JSON structuré demandé dans le system prompt.\n\n---DEBUT_RELEVE---\n${bankSourceText}\n---FIN_RELEVE---\n\n${bankUserPrompt}`
+        : [
+            { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } },
+            { type: 'text' as const, text: bankUserPrompt },
+          ]
+
       const bankStream = anthropic.messages.stream({
         model: CLAUDE_CONFIG.model,
         max_tokens: CLAUDE_CONFIG.max_tokens_releve_bancaire,
         temperature: CLAUDE_CONFIG.temperature,
         system: bankSystemPrompt,
-        messages: [{ role: 'user', content: [
-          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-          { type: 'text', text: 'Retourne UNIQUEMENT un JSON valide (pas de markdown). Lis TOUTES les lignes du releve sans exception.' },
-        ]}],
+        messages: [{ role: 'user', content: bankInitialContent as any }],
       })
       aiResponse = await bankStream.finalMessage()
       let bankText = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
@@ -579,16 +590,20 @@ Respond with ONLY the type word. Nothing else.`,
         console.warn(`[upload] Bank continuation ${cont}/${MAX_CONTINUATIONS} — landmark: ${lastDate} / ${lastDescription?.slice(0, 50)}`)
 
         try {
+          const contInstruction = `${landmarkHint}\n\nRetourne UNIQUEMENT le tableau JSON des transactions manquantes. Format : [{"date":"YYYY-MM-DD","description":"...","debit":0,"credit":0,"solde":0}, ...].\nSi rien à ajouter : [].`
+          const contContent = bankSourceText
+            ? `Voici le contenu texte du relevé bancaire (mêmes données qu'à l'appel initial).\n\n---DEBUT_RELEVE---\n${bankSourceText}\n---FIN_RELEVE---\n\n${contInstruction}`
+            : [
+                { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } },
+                { type: 'text' as const, text: contInstruction },
+              ]
           const contStream = anthropic.messages.stream({
             model: CLAUDE_CONFIG.model,
             max_tokens: CLAUDE_CONFIG.max_tokens_releve_bancaire,
             temperature: CLAUDE_CONFIG.temperature,
             system: 'Tu continues à extraire les transactions d\'un relevé bancaire. Retourne UNIQUEMENT un tableau JSON `[ {...}, {...} ]` avec les nouvelles transactions, sans aucune métadonnée, sans markdown, sans texte avant ou après. Si toutes les transactions sont déjà extraites, retourne `[]`.',
             messages: [
-              { role: 'user', content: [
-                { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-                { type: 'text', text: `${landmarkHint}\n\nRetourne UNIQUEMENT le tableau JSON des transactions manquantes. Format : [{"date":"YYYY-MM-DD","description":"...","debit":0,"credit":0,"solde":0}, ...].\nSi rien à ajouter : [].` },
-              ]},
+              { role: 'user', content: contContent as any },
             ],
           })
           const contResponse = await contStream.finalMessage()
