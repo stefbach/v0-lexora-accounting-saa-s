@@ -2412,38 +2412,45 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             )
           }
 
-          // F7 — sanity check : refuse toute tx dont le montant est anormalement élevé.
-          // Heuristique : si max(debit, credit) > SEUIL_ABSOLU (20M MUR équivalent) OU
-          // > 50× la médiane des autres tx du relevé → flag 'montant_suspect'.
-          const seuilAbsolu = 20_000_000 // 20M MUR = cap raisonnable pour 1 tx bancaire
+          // F7 — sanity check montants anormaux, sur DEUX niveaux distincts :
+          //  • Plafond absolu (20M MUR) : un montant au-dessus est quasi-certainement
+          //    une erreur d'extraction → on BLOQUE l'import (garde-fou dur : créer une
+          //    écriture à 20M+ erronée compromettrait l'intégrité comptable).
+          //  • Heuristique relative (> 50× médiane, mais SOUS le plafond) : souvent un
+          //    faux positif (gros virement légitime parmi de petits frais) → on ALERTE
+          //    mais on N'ARRÊTE PAS l'import. Le relevé est créé et passe en review
+          //    a posteriori via l'alerte (decision produit juin 2026).
+          const seuilAbsolu = 20_000_000 // 20M MUR = cap au-delà duquel une tx unique est invraisemblable
           const lignesF7: any[] = normalizedTransactions
           if (lignesF7.length > 0) {
             const montants = lignesF7.map(l => Math.max(parseAmountSafe(l.debit, 'f7.debit'), parseAmountSafe(l.credit, 'f7.credit')))
             const sorted = [...montants].sort((a, b) => a - b)
             const median = sorted[Math.floor(sorted.length / 2)] || 0
-            const suspectes = lignesF7.filter(l => {
+            const maxMontant = montants.length > 0 ? Math.max(...montants) : 0
+            const aberrantesAbsolues = lignesF7.filter(l =>
+              Math.max(parseAmountSafe(l.debit, 'f7.debit'), parseAmountSafe(l.credit, 'f7.credit')) > seuilAbsolu)
+            const suspectesRelatives = lignesF7.filter(l => {
               const m = Math.max(parseAmountSafe(l.debit, 'f7.debit'), parseAmountSafe(l.credit, 'f7.credit'))
-              return m > seuilAbsolu || (median > 0 && m > 50 * median)
+              return m <= seuilAbsolu && median > 0 && m > 50 * median
             })
-            if (suspectes.length > 0) {
-              const maxMontant = montants.length > 0 ? Math.max(...montants) : 0
-              const f7Msg = `F7: ${suspectes.length} tx avec montant anormalement élevé (max=${maxMontant}, médiane=${median}). Review humaine requise.`
-              console.error(`[upload] F7 BLOCK: ${f7Msg} (doc ${docId})`)
-              // Marque le doc en erreur_ocr pour review humaine, ne PAS créer le relevé
+
+            // Niveau 1 — plafond absolu : blocage dur (extraction probablement corrompue).
+            if (aberrantesAbsolues.length > 0) {
+              const f7Msg = `F7: ${aberrantesAbsolues.length} tx > ${seuilAbsolu} MUR (max=${maxMontant}). Extraction probablement erronée — import bloqué.`
+              console.error(`[upload] F7 HARD BLOCK: ${f7Msg} (doc ${docId})`)
               if (docId) {
                 await supabase.from('documents').update({
                   statut: 'erreur_ocr',
                   message_erreur: f7Msg,
                 }).eq('id', docId)
               }
-              // Alerte compliance — best-effort, schema aligné sur les autres alertes du fichier
               try {
                 await supabase.from('alertes').insert({
                   societe_id: bankSocieteId,
                   type_alerte: 'montant_suspect_ocr',
                   niveau: 'critique',
-                  titre: 'Montants OCR anormalement élevés',
-                  description: `OCR relevé bancaire: ${suspectes.length} tx > 20M MUR ou > 50× médiane. Doc ${docId}.`,
+                  titre: 'Montants OCR aberrants (> 20M MUR)',
+                  description: `OCR relevé bancaire: ${aberrantesAbsolues.length} tx > 20M MUR. Doc ${docId}.`,
                   statut: 'active',
                 })
               } catch (alertErr) {
@@ -2451,11 +2458,29 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               }
               return NextResponse.json(
                 {
-                  error: `Montants anormalement élevés détectés (${suspectes.length} tx). Review humaine requise avant import.`,
-                  suspectes: suspectes.slice(0, 5).map((l: any) => ({ libelle: l.libelle, debit: l.debit, credit: l.credit })),
+                  error: `Montants aberrants détectés (${aberrantesAbsolues.length} tx > 20M MUR). Extraction à vérifier avant import.`,
+                  suspectes: aberrantesAbsolues.slice(0, 5).map((l: any) => ({ libelle: l.libelle, debit: l.debit, credit: l.credit })),
                 },
                 { status: 400 },
               )
+            }
+
+            // Niveau 2 — gros montant relatif : alerte non bloquante, import poursuivi.
+            if (suspectesRelatives.length > 0) {
+              const f7Msg = `F7: ${suspectesRelatives.length} tx > 50× médiane (max=${maxMontant}, médiane=${median}). Alerte créée, import poursuivi pour review a posteriori.`
+              console.warn(`[upload] F7 SOFT ALERT: ${f7Msg} (doc ${docId})`)
+              try {
+                await supabase.from('alertes').insert({
+                  societe_id: bankSocieteId,
+                  type_alerte: 'montant_suspect_ocr',
+                  niveau: 'important',
+                  titre: 'Montants élevés à vérifier',
+                  description: `OCR relevé bancaire: ${suspectesRelatives.length} tx > 50× la médiane (max=${maxMontant} MUR). Vérifier ces virements. Doc ${docId}.`,
+                  statut: 'active',
+                })
+              } catch (alertErr) {
+                console.error('[upload] alertes insert failed (non-fatal):', alertErr)
+              }
             }
           }
 
