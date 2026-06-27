@@ -163,6 +163,18 @@ export async function ocrExpenseTicket(args: {
     : Buffer.from(args.image_bytes as ArrayBuffer)
   const base64 = buf.toString('base64')
 
+  // --- Pré-passe Mistral OCR (si configuré) : image → markdown, que Claude
+  // structure ensuite en JSON. Plus fiable sur les tickets photographiés que
+  // la vision directe. Fallback transparent sur la vision Claude si indispo/échec.
+  let ocrMarkdown: string | null = null
+  const { mistralOcrAvailable, ocrToMarkdown } = await import('@/lib/ai/mistral-ocr')
+  if (mistralOcrAvailable()) {
+    const ocr = await ocrToMarkdown({ data: base64, mimeType: supportedMime })
+    if (ocr.ok && ocr.markdown.trim().length > 10) {
+      ocrMarkdown = ocr.markdown
+    }
+  }
+
   const client = new Anthropic({ apiKey: ANTHROPIC_KEY })
 
   let response
@@ -175,14 +187,16 @@ export async function ocrExpenseTicket(args: {
       messages: [
         {
           role: 'user',
-          content: [
-            {
-              type: 'image',
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- media_type Anthropic SDK est un union restreint, supportedMime déjà validé en amont
-              source: { type: 'base64', media_type: supportedMime as any, data: base64 },
-            },
-            { type: 'text', text: 'Extrait le JSON conforme au schéma.' },
-          ],
+          content: ocrMarkdown
+            ? `Voici le texte OCR d'un ticket / reçu (extrait via Mistral OCR). Extrait le JSON conforme au schéma.\n\n---DEBUT_TICKET---\n${ocrMarkdown}\n---FIN_TICKET---`
+            : [
+                {
+                  type: 'image',
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- media_type Anthropic SDK est un union restreint, supportedMime déjà validé en amont
+                  source: { type: 'base64', media_type: supportedMime as any, data: base64 },
+                },
+                { type: 'text', text: 'Extrait le JSON conforme au schéma.' },
+              ],
         },
       ],
     })

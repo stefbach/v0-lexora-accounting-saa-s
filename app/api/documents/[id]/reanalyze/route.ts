@@ -7,6 +7,10 @@ import { isBankName, validateAndCleanExtraction, computeConfidence, repairBankJS
 import { extractBankStatement } from '@/lib/ai/bank-statement-extraction'
 import { resolveTransactionAmounts, resolveTransactionDate } from '@/lib/utils/bank-amount'
 
+// L'extraction d'un relevé bancaire (OCR Mistral + extraction Claude multi-appels)
+// peut dépasser le défaut Vercel (60 s) → on aligne sur la route upload (5 min).
+export const maxDuration = 300
+
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY

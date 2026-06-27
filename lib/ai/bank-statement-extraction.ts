@@ -104,22 +104,36 @@ const computeLandmark = (parsed: any): { date: string | null; desc: string | nul
   }
 }
 
-export async function extractBankStatement(
-  anthropic: Anthropic,
-  options: ExtractOptions,
-): Promise<ExtractResult> {
-  const {
-    base64, systemPrompt, model, maxTokens, temperature,
-    initialUserPrompt = 'Retourne UNIQUEMENT un JSON valide (pas de markdown). Lis TOUTES les lignes du releve sans exception.',
-    maxContinuations = 5,
-  } = options
+/**
+ * Couche d'extraction texte d'un PDF de relevé (Phase 0 + 0b), partagée entre
+ * `extractBankStatement` et la voie inline de /api/documents/upload.
+ *
+ * Claude lit les PDFs comme images et galère sur les tableaux denses (>50
+ * transactions) — c'est aussi ce qui faisait timeout la fonction (vision lente
+ * + boucle de continuations). En envoyant le TEXTE, on multiplie la fiabilité
+ * et on divise le temps de traitement.
+ *
+ *  1. Mistral OCR (mistral-ocr-latest = OCR 4) : moteur PRINCIPAL si MISTRAL_API_KEY.
+ *     Markdown structuré, tableaux préservés, robuste sur PDF natifs ET scannés.
+ *  2. unpdf/pdfjs : repli si Mistral indisponible/échoue (texte embarqué uniquement).
+ *
+ * Renvoie `null` si aucune méthode ne donne de texte exploitable → l'appelant
+ * retombe sur la vision Claude (PDF base64).
+ */
+export async function extractBankPdfText(base64: string): Promise<string | null> {
+  // --- Moteur principal : Mistral OCR (le plus puissant — markdown structuré,
+  // conserve les colonnes des tableaux bancaires, gère les scans).
+  const { mistralOcrAvailable, ocrToMarkdown } = await import('./mistral-ocr')
+  if (mistralOcrAvailable()) {
+    const ocr = await ocrToMarkdown({ data: base64, mimeType: 'application/pdf' })
+    if (ocr.ok && ocr.markdown.trim().length > 200) {
+      console.warn(`[bank-extract] Mistral OCR success: ${ocr.markdown.length} chars, ${ocr.pagesProcessed} pages, ${ocr.duration_ms}ms`)
+      return ocr.markdown
+    }
+    console.warn(`[bank-extract] Mistral OCR insufficient, falling back to unpdf: ${ocr.ok ? 'too little text' : ocr.error}`)
+  }
 
-  // --- Phase 0 : tenter une extraction de texte côté serveur (unpdf/pdfjs).
-  // Claude lit les PDFs comme images et galère sur les tableaux denses
-  // (>50 transactions). En envoyant le TEXTE structuré extrait du PDF, on
-  // multiplie par 10 la fiabilité d'extraction des tableaux bancaires.
-  // Fallback sur PDF base64 si l'extraction texte échoue (PDF scanné image).
-  let extractedText: string | null = null
+  // --- Repli : unpdf/pdfjs (texte embarqué d'un PDF natif).
   try {
     const pdfBytes = Uint8Array.from(Buffer.from(base64, 'base64'))
     const { extractText, getDocumentProxy } = await import('unpdf')
@@ -132,14 +146,29 @@ export async function extractBankStatement(
         ? raw.join('\n')
         : ''
     if (text && text.trim().length > 200) {
-      extractedText = text
       console.warn(`[bank-extract] unpdf success: ${text.length} chars from PDF`)
-    } else {
-      console.warn('[bank-extract] unpdf returned too little text, falling back to PDF base64')
+      return text
     }
+    console.warn('[bank-extract] unpdf returned too little text, falling back to PDF base64 (vision)')
   } catch (e: any) {
-    console.warn('[bank-extract] unpdf failed, falling back to PDF base64:', e?.message)
+    console.warn('[bank-extract] unpdf failed, falling back to PDF base64 (vision):', e?.message)
   }
+
+  return null
+}
+
+export async function extractBankStatement(
+  anthropic: Anthropic,
+  options: ExtractOptions,
+): Promise<ExtractResult> {
+  const {
+    base64, systemPrompt, model, maxTokens, temperature,
+    initialUserPrompt = 'Retourne UNIQUEMENT un JSON valide (pas de markdown). Lis TOUTES les lignes du releve sans exception.',
+    maxContinuations = 5,
+  } = options
+
+  // --- Phase 0/0b : extraction texte (unpdf → Mistral OCR) ; null = fallback vision.
+  const extractedText: string | null = await extractBankPdfText(base64)
 
   // --- Initial extraction ---
   // Si on a réussi à extraire le texte, on envoie le texte (plus fiable).

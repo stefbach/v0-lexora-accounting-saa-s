@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSystemPrompt, injectTauxChange, injectSocietes, CLAUDE_CONFIG, SYSTEM_PROMPT_GENERIC_EXTRACTION } from '@/lib/ai/prompts'
-import { extractBankStatement } from '@/lib/ai/bank-statement-extraction'
+import { extractBankStatement, extractBankPdfText } from '@/lib/ai/bank-statement-extraction'
 import { findTiersInAnnuaire, incrementTiersUsage, createTiersFromOcr } from '@/lib/tiers-annuaire'
 import { createHash } from 'crypto'
 import { isBankName, validateAndCleanExtraction, computeConfidence } from '@/lib/utils/bank-utils'
@@ -67,34 +67,11 @@ export async function POST(request: NextRequest) {
     }
     if (file.size > 20 * 1024 * 1024) return NextResponse.json({ error: 'Fichier trop volumineux (max 20MB)' }, { status: 400 })
 
-    // Détection doublons — multi-level check
+    // Détection doublons — voir plus bas (scopée au dossier cible).
+    // IMPORTANT : la dédup est PAR DOSSIER, pas globale. Un même fichier (facture,
+    // relevé) peut légitimement exister dans plusieurs sociétés / comptes de test.
+    // On ne peut donc dédupliquer qu'APRÈS avoir résolu le dossier de destination.
     let existingDoc: { id: string; nom_fichier: string; statut: string } | null = null
-
-    // Level 1: filename + size (cross-user — catches same file uploaded by any user)
-    const { data: nameSizeDup } = await supabase
-      .from('documents')
-      .select('id, nom_fichier, statut')
-      .eq('nom_fichier', file.name)
-      .eq('taille_fichier', file.size)
-      .limit(1)
-      .maybeSingle()
-    if (nameSizeDup) existingDoc = nameSizeDup
-    if (existingDoc && existingDoc.statut === 'traite') {
-      return NextResponse.json({
-        error: `Doublon détecté : "${file.name}" a déjà été uploadé (ID: ${existingDoc.id}). Utilisez "Réanalyser" pour retraiter ce document.`,
-        doublon: true,
-        doc_id: existingDoc.id
-      }, { status: 409 })
-    }
-    // Si le document existe mais en erreur ou en_attente, demander confirmation
-    if (existingDoc && existingDoc.statut !== 'traite') {
-      return NextResponse.json({
-        doublon: true,
-        statut: existingDoc.statut,
-        message: "Un document identique existe déjà avec des erreurs de traitement. Voulez-vous le retraiter ?",
-        existingId: existingDoc.id,
-      }, { status: 409 })
-    }
 
     // Resolve dossier_id — PRIORITY 1: explicit societe_id from FormData
     let resolvedDossierId = dossierId
@@ -176,13 +153,28 @@ export async function POST(request: NextRequest) {
     const fileHash = createHash('sha256').update(fileBuffer).digest('hex')
     const base64 = fileBuffer.toString('base64')
 
-    // Level 2: Hash-based dedup (catches renamed files with identical content)
-    // Wrapped in try/catch in case file_hash column doesn't exist yet
+    // Dédup SCOPÉE AU DOSSIER cible (resolvedDossierId) — pas globale.
+    // Level 1: nom + taille (attrape le même fichier re-déposé dans CE dossier).
+    {
+      const { data: nameSizeDup } = await supabase
+        .from('documents')
+        .select('id, nom_fichier, statut')
+        .eq('dossier_id', resolvedDossierId)
+        .eq('nom_fichier', file.name)
+        .eq('taille_fichier', file.size)
+        .limit(1)
+        .maybeSingle()
+      if (nameSizeDup) existingDoc = nameSizeDup
+    }
+
+    // Level 2: hash SHA-256 (attrape un fichier renommé au contenu identique),
+    // toujours scopé au dossier. Wrapped en try/catch si la colonne file_hash manque.
     if (!existingDoc) {
       try {
         const { data: hashDup, error: hashErr } = await supabase
           .from('documents')
           .select('id, nom_fichier, statut')
+          .eq('dossier_id', resolvedDossierId)
           .eq('file_hash', fileHash)
           .limit(1)
           .maybeSingle()
@@ -486,15 +478,26 @@ Respond with ONLY the type word. Nothing else.`,
       console.warn('[upload] Skipping AI call — already parsed locally')
     } else if (isLikelyBankStatement && isPdf) {
       const bankSystemPrompt = injectSocietes(getSystemPrompt('releve_bancaire', tauxChange), societeDetailsForPrompt)
+
+      // Phase 0/0b : extraire le TEXTE du relevé (unpdf → Mistral OCR) avant
+      // d'appeler Claude. Envoyer du texte (vs le PDF en image) divise le temps
+      // de traitement et évite le timeout 300 s sur les relevés denses/scannés.
+      // null → fallback vision (PDF base64) comme avant.
+      const bankSourceText: string | null = await extractBankPdfText(base64)
+      const bankUserPrompt = 'Retourne UNIQUEMENT un JSON valide (pas de markdown). Lis TOUTES les lignes du releve sans exception.'
+      const bankInitialContent = bankSourceText
+        ? `Voici le contenu texte d'un relevé bancaire (extrait côté serveur). Lis TOUTES les lignes du tableau de transactions et retourne le JSON structuré demandé dans le system prompt.\n\n---DEBUT_RELEVE---\n${bankSourceText}\n---FIN_RELEVE---\n\n${bankUserPrompt}`
+        : [
+            { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } },
+            { type: 'text' as const, text: bankUserPrompt },
+          ]
+
       const bankStream = anthropic.messages.stream({
         model: CLAUDE_CONFIG.model,
         max_tokens: CLAUDE_CONFIG.max_tokens_releve_bancaire,
         temperature: CLAUDE_CONFIG.temperature,
         system: bankSystemPrompt,
-        messages: [{ role: 'user', content: [
-          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-          { type: 'text', text: 'Retourne UNIQUEMENT un JSON valide (pas de markdown). Lis TOUTES les lignes du releve sans exception.' },
-        ]}],
+        messages: [{ role: 'user', content: bankInitialContent as any }],
       })
       aiResponse = await bankStream.finalMessage()
       let bankText = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
@@ -579,16 +582,20 @@ Respond with ONLY the type word. Nothing else.`,
         console.warn(`[upload] Bank continuation ${cont}/${MAX_CONTINUATIONS} — landmark: ${lastDate} / ${lastDescription?.slice(0, 50)}`)
 
         try {
+          const contInstruction = `${landmarkHint}\n\nRetourne UNIQUEMENT le tableau JSON des transactions manquantes. Format : [{"date":"YYYY-MM-DD","description":"...","debit":0,"credit":0,"solde":0}, ...].\nSi rien à ajouter : [].`
+          const contContent = bankSourceText
+            ? `Voici le contenu texte du relevé bancaire (mêmes données qu'à l'appel initial).\n\n---DEBUT_RELEVE---\n${bankSourceText}\n---FIN_RELEVE---\n\n${contInstruction}`
+            : [
+                { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } },
+                { type: 'text' as const, text: contInstruction },
+              ]
           const contStream = anthropic.messages.stream({
             model: CLAUDE_CONFIG.model,
             max_tokens: CLAUDE_CONFIG.max_tokens_releve_bancaire,
             temperature: CLAUDE_CONFIG.temperature,
             system: 'Tu continues à extraire les transactions d\'un relevé bancaire. Retourne UNIQUEMENT un tableau JSON `[ {...}, {...} ]` avec les nouvelles transactions, sans aucune métadonnée, sans markdown, sans texte avant ou après. Si toutes les transactions sont déjà extraites, retourne `[]`.',
             messages: [
-              { role: 'user', content: [
-                { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-                { type: 'text', text: `${landmarkHint}\n\nRetourne UNIQUEMENT le tableau JSON des transactions manquantes. Format : [{"date":"YYYY-MM-DD","description":"...","debit":0,"credit":0,"solde":0}, ...].\nSi rien à ajouter : [].` },
-              ]},
+              { role: 'user', content: contContent as any },
             ],
           })
           const contResponse = await contStream.finalMessage()
@@ -2397,38 +2404,45 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             )
           }
 
-          // F7 — sanity check : refuse toute tx dont le montant est anormalement élevé.
-          // Heuristique : si max(debit, credit) > SEUIL_ABSOLU (20M MUR équivalent) OU
-          // > 50× la médiane des autres tx du relevé → flag 'montant_suspect'.
-          const seuilAbsolu = 20_000_000 // 20M MUR = cap raisonnable pour 1 tx bancaire
+          // F7 — sanity check montants anormaux, sur DEUX niveaux distincts :
+          //  • Plafond absolu (20M MUR) : un montant au-dessus est quasi-certainement
+          //    une erreur d'extraction → on BLOQUE l'import (garde-fou dur : créer une
+          //    écriture à 20M+ erronée compromettrait l'intégrité comptable).
+          //  • Heuristique relative (> 50× médiane, mais SOUS le plafond) : souvent un
+          //    faux positif (gros virement légitime parmi de petits frais) → on ALERTE
+          //    mais on N'ARRÊTE PAS l'import. Le relevé est créé et passe en review
+          //    a posteriori via l'alerte (decision produit juin 2026).
+          const seuilAbsolu = 20_000_000 // 20M MUR = cap au-delà duquel une tx unique est invraisemblable
           const lignesF7: any[] = normalizedTransactions
           if (lignesF7.length > 0) {
             const montants = lignesF7.map(l => Math.max(parseAmountSafe(l.debit, 'f7.debit'), parseAmountSafe(l.credit, 'f7.credit')))
             const sorted = [...montants].sort((a, b) => a - b)
             const median = sorted[Math.floor(sorted.length / 2)] || 0
-            const suspectes = lignesF7.filter(l => {
+            const maxMontant = montants.length > 0 ? Math.max(...montants) : 0
+            const aberrantesAbsolues = lignesF7.filter(l =>
+              Math.max(parseAmountSafe(l.debit, 'f7.debit'), parseAmountSafe(l.credit, 'f7.credit')) > seuilAbsolu)
+            const suspectesRelatives = lignesF7.filter(l => {
               const m = Math.max(parseAmountSafe(l.debit, 'f7.debit'), parseAmountSafe(l.credit, 'f7.credit'))
-              return m > seuilAbsolu || (median > 0 && m > 50 * median)
+              return m <= seuilAbsolu && median > 0 && m > 50 * median
             })
-            if (suspectes.length > 0) {
-              const maxMontant = montants.length > 0 ? Math.max(...montants) : 0
-              const f7Msg = `F7: ${suspectes.length} tx avec montant anormalement élevé (max=${maxMontant}, médiane=${median}). Review humaine requise.`
-              console.error(`[upload] F7 BLOCK: ${f7Msg} (doc ${docId})`)
-              // Marque le doc en erreur_ocr pour review humaine, ne PAS créer le relevé
+
+            // Niveau 1 — plafond absolu : blocage dur (extraction probablement corrompue).
+            if (aberrantesAbsolues.length > 0) {
+              const f7Msg = `F7: ${aberrantesAbsolues.length} tx > ${seuilAbsolu} MUR (max=${maxMontant}). Extraction probablement erronée — import bloqué.`
+              console.error(`[upload] F7 HARD BLOCK: ${f7Msg} (doc ${docId})`)
               if (docId) {
                 await supabase.from('documents').update({
                   statut: 'erreur_ocr',
                   message_erreur: f7Msg,
                 }).eq('id', docId)
               }
-              // Alerte compliance — best-effort, schema aligné sur les autres alertes du fichier
               try {
                 await supabase.from('alertes').insert({
                   societe_id: bankSocieteId,
                   type_alerte: 'montant_suspect_ocr',
                   niveau: 'critique',
-                  titre: 'Montants OCR anormalement élevés',
-                  description: `OCR relevé bancaire: ${suspectes.length} tx > 20M MUR ou > 50× médiane. Doc ${docId}.`,
+                  titre: 'Montants OCR aberrants (> 20M MUR)',
+                  description: `OCR relevé bancaire: ${aberrantesAbsolues.length} tx > 20M MUR. Doc ${docId}.`,
                   statut: 'active',
                 })
               } catch (alertErr) {
@@ -2436,11 +2450,29 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               }
               return NextResponse.json(
                 {
-                  error: `Montants anormalement élevés détectés (${suspectes.length} tx). Review humaine requise avant import.`,
-                  suspectes: suspectes.slice(0, 5).map((l: any) => ({ libelle: l.libelle, debit: l.debit, credit: l.credit })),
+                  error: `Montants aberrants détectés (${aberrantesAbsolues.length} tx > 20M MUR). Extraction à vérifier avant import.`,
+                  suspectes: aberrantesAbsolues.slice(0, 5).map((l: any) => ({ libelle: l.libelle, debit: l.debit, credit: l.credit })),
                 },
                 { status: 400 },
               )
+            }
+
+            // Niveau 2 — gros montant relatif : alerte non bloquante, import poursuivi.
+            if (suspectesRelatives.length > 0) {
+              const f7Msg = `F7: ${suspectesRelatives.length} tx > 50× médiane (max=${maxMontant}, médiane=${median}). Alerte créée, import poursuivi pour review a posteriori.`
+              console.warn(`[upload] F7 SOFT ALERT: ${f7Msg} (doc ${docId})`)
+              try {
+                await supabase.from('alertes').insert({
+                  societe_id: bankSocieteId,
+                  type_alerte: 'montant_suspect_ocr',
+                  niveau: 'important',
+                  titre: 'Montants élevés à vérifier',
+                  description: `OCR relevé bancaire: ${suspectesRelatives.length} tx > 50× la médiane (max=${maxMontant} MUR). Vérifier ces virements. Doc ${docId}.`,
+                  statut: 'active',
+                })
+              } catch (alertErr) {
+                console.error('[upload] alertes insert failed (non-fatal):', alertErr)
+              }
             }
           }
 
