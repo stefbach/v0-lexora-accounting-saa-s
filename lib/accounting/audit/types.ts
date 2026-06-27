@@ -48,11 +48,15 @@ export type AuditSeverity = 'info' | 'warning' | 'critical'
 /** Constat d'un test d'audit automatique (toujours explicable). */
 export type AuditFinding = {
   test: string // identifiant du test, ex "T1_equilibre"
+  /** Clé stable (test + désambiguïsateur) pour persister le statut de traitement. */
+  key: string
   severity: AuditSeverity
   titre: string
   explication: string // langage naturel — exigible par l'auditeur
   /** Références concrètes (comptes, pièces) pour la traçabilité. */
   refs?: Array<{ numero_compte?: string; montant?: number; detail?: string }>
+  /** Statut de traitement persistant : open | resolved | accepted | false_positive. */
+  statut?: string
 }
 
 /** Élément de la PBC list (Prepared By Client) — pièces à fournir à l'auditeur. */
@@ -61,8 +65,10 @@ export type PbcItem = {
   categorie: string // ex "Substance", "Transfer Pricing", "Banque"
   intitule: string
   obligatoire: boolean
-  /** true si Lexora dispose déjà de l'élément (pré-coché). */
+  /** true si la pièce est considérée comme fournie (auto-détecté OU validé manuellement). */
   fourni: boolean
+  /** Statut persistant : todo | fourni | na (manuel ; sinon dérivé de l'auto-détection). */
+  statut?: string
   note?: string
 }
 

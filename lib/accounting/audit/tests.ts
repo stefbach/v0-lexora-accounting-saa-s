@@ -16,7 +16,7 @@ export function runAuditTests(input: {
   seuilMaterialite: number
 }): AuditFinding[] {
   const { balanceN, leadSchedules, stats, seuilMaterialite } = input
-  const findings: AuditFinding[] = []
+  const findings: Array<Omit<AuditFinding, 'key'>> = []
 
   // T1 — Équilibre de la balance (débit = crédit).
   const totalDebit = round2(balanceN.reduce((s, l) => s + l.total_debit, 0))
@@ -107,5 +107,10 @@ export function runAuditTests(input: {
     })
   }
 
-  return findings
+  // Clé stable pour persister le statut de traitement. Les tests répétés par
+  // compte/rubrique (T3, T4) sont désambiguïsés par leur première référence.
+  return findings.map((f) => {
+    const ref = f.refs?.[0]?.numero_compte
+    return { ...f, key: ref ? `${f.test}:${ref}` : f.test }
+  })
 }

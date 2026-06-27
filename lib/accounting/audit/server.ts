@@ -159,5 +159,28 @@ export async function generateAuditFile(
     modules, balanceN, balanceN1, stats, evidence,
   })
 
+  // --- Fusion des statuts persistés (best-effort : tables mig 464). ---
+  try {
+    const [{ data: pbcRows }, { data: findRows }] = await Promise.all([
+      admin.from('audit_pbc_status').select('pbc_code, statut').eq('societe_id', societe_id).eq('exercice', exercice),
+      admin.from('audit_findings_status').select('finding_key, statut').eq('societe_id', societe_id).eq('exercice', exercice),
+    ])
+    const pbcMap = new Map<string, string>((pbcRows || []).map((r: any) => [r.pbc_code, r.statut]))
+    const findMap = new Map<string, string>((findRows || []).map((r: any) => [r.finding_key, r.statut]))
+
+    for (const p of file.pbc) {
+      const manual = pbcMap.get(p.code)
+      p.statut = manual || (p.fourni ? 'fourni' : 'todo')
+      p.fourni = p.statut === 'fourni'
+    }
+    file.resume.pbc_fournis = file.pbc.filter((p) => p.fourni).length
+
+    for (const f of file.findings) {
+      f.statut = findMap.get(f.key) || 'open'
+    }
+  } catch {
+    // Tables absentes (migration non appliquée) → on garde l'auto-détection.
+  }
+
   return { societe: { id: societe.id, nom: societe.nom }, file }
 }

@@ -45,6 +45,18 @@ export async function GET(request: Request) {
 
   try {
     const { societe, file } = await generateAuditFile(admin, societe_id, exercice, new Date().toISOString())
+
+    // Historise le run (best-effort — n'échoue jamais la requête).
+    admin.from('audit_runs').insert({
+      societe_id, exercice, genere_par: user.id,
+      equilibre: file.equilibre,
+      nb_findings_critical: file.resume.nb_findings_critical,
+      nb_findings_warning: file.resume.nb_findings_warning,
+      pbc_fournis: file.resume.pbc_fournis,
+      pbc_total: file.resume.pbc_total,
+      resume: file.resume,
+    }).then(() => {}, () => {})
+
     return NextResponse.json({ societe, ...file })
   } catch (err) {
     if (err instanceof AuditDataError) return NextResponse.json({ error: err.message }, { status: err.status })

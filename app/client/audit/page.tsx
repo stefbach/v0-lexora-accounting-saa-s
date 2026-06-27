@@ -88,6 +88,28 @@ export default function AuditReadinessPage() {
     URL.revokeObjectURL(url)
   }
 
+  async function setStatus(kind: "pbc" | "finding", code: string, statut: string) {
+    if (!societeId || !data) return
+    // Optimiste : maj locale immédiate.
+    setData((prev: any) => {
+      if (!prev) return prev
+      const next = { ...prev }
+      if (kind === "pbc") {
+        next.pbc = prev.pbc.map((p: any) => p.code === code ? { ...p, statut, fourni: statut === "fourni" } : p)
+      } else {
+        next.findings = prev.findings.map((f: any) => f.key === code ? { ...f, statut } : f)
+      }
+      return next
+    })
+    try {
+      await fetch(`/api/comptable/gbc/audit/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ societe_id: societeId, exercice, kind, code, statut }),
+      })
+    } catch { /* best-effort */ }
+  }
+
   async function generateMemo() {
     if (!societeId) return
     setMemoLoading(true)
@@ -232,9 +254,18 @@ export default function AuditReadinessPage() {
                       <div key={i} className="flex items-start gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
                         <Icon className="mt-0.5 h-4 w-4 shrink-0" style={{ color: meta.color }} />
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span className="font-medium" style={{ color: NAVY }}>{f.titre}</span>
                             <Badge variant="outline" style={{ borderColor: meta.color, color: meta.color }}>{t(meta.key, locale)}</Badge>
+                            <select
+                              value={f.statut || "open"}
+                              onChange={(e) => setStatus("finding", f.key, e.target.value)}
+                              className="ml-auto h-7 rounded border border-slate-300 bg-white px-2 text-xs"
+                              aria-label={t("aud.status", locale)}
+                            >
+                              {["open", "resolved", "accepted", "false_positive"].map((s) =>
+                                <option key={s} value={s}>{t(`aud.f_st_${s}`, locale)}</option>)}
+                            </select>
                           </div>
                           <p className="mt-0.5 text-sm text-slate-600">{f.explication}</p>
                         </div>
@@ -287,7 +318,7 @@ export default function AuditReadinessPage() {
                       <TableHead>{t("aud.pbc_category", locale)}</TableHead>
                       <TableHead>{t("aud.pbc_item", locale)}</TableHead>
                       <TableHead className="text-center">{t("aud.pbc_required", locale)}</TableHead>
-                      <TableHead className="text-center">{t("aud.pbc_provided", locale)}</TableHead>
+                      <TableHead className="text-center">{t("aud.status", locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -297,9 +328,15 @@ export default function AuditReadinessPage() {
                         <TableCell>{p.intitule}</TableCell>
                         <TableCell className="text-center">{p.obligatoire ? t("aud.yes", locale) : t("aud.no", locale)}</TableCell>
                         <TableCell className="text-center">
-                          {p.fourni
-                            ? <CheckCircle2 className="mx-auto h-4 w-4" style={{ color: "#16A34A" }} />
-                            : <XCircle className="mx-auto h-4 w-4" style={{ color: "#CBD5E1" }} />}
+                          <select
+                            value={p.statut || (p.fourni ? "fourni" : "todo")}
+                            onChange={(e) => setStatus("pbc", p.code, e.target.value)}
+                            className="h-7 rounded border border-slate-300 bg-white px-2 text-xs"
+                            aria-label={t("aud.status", locale)}
+                          >
+                            {["todo", "fourni", "na"].map((s) =>
+                              <option key={s} value={s}>{t(`aud.pbc_st_${s}`, locale)}</option>)}
+                          </select>
                         </TableCell>
                       </TableRow>
                     ))}
