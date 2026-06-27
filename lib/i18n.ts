@@ -1,4 +1,5 @@
 import { gbcChunk } from './i18n/gbc'
+import { auditReadinessChunk } from './i18n/audit_readiness'
 import { mraChunk } from './i18n/mra'
 import { coreChunk } from './i18n/core'
 import { hrChunk } from './i18n/hr'
@@ -642,6 +643,7 @@ const translations: Record<Locale, Record<string, string>> = {
   fr: {
     ...baseTranslations.fr,
     ...gbcChunk.fr,
+    ...auditReadinessChunk.fr,
     ...mraChunk.fr,
     ...coreChunk.fr,
     ...hrChunk.fr,
@@ -679,6 +681,7 @@ const translations: Record<Locale, Record<string, string>> = {
   en: {
     ...baseTranslations.en,
     ...gbcChunk.en,
+    ...auditReadinessChunk.en,
     ...mraChunk.en,
     ...coreChunk.en,
     ...hrChunk.en,

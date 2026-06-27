@@ -17,7 +17,7 @@ import {
   Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
   CalendarDays, FilePlus2, SlidersHorizontal, Menu, X, FilePen, UserCircle,
   Sparkles, Package, Send, Repeat, MessageCircle, Mail, KeyRound, ArrowRightLeft,
-  TrendingUp, FolderKanban
+  TrendingUp, FolderKanban, ShieldCheck
 } from "lucide-react"
 
 /* ------------------------------------------------------------------ */
@@ -149,6 +149,7 @@ const MENU: MenuSection[] = [
     requiredRegime: ['gbc1', 'authorised_company', 'holding', 'branch_foreign_pe'],
     items: [
       { href: "/client/gbc-dashboard", label: "Dashboard GBC", labelKey: "clay.gbc_dashboard", icon: Globe },
+      { href: "/client/audit", label: "Audit-readiness", labelKey: "clay.gbc_audit", icon: ShieldCheck },
       { href: "/client/gbc-per", label: "PER 80% + FTC", labelKey: "clay.gbc_per_ftc", icon: Banknote },
       { href: "/client/gbc-substance", label: "Substance (CIGA)", labelKey: "clay.gbc_substance", icon: Scale },
       { href: "/client/gbc-transfer-pricing", label: "Transfer Pricing", labelKey: "clay.gbc_transfer_pricing", icon: BarChart3 },
