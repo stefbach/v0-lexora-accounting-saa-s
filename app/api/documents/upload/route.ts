@@ -67,34 +67,11 @@ export async function POST(request: NextRequest) {
     }
     if (file.size > 20 * 1024 * 1024) return NextResponse.json({ error: 'Fichier trop volumineux (max 20MB)' }, { status: 400 })
 
-    // Détection doublons — multi-level check
+    // Détection doublons — voir plus bas (scopée au dossier cible).
+    // IMPORTANT : la dédup est PAR DOSSIER, pas globale. Un même fichier (facture,
+    // relevé) peut légitimement exister dans plusieurs sociétés / comptes de test.
+    // On ne peut donc dédupliquer qu'APRÈS avoir résolu le dossier de destination.
     let existingDoc: { id: string; nom_fichier: string; statut: string } | null = null
-
-    // Level 1: filename + size (cross-user — catches same file uploaded by any user)
-    const { data: nameSizeDup } = await supabase
-      .from('documents')
-      .select('id, nom_fichier, statut')
-      .eq('nom_fichier', file.name)
-      .eq('taille_fichier', file.size)
-      .limit(1)
-      .maybeSingle()
-    if (nameSizeDup) existingDoc = nameSizeDup
-    if (existingDoc && existingDoc.statut === 'traite') {
-      return NextResponse.json({
-        error: `Doublon détecté : "${file.name}" a déjà été uploadé (ID: ${existingDoc.id}). Utilisez "Réanalyser" pour retraiter ce document.`,
-        doublon: true,
-        doc_id: existingDoc.id
-      }, { status: 409 })
-    }
-    // Si le document existe mais en erreur ou en_attente, demander confirmation
-    if (existingDoc && existingDoc.statut !== 'traite') {
-      return NextResponse.json({
-        doublon: true,
-        statut: existingDoc.statut,
-        message: "Un document identique existe déjà avec des erreurs de traitement. Voulez-vous le retraiter ?",
-        existingId: existingDoc.id,
-      }, { status: 409 })
-    }
 
     // Resolve dossier_id — PRIORITY 1: explicit societe_id from FormData
     let resolvedDossierId = dossierId
@@ -176,13 +153,28 @@ export async function POST(request: NextRequest) {
     const fileHash = createHash('sha256').update(fileBuffer).digest('hex')
     const base64 = fileBuffer.toString('base64')
 
-    // Level 2: Hash-based dedup (catches renamed files with identical content)
-    // Wrapped in try/catch in case file_hash column doesn't exist yet
+    // Dédup SCOPÉE AU DOSSIER cible (resolvedDossierId) — pas globale.
+    // Level 1: nom + taille (attrape le même fichier re-déposé dans CE dossier).
+    {
+      const { data: nameSizeDup } = await supabase
+        .from('documents')
+        .select('id, nom_fichier, statut')
+        .eq('dossier_id', resolvedDossierId)
+        .eq('nom_fichier', file.name)
+        .eq('taille_fichier', file.size)
+        .limit(1)
+        .maybeSingle()
+      if (nameSizeDup) existingDoc = nameSizeDup
+    }
+
+    // Level 2: hash SHA-256 (attrape un fichier renommé au contenu identique),
+    // toujours scopé au dossier. Wrapped en try/catch si la colonne file_hash manque.
     if (!existingDoc) {
       try {
         const { data: hashDup, error: hashErr } = await supabase
           .from('documents')
           .select('id, nom_fichier, statut')
+          .eq('dossier_id', resolvedDossierId)
           .eq('file_hash', fileHash)
           .limit(1)
           .maybeSingle()
