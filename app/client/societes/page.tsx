@@ -139,8 +139,8 @@ export default function SocietesPage() {
 
               {/* Phase K — Régime fiscal/réglementaire */}
               <div className="pt-3 mt-3 border-t border-slate-200">
-                <Label className="text-sm font-semibold">Type de société (régime)</Label>
-                <p className="text-xs text-slate-500 mb-2">Détermine les modules IFRS et obligations FSC activés.</p>
+                <Label className="text-sm font-semibold">{t('scp.soc_regime_label', locale)}</Label>
+                <p className="text-xs text-slate-500 mb-2">{t('scp.soc_regime_hint', locale)}</p>
                 <Select
                   value={form.regime}
                   onValueChange={v => setForm(f => ({
@@ -153,32 +153,32 @@ export default function SocietesPage() {
                   <SelectTrigger><SelectValue/></SelectTrigger>
                   <SelectContent>
                     {REGIME_OPTIONS.map(o => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      <SelectItem key={o.value} value={o.value}>{t(`scp.soc_regime_${o.value}_label`, locale)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {form.regime && REGIME_OPTIONS.find(o => o.value === form.regime) && (
-                  <p className="text-xs text-slate-500 mt-1">{REGIME_OPTIONS.find(o => o.value === form.regime)?.description}</p>
+                  <p className="text-xs text-slate-500 mt-1">{t(`scp.soc_regime_${form.regime}_desc`, locale)}</p>
                 )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Devise fonctionnelle (IAS 21)</Label>
+                  <Label>{t('scp.soc_functional_currency', locale)}</Label>
                   <Select value={form.devise_fonctionnelle} onValueChange={v => setForm(f => ({...f, devise_fonctionnelle: v}))}>
                     <SelectTrigger><SelectValue/></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="MUR">MUR — Roupies Mauriciennes</SelectItem>
-                      <SelectItem value="USD">USD — Dollar US</SelectItem>
-                      <SelectItem value="EUR">EUR — Euro</SelectItem>
-                      <SelectItem value="GBP">GBP — Livre Sterling</SelectItem>
-                      <SelectItem value="ZAR">ZAR — Rand Sud-Africain</SelectItem>
-                      <SelectItem value="INR">INR — Roupie Indienne</SelectItem>
+                      <SelectItem value="MUR">{t('scp.soc_cur_mur', locale)}</SelectItem>
+                      <SelectItem value="USD">{t('scp.soc_cur_usd', locale)}</SelectItem>
+                      <SelectItem value="EUR">{t('scp.soc_cur_eur', locale)}</SelectItem>
+                      <SelectItem value="GBP">{t('scp.soc_cur_gbp', locale)}</SelectItem>
+                      <SelectItem value="ZAR">{t('scp.soc_cur_zar', locale)}</SelectItem>
+                      <SelectItem value="INR">{t('scp.soc_cur_inr', locale)}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label>Pays résidence fiscale</Label>
+                  <Label>{t('scp.soc_tax_residency_country', locale)}</Label>
                   <Input value={form.tax_residency_country} onChange={F("tax_residency_country")} placeholder="MU"/>
                 </div>
               </div>
@@ -186,13 +186,13 @@ export default function SocietesPage() {
               {/* Champs FSC (visibles uniquement si GBC1 ou Authorised Company) */}
               {(form.regime === 'gbc1' || form.regime === 'authorised_company') && (
                 <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200">
-                  <div className="col-span-2 text-xs font-semibold text-slate-700">Licence FSC</div>
+                  <div className="col-span-2 text-xs font-semibold text-slate-700">{t('scp.soc_fsc_license', locale)}</div>
                   <div>
-                    <Label>N° licence FSC</Label>
+                    <Label>{t('scp.soc_fsc_license_number', locale)}</Label>
                     <Input value={form.fsc_license_number} onChange={F("fsc_license_number")} placeholder="C12345678"/>
                   </div>
                   <div>
-                    <Label>Type</Label>
+                    <Label>{t('scp.soc_type', locale)}</Label>
                     <Input value={form.fsc_license_type} onChange={F("fsc_license_type")} placeholder="GBL / Authorised Company"/>
                   </div>
                 </div>
