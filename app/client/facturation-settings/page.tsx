@@ -341,13 +341,13 @@ export default function FacturationSettingsPage() {
       const res = await fetch('/api/client/facture-template', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok || !data.saved) {
-        throw new Error(data.error || 'Échec de l\'analyse')
+        throw new Error(data.error || t('inv.fs.analysis_failed', locale))
       }
       setAiUploadFile(null)
       setAiUploadConsignes("")
       await loadAiTemplates()
     } catch (e: unknown) {
-      setAiUploadError(e instanceof Error ? e.message : 'Erreur inconnue')
+      setAiUploadError(e instanceof Error ? e.message : t('inv.fs.unknown_error', locale))
     } finally {
       setAiUploading(false)
     }
@@ -355,7 +355,7 @@ export default function FacturationSettingsPage() {
 
   const handleAiTemplateDelete = useCallback(async (id: string) => {
     if (!societeId) return
-    if (!confirm('Supprimer ce template ?')) return
+    if (!confirm(t('inv.fs.delete_template_confirm', locale))) return
     try {
       const res = await fetch('/api/client/facture-template', {
         method: 'DELETE',
@@ -371,9 +371,9 @@ export default function FacturationSettingsPage() {
       // On affiche dans la même bande d'erreur que l'upload pour rester
       // discret — l'utilisateur peut réessayer ou recharger la page.
       const data = await res.json().catch(() => ({}))
-      setAiUploadError(data?.error || 'Suppression échouée. Réessaie.')
+      setAiUploadError(data?.error || t('inv.fs.delete_failed', locale))
     } catch (e: unknown) {
-      setAiUploadError(e instanceof Error ? e.message : 'Erreur réseau pendant la suppression.')
+      setAiUploadError(e instanceof Error ? e.message : t('inv.fs.delete_network_err', locale))
     }
   }, [societeId, selectedTemplate, loadAiTemplates])
 
@@ -439,7 +439,7 @@ export default function FacturationSettingsPage() {
         // on remonte une erreur explicite plutôt que de prétendre "saved".
         const savedNom = data?.societe?.nom ?? data?.nom
         if (settings.nom && savedNom !== undefined && String(savedNom).trim() !== String(settings.nom).trim()) {
-          throw new Error(`Le nom n'a pas été enregistré côté serveur (attendu : « ${settings.nom} », reçu : « ${savedNom || '∅'} »). Vérifie qu'une autre session ne réécrit pas la société, ou recharge la page.`)
+          throw new Error(t('inv.fs.name_not_saved', locale).replace('{expected}', String(settings.nom)).replace('{received}', String(savedNom || '∅')))
         }
         await refresh()
         setSaved(true)
@@ -533,14 +533,14 @@ export default function FacturationSettingsPage() {
   return (
     <ClientPageShell
       breadcrumbs={[{ label: t('inv.fs.client_area', locale), href: "/client" }, { label: t('inv.fs.title', locale) }]}
-      kicker="Facturation"
+      kicker={t('inv.fs.kicker', locale)}
       title={t('inv.fs.title', locale)}
       subtitle={t('inv.fs.subtitle', locale)}
       actions={
         <div className="flex items-center gap-3">
           {persistError && (
             <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 max-w-2xl">
-              <strong>Sauvegarde refusée par le serveur :</strong> {persistError}
+              <strong>{t('inv.fs.save_refused', locale)}</strong> {persistError}
             </div>
           )}
           <Button onClick={saveAll} disabled={persisting} className="bg-[#0B0F2E] hover:bg-[#2a3d6b]">
@@ -882,8 +882,8 @@ export default function FacturationSettingsPage() {
                     // source_counts depuis le PR fix-conditions-paiement.
                     const counts = data.source_counts || {}
                     const detail = [
-                      `Annuaire OCR : ${counts.tiers_annuaire ?? 0} client(s) trouvé(s)`,
-                      `Historique factures : ${counts.factures_historique ?? 0} nom(s) distinct(s)`,
+                      t('inv.fs.import_detail_ocr', locale).replace('{n}', String(counts.tiers_annuaire ?? 0)),
+                      t('inv.fs.import_detail_history', locale).replace('{n}', String(counts.factures_historique ?? 0)),
                     ].join("\n")
                     if (data.inserted > 0) {
                       alert(`${t('inv.fs.import_done', locale).replace('{n}', String(data.inserted)).replace('{c}', String(data.candidats))}\n\n${detail}`)
@@ -1087,25 +1087,22 @@ export default function FacturationSettingsPage() {
             <CardHeader>
               <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-[#D4AF37]" />
-                Créer un modèle à partir d'une facture existante
+                {t('inv.fs.create_tpl_from_invoice', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-xs text-gray-600">
-                Uploade une ancienne facture (PDF, PNG, JPG, WebP, max 20 MB) et ajoute tes consignes pour que l'IA extraie un modèle réutilisable.
-              </p>
+              <p className="text-xs text-gray-600">{t('inv.fs.upload_tpl_help', locale)}</p>
               {!settings.logo_url && (
                 <div className="text-xs text-[#A88925] bg-[#D4AF37]/10 px-3 py-2 rounded flex items-start gap-2">
                   <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                   <span>
-                    Aucun logo société uploadé. Pour que le modèle reprenne ton logo en en-tête,
-                    ajoute-le d'abord dans l'onglet <span className="font-semibold">Identité</span>.
+                    {t('inv.fs.no_logo_warning', locale)} <span className="font-semibold">{t('inv.fs.identity_tab', locale)}</span>.
                   </span>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">Fichier facture</Label>
+                  <Label className="text-xs">{t('inv.fs.invoice_file', locale)}</Label>
                   <div className="mt-1 flex items-center gap-2">
                     <Input
                       type="file"
@@ -1123,11 +1120,11 @@ export default function FacturationSettingsPage() {
                   )}
                 </div>
                 <div>
-                  <Label className="text-xs">Consignes pour l'IA (optionnel)</Label>
+                  <Label className="text-xs">{t('inv.fs.ai_consignes', locale)}</Label>
                   <Textarea
                     value={aiUploadConsignes}
                     onChange={e => setAiUploadConsignes(e.target.value)}
-                    placeholder={`Ex: "Garde le header bleu marine", "Mentionne notre licence FSC", "Conditions: paiement à 30 jours fin de mois"...`}
+                    placeholder={t('inv.fs.ai_consignes_ph', locale)}
                     rows={3}
                     disabled={aiUploading}
                     className="mt-1 text-sm"
@@ -1146,13 +1143,13 @@ export default function FacturationSettingsPage() {
                   className="bg-[#0B0F2E] hover:bg-[#0B0F2E]/90 text-white"
                 >
                   {aiUploading ? (
-                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Analyse en cours…</>
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t('inv.fs.analyzing', locale)}</>
                   ) : (
-                    <><Upload className="w-4 h-4 mr-2" />Analyser et créer le modèle</>
+                    <><Upload className="w-4 h-4 mr-2" />{t('inv.fs.analyze_create_tpl', locale)}</>
                   )}
                 </Button>
                 {aiUploading && (
-                  <span className="text-xs text-gray-500">L'IA met 10 à 30 secondes pour analyser la facture.</span>
+                  <span className="text-xs text-gray-500">{t('inv.fs.ai_duration', locale)}</span>
                 )}
               </div>
             </CardContent>
@@ -1163,7 +1160,7 @@ export default function FacturationSettingsPage() {
             <div className="space-y-2">
               <h3 className="text-sm font-semibold text-[#0B0F2E] flex items-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-[#D4AF37]" />
-                Mes modèles IA
+                {t('inv.fs.my_ai_templates', locale)}
                 {aiTemplatesLoading && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
               </h3>
               <div className="grid grid-cols-3 gap-4">
@@ -1185,7 +1182,7 @@ export default function FacturationSettingsPage() {
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); handleAiTemplateDelete(tpl.id) }}
-                          title="Supprimer ce modèle"
+                          title={t('inv.fs.delete_template_title', locale)}
                           className="absolute top-2 right-2 p-1 rounded hover:bg-[#9F1239]/10 text-gray-400 hover:text-[#9F1239] transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -1200,7 +1197,7 @@ export default function FacturationSettingsPage() {
                               <div className="w-10 h-10 rounded" style={{ backgroundColor: primaire }} />
                             )}
                             <div className={tpl.logo_position === 'top-center' ? 'text-center' : 'text-right'}>
-                              <div className="text-[10px] font-bold" style={{ color: primaire }}>FACTURE</div>
+                              <div className="text-[10px] font-bold" style={{ color: primaire }}>{t('inv.fs.invoice_uc_preview', locale)}</div>
                               <div className="text-[8px] text-gray-400">{tpl.format_numero || 'INV-001'}</div>
                             </div>
                           </div>
@@ -1244,7 +1241,7 @@ export default function FacturationSettingsPage() {
           )}
 
           {/* ── Templates standards (hardcoded) ── */}
-          <h3 className="text-sm font-semibold text-[#0B0F2E] pt-2">Modèles standards</h3>
+          <h3 className="text-sm font-semibold text-[#0B0F2E] pt-2">{t('inv.fs.standard_templates', locale)}</h3>
           <div className="grid grid-cols-3 gap-4">
             {getTemplates(locale).map(tpl => (
               <Card key={tpl.id} className={`cursor-pointer transition-all ${selectedTemplate === tpl.id ? "ring-2 ring-[#D4AF37] shadow-lg" : "hover:shadow-md"}`}
