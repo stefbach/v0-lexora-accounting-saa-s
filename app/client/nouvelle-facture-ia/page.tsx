@@ -29,6 +29,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale } from "@/lib/i18n"
 
 interface ChatMessage {
   role: "user" | "assistant"
@@ -79,6 +80,7 @@ function fmtMontant(n: number, dev = "MUR") {
 }
 
 export default function NouvelleFactureIAPage() {
+  const locale = getLocale()
   const router = useRouter()
   const { societeId, societe } = useSocieteActive()
   // Template IA actif lu depuis la société DB (source de vérité par
@@ -101,23 +103,25 @@ export default function NouvelleFactureIAPage() {
     try {
       const r = await fetch(`/api/client/factures-ia/contexte?societe_id=${societeId}`)
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || "Erreur contexte")
+      if (!r.ok) throw new Error(j.error || t('scp.nfia_ctx_error', locale))
       setContexte(j)
       // Message d'accueil construit localement (économise un round trip Claude)
       const nbContacts = j.contacts?.length || 0
       const nbCat = j.catalogue?.length || 0
       const nbFac = j.factures_recentes?.length || 0
       const recap: string[] = []
-      if (nbContacts > 0) recap.push(`${nbContacts} client${nbContacts > 1 ? 's' : ''}`)
-      if (nbCat > 0) recap.push(`${nbCat} article${nbCat > 1 ? 's' : ''} au catalogue`)
-      if (nbFac > 0) recap.push(`${nbFac} facture${nbFac > 1 ? 's' : ''} récente${nbFac > 1 ? 's' : ''}`)
-      const ctxRecap = recap.length > 0 ? `J'ai accès à : ${recap.join(', ')}.\n\n` : ''
+      if (nbContacts > 0) recap.push(`${nbContacts} ${t(nbContacts > 1 ? 'scp.nfia_clients_many' : 'scp.nfia_clients_one', locale)}`)
+      if (nbCat > 0) recap.push(`${nbCat} ${t(nbCat > 1 ? 'scp.nfia_articles_many' : 'scp.nfia_articles_one', locale)}`)
+      if (nbFac > 0) recap.push(`${nbFac} ${t(nbFac > 1 ? 'scp.nfia_factures_many' : 'scp.nfia_factures_one', locale)}`)
+      const ctxRecap = recap.length > 0 ? `${t('scp.nfia_i_have_access', locale)} ${recap.join(', ')}.\n\n` : ''
       setMessages([{
         role: "assistant",
-        content: `Bonjour ! Je suis **Lexora Factures IA**. Je vais t'aider à créer une facture (ou devis / avoir / note de débit) pour **${j.societe?.nom || '?'}** en quelques échanges.\n\n${ctxRecap}Pour démarrer : pour quel client veux-tu facturer, et que faut-il facturer ?\n\n(Tu peux dire par exemple "Une facture pour Jean Dupont, comme la dernière fois", ou "Devis pour Acme Ltd : conseil stratégique 5 jours à 25000 MUR".)`,
+        content: t('scp.nfia_welcome', locale)
+          .replace('{company}', j.societe?.nom || '?')
+          .replace('{ctxRecap}', ctxRecap),
       }])
     } catch (e: any) {
-      setErrorMsg(e?.message || "Erreur chargement contexte")
+      setErrorMsg(e?.message || t('scp.nfia_ctx_load_error', locale))
     } finally {
       setLoadingContexte(false)
     }
@@ -150,11 +154,11 @@ export default function NouvelleFactureIAPage() {
         }),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || "Erreur IA")
+      if (!r.ok) throw new Error(j.error || t('scp.nfia_ai_error', locale))
       setMessages(prev => [...prev, { role: "assistant", content: j.message }])
       setAnalyse(j.analyse || null)
     } catch (e: any) {
-      setErrorMsg(e?.message || "Erreur IA")
+      setErrorMsg(e?.message || t('scp.nfia_ai_error', locale))
       // On retire le message user pour permettre re-essai propre
       setMessages(prev => prev.slice(0, -1))
       setInput(userMsg.content)
@@ -177,11 +181,11 @@ export default function NouvelleFactureIAPage() {
         }),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || "Erreur génération")
+      if (!r.ok) throw new Error(j.error || t('scp.nfia_gen_error', locale))
       // Redirige vers l'aperçu
       router.push(j.preview_url || "/client/factures")
     } catch (e: any) {
-      setErrorMsg(e?.message || "Erreur génération")
+      setErrorMsg(e?.message || t('scp.nfia_gen_error', locale))
     } finally {
       setGenerating(false)
     }
@@ -199,18 +203,18 @@ export default function NouvelleFactureIAPage() {
           <div className="flex items-center gap-3">
             <Link href="/client/nouvelle-facture">
               <Button variant="ghost" size="sm">
-                <ArrowLeft className="h-4 w-4 mr-1" /> Mode classique
+                <ArrowLeft className="h-4 w-4 mr-1" /> {t('scp.nfia_classic_mode', locale)}
               </Button>
             </Link>
             <div>
               <h1 className="text-xl font-bold flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-amber-500" />
-                Nouvelle facture — Assistant IA
+                {t('scp.nfia_title', locale)}
               </h1>
               {contexte?.societe && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
                   <Building2 className="h-3 w-3" />
-                  Pour <span className="font-medium">{contexte.societe.nom}</span>
+                  {t('scp.nfia_for', locale)} <span className="font-medium">{contexte.societe.nom}</span>
                   {contexte.societe.brn && <span className="text-muted-foreground">· BRN {contexte.societe.brn}</span>}
                   {contexte.societe.vat_number && <span className="text-muted-foreground">· VAT {contexte.societe.vat_number}</span>}
                 </p>
@@ -232,7 +236,7 @@ export default function NouvelleFactureIAPage() {
             <CardHeader className="border-b pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-amber-500" />
-                Conversation
+                {t('scp.nfia_conversation', locale)}
                 {loadingContexte && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
               </CardTitle>
             </CardHeader>
@@ -252,7 +256,7 @@ export default function NouvelleFactureIAPage() {
                 {sending && (
                   <div className="flex justify-start">
                     <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-gray-500 flex items-center gap-2">
-                      <Loader2 className="h-3 w-3 animate-spin" /> L'IA réfléchit…
+                      <Loader2 className="h-3 w-3 animate-spin" /> {t('scp.nfia_thinking', locale)}
                     </div>
                   </div>
                 )}
@@ -267,7 +271,7 @@ export default function NouvelleFactureIAPage() {
                       sendMessage()
                     }
                   }}
-                  placeholder="Écris ton message… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)"
+                  placeholder={t('scp.nfia_input_ph', locale)}
                   className="resize-none flex-1 min-h-[48px] max-h-[120px]"
                   disabled={sending || loadingContexte}
                 />
@@ -283,51 +287,51 @@ export default function NouvelleFactureIAPage() {
             <CardHeader className="border-b pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Receipt className="h-4 w-4" />
-                Aperçu
+                {t('scp.nfia_preview', locale)}
                 {analyse?.pret_a_generer && (
                   <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 text-[10px] ml-auto">
-                    ✓ Prêt
+                    ✓ {t('scp.nfia_ready', locale)}
                   </Badge>
                 )}
               </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 overflow-y-auto p-3 space-y-3 text-sm">
               {!analyse && (
-                <p className="text-muted-foreground italic">Continue la conversation pour voir l'aperçu se construire ici.</p>
+                <p className="text-muted-foreground italic">{t('scp.nfia_preview_empty', locale)}</p>
               )}
               {analyse && (
                 <>
-                  <Section title="Type">
+                  <Section title={t('scp.nfia_type', locale)}>
                     <Badge variant="outline" className="capitalize">
                       {params.type_document?.replace('_', ' ') || 'facture'}
                     </Badge>
                   </Section>
-                  <Section title="Client">
+                  <Section title={t('scp.nfia_client', locale)}>
                     {params.tiers || <Empty />}
                     {params.contact_id && (
-                      <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] ml-2">contact lié</Badge>
+                      <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] ml-2">{t('scp.nfia_linked_contact', locale)}</Badge>
                     )}
                   </Section>
-                  <Section title="Dates">
-                    Émission : {params.date_facture || <Empty />}<br />
-                    Échéance : {params.date_echeance || <Empty />}
+                  <Section title={t('scp.nfia_dates', locale)}>
+                    {t('scp.nfia_issue', locale)} {params.date_facture || <Empty />}<br />
+                    {t('scp.nfia_due', locale)} {params.date_echeance || <Empty />}
                   </Section>
                   {params.devise && (
-                    <Section title="Devise">
+                    <Section title={t('scp.nfia_currency', locale)}>
                       {params.devise}
                       {params.taux_change && params.devise !== "MUR" && (
-                        <span className="text-muted-foreground ml-2">(taux {params.taux_change})</span>
+                        <span className="text-muted-foreground ml-2">({t('scp.nfia_rate', locale)} {params.taux_change})</span>
                       )}
                     </Section>
                   )}
-                  <Section title={`Lignes (${params.lignes?.length || 0})`}>
+                  <Section title={`${t('scp.nfia_lines', locale)} (${params.lignes?.length || 0})`}>
                     {!params.lignes || params.lignes.length === 0 ? <Empty /> : (
                       <ul className="space-y-1 text-xs">
                         {params.lignes.map((l, i) => (
                           <li key={i} className="border-l-2 border-amber-300 pl-2">
                             <div className="font-medium">{l.description}</div>
                             <div className="text-muted-foreground">
-                              {l.quantite} {l.unite || ''} × {fmtMontant(l.prix_unitaire, params.devise || 'MUR')} (TVA {l.taux_tva}%)
+                              {l.quantite} {l.unite || ''} × {fmtMontant(l.prix_unitaire, params.devise || 'MUR')} ({t('scp.nfia_vat', locale)} {l.taux_tva}%)
                             </div>
                           </li>
                         ))}
@@ -335,31 +339,31 @@ export default function NouvelleFactureIAPage() {
                     )}
                   </Section>
                   {(params.lignes?.length || 0) > 0 && (
-                    <Section title="Totaux">
+                    <Section title={t('scp.nfia_totals', locale)}>
                       <div className="text-xs space-y-0.5">
-                        <div>HT : {fmtMontant(totalLignesHT, params.devise || 'MUR')}</div>
-                        <div>TVA : {fmtMontant(totalLignesTVA, params.devise || 'MUR')}</div>
+                        <div>{t('scp.nfia_ht', locale)} {fmtMontant(totalLignesHT, params.devise || 'MUR')}</div>
+                        <div>{t('scp.nfia_tva', locale)} {fmtMontant(totalLignesTVA, params.devise || 'MUR')}</div>
                         {(params.remise_pct || params.remise_montant) && (
                           <div className="text-amber-700">
-                            Remise : {params.remise_pct ? `${params.remise_pct}%` : fmtMontant(params.remise_montant || 0, params.devise || 'MUR')}
+                            {t('scp.nfia_discount', locale)} {params.remise_pct ? `${params.remise_pct}%` : fmtMontant(params.remise_montant || 0, params.devise || 'MUR')}
                           </div>
                         )}
                         <div className="font-semibold text-base pt-1 border-t">
-                          TTC : {fmtMontant(totalTTC, params.devise || 'MUR')}
+                          {t('scp.nfia_ttc', locale)} {fmtMontant(totalTTC, params.devise || 'MUR')}
                         </div>
                       </div>
                     </Section>
                   )}
                   {params.recurrent && (
-                    <Section title="Récurrence">
+                    <Section title={t('scp.nfia_recurrence', locale)}>
                       <Badge className="bg-purple-50 text-purple-700 border-purple-200 text-[10px]">
-                        {params.recurrence_periodicite || 'mensuelle'}
+                        {params.recurrence_periodicite || t('scp.nfia_monthly', locale)}
                       </Badge>
                     </Section>
                   )}
                   {analyse.informations_manquantes && analyse.informations_manquantes.length > 0 && (
                     <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs">
-                      <div className="font-semibold mb-1">Encore besoin de :</div>
+                      <div className="font-semibold mb-1">{t('scp.nfia_still_need', locale)}</div>
                       <ul className="list-disc list-inside space-y-0.5">
                         {analyse.informations_manquantes.map((m, i) => <li key={i}>{m}</li>)}
                       </ul>
@@ -375,14 +379,14 @@ export default function NouvelleFactureIAPage() {
                 className="w-full bg-emerald-600 hover:bg-emerald-700"
               >
                 {generating ? (
-                  <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Création…</>
+                  <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> {t('scp.nfia_creating', locale)}</>
                 ) : (
-                  <><CheckCircle2 className="h-4 w-4 mr-1.5" /> Créer la {params.type_document || 'facture'}</>
+                  <><CheckCircle2 className="h-4 w-4 mr-1.5" /> {t('scp.nfia_create', locale)} {params.type_document || 'facture'}</>
                 )}
               </Button>
               {!analyse?.pret_a_generer && analyse && (
                 <p className="text-[11px] text-muted-foreground text-center mt-1">
-                  Continue la conversation pour compléter les infos
+                  {t('scp.nfia_complete_hint', locale)}
                 </p>
               )}
             </div>
@@ -403,5 +407,5 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Empty() {
-  return <span className="text-muted-foreground italic text-xs">non défini</span>
+  return <span className="text-muted-foreground italic text-xs">{t('scp.nfia_undefined', getLocale())}</span>
 }
