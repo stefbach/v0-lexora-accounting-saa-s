@@ -175,7 +175,7 @@ export default function MonEspacePersonnel() {
                 <span className="text-xs font-semibold text-gray-700">Pointage du jour</span>
               </div>
               <div className="text-xs text-gray-600 space-y-0.5">
-                <p>Entrée : <b className="text-gray-900">{fmtTime(pointage?.heure_entree)}</b></p>
+                <p>{t('srh.espace.entry', locale)} <b className="text-gray-900">{fmtTime(pointage?.heure_entree)}</b></p>
                 <p>Sortie : <b className="text-gray-900">{fmtTime(pointage?.heure_sortie)}</b></p>
                 {pointage?.heure_pause_debut && (
                   <p className="text-[10px] text-gray-500">Pause {fmtTime(pointage.heure_pause_debut)}–{fmtTime(pointage.heure_pause_fin)}</p>
@@ -189,7 +189,7 @@ export default function MonEspacePersonnel() {
             <div className="border rounded-lg p-3 hover:border-blue-400 hover:shadow-sm transition-all h-full">
               <div className="flex items-center gap-2 mb-2">
                 <Calendar className="h-4 w-4 text-blue-600" />
-                <span className="text-xs font-semibold text-gray-700">Mes congés</span>
+                <span className="text-xs font-semibold text-gray-700">{t('srh.espace.my_leave', locale)}</span>
               </div>
               <div className="text-xs text-gray-600 space-y-0.5">
                 <p>AL restants : <b className="text-gray-900">{alBalance ? `${alBalance.solde_restant}/${alBalance.solde_total}` : '—'}</b></p>
@@ -212,7 +212,7 @@ export default function MonEspacePersonnel() {
                   <p className="text-[11px]">{fmtTime(shiftToday.heure_debut)} → {fmtTime(shiftToday.heure_fin)}</p>
                 </div>
               ) : (
-                <div className="text-xs text-gray-500 italic">Pas de shift planifié</div>
+                <div className="text-xs text-gray-500 italic">{t('srh.espace.no_shift', locale)}</div>
               )}
             </div>
           </Link>
@@ -226,7 +226,7 @@ export default function MonEspacePersonnel() {
               </div>
               {lastBulletin ? (
                 <div className="text-xs text-gray-600">
-                  <p>Période <b className="text-gray-900">{fmtPeriode(lastBulletin.periode)}</b></p>
+                  <p>{t('srh.espace.period', locale)} <b className="text-gray-900">{fmtPeriode(lastBulletin.periode)}</b></p>
                   <p>Net <b className="text-gray-900">{fmtMontant(lastBulletin.salaire_net)} MUR</b></p>
                   {lastBulletin.statut && (
                     <Badge variant="outline" className="text-[10px] mt-1">{lastBulletin.statut}</Badge>
