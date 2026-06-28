@@ -20,6 +20,16 @@ export const sweepComptableChunk = {
     'scp.firstname': 'Prénom',
     // InterSocieteRow
     'scp.delete_intercompany_mirror': 'Supprimer le miroir inter-société ?',
+    // cloture
+    'scp.cloture_snapshot_failed': 'Échec snapshot',
+    'scp.cloture_unknown_error': 'Erreur inconnue',
+    'scp.cloture_snapshot_regenerated': 'Snapshot régénéré',
+    'scp.cloture_bilan_frozen_on': 'Bilan figé le',
+    'scp.cloture_exercice': 'Exercice',
+    'scp.cloture_network_error': 'Erreur réseau',
+    'scp.cloture_fiscal_years': 'Exercices fiscaux',
+    'scp.cloture_no_fiscal_years': 'Aucun exercice fiscal trouvé pour cette société.',
+    'scp.cloture_regen_aria': 'Régénérer le snapshot du bilan pour',
   },
   en: {
     'scp.agent_title': 'Accounting Agent',
@@ -35,5 +45,14 @@ export const sweepComptableChunk = {
     'scp.no_data_period': 'No data found for this period.',
     'scp.firstname': 'First name',
     'scp.delete_intercompany_mirror': 'Delete the intercompany mirror?',
+    'scp.cloture_snapshot_failed': 'Snapshot failed',
+    'scp.cloture_unknown_error': 'Unknown error',
+    'scp.cloture_snapshot_regenerated': 'Snapshot regenerated',
+    'scp.cloture_bilan_frozen_on': 'Balance sheet frozen on',
+    'scp.cloture_exercice': 'Financial year',
+    'scp.cloture_network_error': 'Network error',
+    'scp.cloture_fiscal_years': 'Fiscal years',
+    'scp.cloture_no_fiscal_years': 'No fiscal year found for this company.',
+    'scp.cloture_regen_aria': 'Regenerate the balance sheet snapshot for',
   },
 }

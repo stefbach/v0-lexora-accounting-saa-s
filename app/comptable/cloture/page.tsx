@@ -84,13 +84,13 @@ export default function CloturePage() {
       )
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        toast.error("Échec snapshot", { description: data?.error || "Erreur inconnue" })
+        toast.error(t('scp.cloture_snapshot_failed', locale), { description: data?.error || t('scp.cloture_unknown_error', locale) })
         return
       }
-      toast.success("Snapshot régénéré", {
+      toast.success(t('scp.cloture_snapshot_regenerated', locale), {
         description: data?.generated_at
-          ? `Bilan figé le ${new Date(data.generated_at).toLocaleString("fr-FR")}`
-          : `Exercice ${annee}`,
+          ? `${t('scp.cloture_bilan_frozen_on', locale)} ${new Date(data.generated_at).toLocaleString(locale === 'en' ? 'en-GB' : 'fr-FR')}`
+          : `${t('scp.cloture_exercice', locale)} ${annee}`,
       })
       // Refresh la liste
       const r2 = await fetch(`/api/comptable/exercices?societe_id=${societeId}`)
@@ -99,7 +99,7 @@ export default function CloturePage() {
         setExercices(Array.isArray(d2.exercices) ? d2.exercices : [])
       }
     } catch (e: any) {
-      toast.error("Échec snapshot", { description: e?.message || "Erreur réseau" })
+      toast.error(t('scp.cloture_snapshot_failed', locale), { description: e?.message || t('scp.cloture_network_error', locale) })
     } finally {
       setRegenLoading(null)
     }
@@ -158,7 +158,7 @@ export default function CloturePage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Lock className="w-4 h-4" /> Exercices fiscaux
+                <Lock className="w-4 h-4" /> {t('scp.cloture_fiscal_years', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -168,10 +168,10 @@ export default function CloturePage() {
                 </div>
               ) : exercices.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-3">
-                  Aucun exercice fiscal trouvé pour cette société.
+                  {t('scp.cloture_no_fiscal_years', locale)}
                 </p>
               ) : (
-                <ul className="divide-y" role="list" aria-label="Exercices fiscaux">
+                <ul className="divide-y" role="list" aria-label={t('scp.cloture_fiscal_years', locale)}>
                   {exercices.map((ex) => (
                     <li
                       key={ex.id || ex.annee}
@@ -193,7 +193,7 @@ export default function CloturePage() {
                           variant="outline"
                           onClick={() => regenerateSnapshot(ex.annee)}
                           disabled={regenLoading === ex.annee}
-                          aria-label={`Régénérer le snapshot du bilan pour ${ex.annee}`}
+                          aria-label={`${t('scp.cloture_regen_aria', locale)} ${ex.annee}`}
                           className="gap-1"
                         >
                           {regenLoading === ex.annee ? (
