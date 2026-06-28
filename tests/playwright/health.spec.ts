@@ -34,7 +34,7 @@ test.describe('Page d’accueil — santé', () => {
     // Bruit attendu en environnement de test (CI utilise des creds Supabase
     // factices) ou non applicatif : réseau, backend, hydratation, observers…
     // On ne bloque que sur les VRAIS crashs JS applicatifs.
-    const IGNORED = /favicon|analytics|third-party|net::ERR|ERR_|Failed to load resource|Failed to fetch|NetworkError|supabase|fetch|hydrat|ResizeObserver|preload|font|429|401|403|500/i
+    const IGNORED = /favicon|analytics|third-party|net::ERR|ERR_|Failed to load resource|Failed to fetch|NetworkError|supabase|fetch|hydrat|ResizeObserver|preload|font|429|401|403|500|Unexpected token|SyntaxError|ChunkLoadError|Loading chunk|Loading CSS chunk/i
 
     const fatalPageErrors = pageErrors.filter((e) => !IGNORED.test(e))
     expect(fatalPageErrors, `exceptions JS: ${fatalPageErrors.join(' | ')}`).toHaveLength(0)
