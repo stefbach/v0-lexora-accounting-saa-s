@@ -53,7 +53,7 @@ export default function GbcPerPage() {
       a.click()
       URL.revokeObjectURL(url)
     } catch (e: any) {
-      setError(e?.message || 'Erreur export PDF')
+      setError(e?.message || t('scp.export_pdf_error', locale))
     } finally {
       setExporting(false)
     }
@@ -67,7 +67,7 @@ export default function GbcPerPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
       setData(json)
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setLoading(false) }
+    } catch (e: any) { setError(e?.message || t('cui.error_generic', locale)) } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [societeId, exercice])
 
@@ -90,7 +90,7 @@ export default function GbcPerPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
       setOpen(false); setForm(EMPTY_FTC); load()
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setSaving(false) }
+    } catch (e: any) { setError(e?.message || t('cui.error_generic', locale)) } finally { setSaving(false) }
   }
 
   if (!societeId) return <div className="p-8"><div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{t('gbc.common.no_societe', locale)}</div></div>
@@ -110,7 +110,7 @@ export default function GbcPerPage() {
           <Button onClick={load} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />{t('gbc.common.refresh', locale)}</Button>
           <Button onClick={exportPDF} variant="outline" disabled={exporting}>
             {exporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileDown className="h-4 w-4 mr-2" />}
-            Exporter PDF
+            {t('scp.export_pdf', locale)}
           </Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild><Button className="bg-indigo-600 hover:bg-indigo-700 text-white"><Plus className="h-4 w-4 mr-2" />{t('gbc.per.ftc_btn', locale)}</Button></DialogTrigger>

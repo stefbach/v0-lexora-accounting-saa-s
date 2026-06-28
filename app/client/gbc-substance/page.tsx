@@ -56,7 +56,7 @@ export default function GbcSubstancePage() {
       a.click()
       URL.revokeObjectURL(url)
     } catch (e: any) {
-      setError(e?.message || 'Erreur export PDF')
+      setError(e?.message || t('scp.export_pdf_error', locale))
     } finally {
       setExporting(false)
     }
@@ -76,7 +76,7 @@ export default function GbcSubstancePage() {
         premises_verified: !!json.tracking.premises_verified,
         notes: json.tracking.notes || '',
       })
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setLoading(false) }
+    } catch (e: any) { setError(e?.message || t('cui.error_generic', locale)) } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [societeId, exercice])
 
@@ -91,7 +91,7 @@ export default function GbcSubstancePage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
       setOpenCfg(false); load()
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setSaving(false) }
+    } catch (e: any) { setError(e?.message || t('cui.error_generic', locale)) } finally { setSaving(false) }
   }
 
   const addCiga = async () => {
@@ -115,7 +115,7 @@ export default function GbcSubstancePage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
       setOpenCiga(false); setCiga(EMPTY_CIGA); load()
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setSaving(false) }
+    } catch (e: any) { setError(e?.message || t('cui.error_generic', locale)) } finally { setSaving(false) }
   }
 
   if (!societeId) return <div className="p-8"><div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{t('gbc.common.no_societe', locale)}</div></div>
@@ -137,7 +137,7 @@ export default function GbcSubstancePage() {
           <Button onClick={load} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />{t('gbc.common.refresh', locale)}</Button>
           <Button onClick={exportPDF} variant="outline" disabled={exporting}>
             {exporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileDown className="h-4 w-4 mr-2" />}
-            Exporter PDF
+            {t('scp.export_pdf', locale)}
           </Button>
           <Dialog open={openCfg} onOpenChange={setOpenCfg}>
             <DialogTrigger asChild><Button variant="outline"><Settings className="h-4 w-4 mr-2" />{t('gbc.substance.configure_btn', locale)}</Button></DialogTrigger>

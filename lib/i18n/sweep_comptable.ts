@@ -30,6 +30,9 @@ export const sweepComptableChunk = {
     'scp.cloture_fiscal_years': 'Exercices fiscaux',
     'scp.cloture_no_fiscal_years': 'Aucun exercice fiscal trouvé pour cette société.',
     'scp.cloture_regen_aria': 'Régénérer le snapshot du bilan pour',
+    // gbc export
+    'scp.export_pdf': 'Exporter PDF',
+    'scp.export_pdf_error': 'Erreur export PDF',
     // societes — régime / devise / FSC
     'scp.soc_regime_label': 'Type de société (régime)',
     'scp.soc_regime_hint': 'Détermine les modules IFRS et obligations FSC activés.',
@@ -78,6 +81,8 @@ export const sweepComptableChunk = {
     'scp.cloture_fiscal_years': 'Fiscal years',
     'scp.cloture_no_fiscal_years': 'No fiscal year found for this company.',
     'scp.cloture_regen_aria': 'Regenerate the balance sheet snapshot for',
+    'scp.export_pdf': 'Export PDF',
+    'scp.export_pdf_error': 'PDF export error',
     'scp.soc_regime_label': 'Company type (regime)',
     'scp.soc_regime_hint': 'Determines the enabled IFRS modules and FSC obligations.',
     'scp.soc_functional_currency': 'Functional currency (IAS 21)',
