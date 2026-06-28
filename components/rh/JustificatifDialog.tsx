@@ -87,17 +87,16 @@ export function JustificatifDialog({ open, onOpenChange, demande, onChange }: Pr
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle style={{ color: NAVY }}>
-            📎 Justificatifs — {titreDemande}
+            {t('hr.justif.title', locale)} {titreDemande}
           </DialogTitle>
           <DialogDescription className="text-xs text-gray-500">
-            Consulter les documents déjà attachés ou en ajouter un nouveau.
-            Les pièces jointes sont liées automatiquement à cette demande.
+            {t('hr.justif.desc', locale)}
           </DialogDescription>
         </DialogHeader>
         <Tabs value={activeTab} onValueChange={v => setActiveTab(v as 'liste' | 'ajouter')}>
           <TabsList className="grid grid-cols-2 w-full">
             <TabsTrigger value="liste">
-              Documents ({docs.length})
+              {t('hr.justif.tab_list', locale)} ({docs.length})
             </TabsTrigger>
             <TabsTrigger value="ajouter">
               <Upload className="h-3.5 w-3.5 mr-1.5" /> {t('cui.add', locale)}
@@ -112,7 +111,7 @@ export function JustificatifDialog({ open, onOpenChange, demande, onChange }: Pr
               </div>
             ) : docs.length === 0 ? (
               <div className="text-center py-8 text-gray-500 text-sm">
-                Aucun document attaché à cette demande.
+                {t('hr.justif.empty', locale)}
                 <button
                   type="button"
                   className="block mx-auto mt-2 text-indigo-600 underline text-xs"
@@ -146,6 +145,7 @@ export function JustificatifDialog({ open, onOpenChange, demande, onChange }: Pr
 
 // ─── Ligne document ──────────────────────────────────────────────────
 function DocRow({ doc, onChange }: { doc: DocumentRH; onChange: () => void }) {
+  const locale = getLocale()
   const [loading, setLoading] = useState(false)
   const isIncoming = doc.direction === 'employe_vers_rh'
 
@@ -160,13 +160,13 @@ function DocRow({ doc, onChange }: { doc: DocumentRH; onChange: () => void }) {
   }
 
   const supprimer = async () => {
-    if (!confirm(`Supprimer "${doc.nom_fichier_original}" ? Irréversible.`)) return
+    if (!confirm(t('hr.justif.del_confirm', locale).replace('{nom}', doc.nom_fichier_original))) return
     setLoading(true)
     try {
       const res = await fetch(`/api/documents-rh/${doc.id}`, { method: 'DELETE' })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        alert(err?.error || 'Échec suppression')
+        alert(err?.error || t('hr.justif.del_failed', locale))
       }
       onChange()
     } finally { setLoading(false) }
@@ -204,6 +204,7 @@ function UploadForm({
   demande: Props['demande']
   onUploaded: () => void
 }) {
+  const locale = getLocale()
   const [file, setFile] = useState<File | null>(null)
   const [categorie, setCategorie] = useState<DocumentCategorie>('justificatif_conge')
   const [description, setDescription] = useState("")
@@ -212,8 +213,8 @@ function UploadForm({
 
   const submit = async () => {
     setErreur(null)
-    if (!file) { setErreur('Aucun fichier sélectionné.'); return }
-    if (!demande.employe_id) { setErreur('Employé inconnu pour cette demande.'); return }
+    if (!file) { setErreur(t('hr.justif.err_no_file', locale)); return }
+    if (!demande.employe_id) { setErreur(t('hr.justif.err_no_employe', locale)); return }
     const v = validerFichier(file)
     if (!v.valide) { setErreur(v.erreur || 'Fichier invalide'); return }
 
@@ -239,7 +240,7 @@ function UploadForm({
       setFile(null); setDescription('')
       onUploaded()
     } catch (e: any) {
-      setErreur(e?.message || 'Erreur réseau')
+      setErreur(e?.message || t('hr.justif.err_network', locale))
     } finally {
       setSubmitting(false)
     }
@@ -248,33 +249,33 @@ function UploadForm({
   return (
     <div className="space-y-3">
       <div>
-        <Label className="text-sm">Catégorie</Label>
+        <Label className="text-sm">{t('hr.justif.category', locale)}</Label>
         <Select value={categorie} onValueChange={v => setCategorie(v as DocumentCategorie)}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="justificatif_conge">Justificatif congé</SelectItem>
-            <SelectItem value="certificat_medical">Certificat médical</SelectItem>
-            <SelectItem value="autre">Autre</SelectItem>
+            <SelectItem value="justificatif_conge">{t('hr.justif.cat_conge', locale)}</SelectItem>
+            <SelectItem value="certificat_medical">{t('hr.justif.cat_medical', locale)}</SelectItem>
+            <SelectItem value="autre">{t('hr.justif.cat_autre', locale)}</SelectItem>
           </SelectContent>
         </Select>
       </div>
       <div>
-        <Label className="text-sm">Description (optionnel)</Label>
+        <Label className="text-sm">{t('hr.justif.description_label', locale)}</Label>
         <Input
           value={description}
           onChange={e => setDescription(e.target.value)}
-          placeholder="Ex: Scan certificat apporté le 24/04"
+          placeholder={t('hr.justif.description_ph', locale)}
         />
       </div>
       <div>
-        <Label className="text-sm">Fichier</Label>
+        <Label className="text-sm">{t('hr.justif.file_label', locale)}</Label>
         <Input
           type="file"
           accept={EXTENSIONS_LISIBLES.replace(/\s/g, '')}
           onChange={e => setFile(e.target.files?.[0] || null)}
         />
         <p className="text-[11px] text-gray-400 mt-1">
-          Max {formaterTaille(TAILLE_MAX_OCTETS)}. Acceptés : {EXTENSIONS_LISIBLES}.
+          {t('hr.justif.max_accepted', locale).replace('{max}', formaterTaille(TAILLE_MAX_OCTETS)).replace('{ext}', EXTENSIONS_LISIBLES)}
         </p>
         {file && (
           <p className="text-xs text-gray-600 mt-1">
@@ -292,7 +293,7 @@ function UploadForm({
         <Button onClick={submit} disabled={submitting || !file} style={{ backgroundColor: GOLD, color: NAVY }}>
           {submitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
           <Upload className="h-3.5 w-3.5 mr-1.5" />
-          Envoyer
+          {t('hr.justif.send', locale)}
         </Button>
       </div>
     </div>
@@ -312,6 +313,7 @@ export function JustificatifBouton({
   requisManquant?: boolean
   initialCount?: number
 }) {
+  const locale = getLocale()
   const [open, setOpen] = useState(false)
   const [count, setCount] = useState<number | null>(initialCount ?? null)
 
@@ -337,7 +339,7 @@ export function JustificatifBouton({
         size="sm"
         variant="outline"
         className={`h-7 text-[11px] px-2 ${color}`}
-        title={manque ? 'Justificatif requis — cliquer pour uploader' : 'Gérer les justificatifs'}
+        title={manque ? t('hr.justif.icon_title_required', locale) : t('hr.justif.icon_title_manage', locale)}
         onClick={() => setOpen(true)}
       >
         <FileText className="h-3 w-3 mr-1" />
