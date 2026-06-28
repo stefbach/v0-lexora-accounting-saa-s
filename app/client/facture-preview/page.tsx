@@ -53,7 +53,7 @@ interface InvoiceData {
 }
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
-function fmtDate(d: string) { if (!d) return "-"; return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }) }
+function fmtDate(d: string, locale: Locale = 'fr') { if (!d) return "-"; return new Date(d).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR', { day: "2-digit", month: "long", year: "numeric" }) }
 
 /**
  * Métadonnées par type de document (mig 042 type_document) — pilote tout
@@ -74,14 +74,14 @@ interface DocTypeMeta {
   validity_note: string | null   // mention de validité (devis surtout)
   accent_override: string | null // couleur dominante surchargée
 }
-function getDocMeta(type: string | undefined): DocTypeMeta {
+function getDocMeta(type: string | undefined, locale: Locale = 'fr'): DocTypeMeta {
   switch (type) {
     case 'avoir':
       return {
         title_fr: 'AVOIR',
         title_en: 'CREDIT NOTE',
-        echeance_label: 'Date d\'émission',
-        ref_label: 'Avoir sur facture N°',
+        echeance_label: t('inv.pv.issue_date', locale),
+        ref_label: t('inv.pv.ref_credit', locale),
         show_bank: true, // pour le remboursement
         show_signature: false,
         validity_note: null,
@@ -91,8 +91,8 @@ function getDocMeta(type: string | undefined): DocTypeMeta {
       return {
         title_fr: 'NOTE DE DÉBIT',
         title_en: 'DEBIT NOTE',
-        echeance_label: 'Date d\'échéance',
-        ref_label: 'En complément de facture N°',
+        echeance_label: t('inv.pv.due_date', locale),
+        ref_label: t('inv.pv.ref_debit', locale),
         show_bank: true,
         show_signature: false,
         validity_note: null,
@@ -102,18 +102,18 @@ function getDocMeta(type: string | undefined): DocTypeMeta {
       return {
         title_fr: 'DEVIS',
         title_en: 'QUOTATION',
-        echeance_label: 'Valable jusqu\'au',
+        echeance_label: t('inv.pv.valid_until', locale),
         ref_label: '',
         show_bank: false, // pas encore à payer
         show_signature: true,
-        validity_note: 'Bon pour accord — Date et signature du client précédées de la mention « Bon pour accord ».',
+        validity_note: t('inv.pv.validity_devis', locale),
         accent_override: null,
       }
     default:
       return {
         title_fr: 'FACTURE',
         title_en: 'INVOICE',
-        echeance_label: 'Échéance',
+        echeance_label: t('inv.pv.due', locale),
         ref_label: '',
         show_bank: true,
         show_signature: false,
@@ -305,7 +305,7 @@ function FacturePreviewContent() {
   // à payer au fournisseur).
   const signMul = data.type_document === 'avoir' ? -1 : 1
   const fmtSigned = (n: number) => fmt(n * signMul)
-  const docMeta = getDocMeta(data.type_document)
+  const docMeta = getDocMeta(data.type_document, locale)
   const colors = (() => {
     // Pour avoir/note de débit, on surcharge la couleur d'accent par la
     // couleur du type de doc (rouge/orange) pour bien distinguer du flux
@@ -480,8 +480,8 @@ function FacturePreviewContent() {
               <span className="font-mono font-bold" style={{ color: colors.primaire }}>{data.numero_facture}</span>
             </div>
             <div className="flex justify-end gap-8">
-              <span className="text-sm text-gray-500">Date:</span>
-              <span className="text-sm">{fmtDate(data.date_facture)}</span>
+              <span className="text-sm text-gray-500">{t('inv.pv.date_label', locale)}</span>
+              <span className="text-sm">{fmtDate(data.date_facture, locale)}</span>
             </div>
             {/* Échéance / Validité / etc. — label adapté au type de doc */}
             {data.date_echeance && (
@@ -489,13 +489,13 @@ function FacturePreviewContent() {
                 <span className="text-sm text-gray-500">{docMeta.echeance_label}:</span>
                 <span className="text-sm">
                   {data.type_document !== 'devis' && data.date_facture === data.date_echeance
-                    ? 'À réception de facture'
-                    : fmtDate(data.date_echeance)}
+                    ? t('inv.pv.on_receipt', locale)
+                    : fmtDate(data.date_echeance, locale)}
                 </span>
               </div>
             )}
             <div className="flex justify-end gap-8">
-              <span className="text-sm text-gray-500">Devise:</span>
+              <span className="text-sm text-gray-500">{t('inv.pv.currency_label', locale)}</span>
               <span className="text-sm font-semibold">{data.devise}</span>
             </div>
             {/* Référence facture d'origine (avoir / note de débit) */}
@@ -524,14 +524,14 @@ function FacturePreviewContent() {
             <table className="w-full mb-6" style={{ borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ backgroundColor: colors.primaire }}>
-                  <th className="text-left text-white text-xs font-semibold py-3 px-4 rounded-tl-lg">Description</th>
+                  <th className="text-left text-white text-xs font-semibold py-3 px-4 rounded-tl-lg">{t('inv.pv.description', locale)}</th>
                   <th className="text-right text-white text-xs font-semibold py-3 px-3 w-16">{t('inv.pv.qty', locale)}</th>
                   <th className="text-right text-white text-xs font-semibold py-3 px-3 w-32">
                     {t('inv.pv.unit_price_short', locale)}{isForeign && <div className="text-[10px] font-normal opacity-80">{data.devise} / MUR</div>}
                   </th>
-                  <th className="text-right text-white text-xs font-semibold py-3 px-3 w-16">TVA</th>
+                  <th className="text-right text-white text-xs font-semibold py-3 px-3 w-16">{t('inv.pv.vat_short', locale)}</th>
                   <th className="text-right text-white text-xs font-semibold py-3 px-4 rounded-tr-lg w-32">
-                    Montant{isForeign && <div className="text-[10px] font-normal opacity-80">{data.devise} / MUR</div>}
+                    {t('inv.pv.amount', locale)}{isForeign && <div className="text-[10px] font-normal opacity-80">{data.devise} / MUR</div>}
                   </th>
                 </tr>
               </thead>
@@ -567,21 +567,21 @@ function FacturePreviewContent() {
         <div className="flex justify-end mb-8">
           <div className="w-72 space-y-1.5">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Sous-total HT</span>
+              <span className="text-gray-600">{t('inv.pv.subtotal_ht', locale)}</span>
               <span className="font-mono">{fmtSigned(subtotalHT)} {data.devise}</span>
             </div>
             {discount > 0 && (
               <div className="flex justify-between text-sm text-red-600">
-                <span>Remise{data.remise_pct > 0 ? ` (${data.remise_pct}%)` : ""}</span>
+                <span>{t('inv.pv.discount', locale)}{data.remise_pct > 0 ? ` (${data.remise_pct}%)` : ""}</span>
                 <span className="font-mono">-{fmt(discount)} {data.devise}</span>
               </div>
             )}
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">TVA {data.client_offshore ? "(Zero-rated export)" : "(15%)"}</span>
+              <span className="text-gray-600">{t('inv.pv.vat_short', locale)} {data.client_offshore ? "(Zero-rated export)" : "(15%)"}</span>
               <span className="font-mono">{fmtSigned(totalTVA)} {data.devise}</span>
             </div>
             <div className="border-t-2 pt-2 flex justify-between font-bold text-lg" style={{ borderColor: colors.primaire }}>
-              <span style={{ color: colors.primaire }}>Total TTC</span>
+              <span style={{ color: colors.primaire }}>{t('inv.pv.total_ttc', locale)}</span>
               <span className="font-mono" style={{ color: colors.primaire }}>{fmtSigned(grandTotal)} {data.devise}</span>
             </div>
             {data.devise !== "MUR" && data.taux_change > 0 && (
@@ -591,9 +591,9 @@ function FacturePreviewContent() {
                   <span className="font-mono font-medium">{fmtSigned(grandTotal * data.taux_change)} MUR</span>
                 </div>
                 <div className="mt-2 px-3 py-2 rounded-md text-[11px] italic text-gray-600 bg-gray-50 border border-gray-200 text-right">
-                  Taux de change appliqué : 1 {data.devise} = {fmt(data.taux_change)} MUR
+                  {t('inv.pv.exchange_rate_applied', locale)} 1 {data.devise} = {fmt(data.taux_change)} MUR
                   <br />
-                  (cours du {fmtDate(data.date_facture)})
+                  ({t('inv.pv.rate_as_of', locale)} {fmtDate(data.date_facture, locale)})
                 </div>
               </>
             )}
@@ -611,8 +611,8 @@ function FacturePreviewContent() {
                 : 'Coordonnees de paiement / Payment Details'}
             </h3>
             <div className="grid grid-cols-2 gap-2 text-sm">
-              {s.banque_nom && <div><span className="text-gray-500">Banque: </span><span className="font-medium">{s.banque_nom}</span></div>}
-              {s.banque_compte && <div><span className="text-gray-500">Compte: </span><span className="font-mono">{s.banque_compte}</span></div>}
+              {s.banque_nom && <div><span className="text-gray-500">{t('inv.pv.bank', locale)}: </span><span className="font-medium">{s.banque_nom}</span></div>}
+              {s.banque_compte && <div><span className="text-gray-500">{t('inv.pv.account', locale)}: </span><span className="font-mono">{s.banque_compte}</span></div>}
               {s.banque_iban && <div><span className="text-gray-500">IBAN: </span><span className="font-mono">{s.banque_iban}</span></div>}
               {s.banque_swift && <div><span className="text-gray-500">SWIFT/BIC: </span><span className="font-mono">{s.banque_swift}</span></div>}
             </div>
@@ -631,11 +631,11 @@ function FacturePreviewContent() {
             )}
             <div className="grid grid-cols-2 gap-6 mt-4">
               <div>
-                <p className="text-xs text-gray-500 mb-6">Date :</p>
+                <p className="text-xs text-gray-500 mb-6">{t('inv.pv.date_label', locale)}</p>
                 <div className="border-b border-gray-300 h-8"></div>
               </div>
               <div>
-                <p className="text-xs text-gray-500 mb-6">Signature précédée de « Bon pour accord » :</p>
+                <p className="text-xs text-gray-500 mb-6">{t('inv.pv.signature_note', locale)}</p>
                 <div className="border-b border-gray-300 h-8"></div>
               </div>
             </div>
@@ -665,8 +665,8 @@ function FacturePreviewContent() {
                   </div>
                   {data.fiscalisation_date && (
                     <div className="flex gap-2 text-sm">
-                      <span className="text-gray-500 whitespace-nowrap">Date de fiscalisation:</span>
-                      <span className="text-sm">{new Date(data.fiscalisation_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="text-gray-500 whitespace-nowrap">{t('inv.pv.fiscalisation_date_label', locale)}</span>
+                      <span className="text-sm">{new Date(data.fiscalisation_date).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                   )}
                   {data.type_document && data.type_document !== 'facture' && (
@@ -727,7 +727,7 @@ function FacturePreviewContent() {
 
 export default function FacturePreviewPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-screen">Chargement...</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center h-screen">{t('cui.loading', getLocale())}</div>}>
       <FacturePreviewContent />
     </Suspense>
   )
