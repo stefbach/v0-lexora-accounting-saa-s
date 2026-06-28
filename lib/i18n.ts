@@ -1,5 +1,6 @@
 import { gbcChunk } from './i18n/gbc'
 import { auditReadinessChunk } from './i18n/audit_readiness'
+import { commonUiChunk } from './i18n/common_ui'
 import { mraChunk } from './i18n/mra'
 import { coreChunk } from './i18n/core'
 import { hrChunk } from './i18n/hr'
@@ -33,6 +34,9 @@ import { rhplanningChunk } from './i18n/rh_planning'
 import { rhemployesChunk } from './i18n/rh_employes'
 import { rhpaieChunk } from './i18n/rh_paie'
 import { rhdiversChunk } from './i18n/rh_divers'
+import { sweepSharedChunk } from './i18n/sweep_shared'
+import { sweepComptableChunk } from './i18n/sweep_comptable'
+import { sweepRhChunk } from './i18n/sweep_rh'
 
 export type Locale = 'fr' | 'en'
 
@@ -644,6 +648,7 @@ const translations: Record<Locale, Record<string, string>> = {
     ...baseTranslations.fr,
     ...gbcChunk.fr,
     ...auditReadinessChunk.fr,
+    ...commonUiChunk.fr,
     ...mraChunk.fr,
     ...coreChunk.fr,
     ...hrChunk.fr,
@@ -677,11 +682,15 @@ const translations: Record<Locale, Record<string, string>> = {
     ...rhemployesChunk.fr,
     ...rhpaieChunk.fr,
     ...rhdiversChunk.fr,
+    ...sweepComptableChunk.fr,
+    ...sweepSharedChunk.fr,
+    ...sweepRhChunk.fr,
   },
   en: {
     ...baseTranslations.en,
     ...gbcChunk.en,
     ...auditReadinessChunk.en,
+    ...commonUiChunk.en,
     ...mraChunk.en,
     ...coreChunk.en,
     ...hrChunk.en,
@@ -715,6 +724,9 @@ const translations: Record<Locale, Record<string, string>> = {
     ...rhemployesChunk.en,
     ...rhpaieChunk.en,
     ...rhdiversChunk.en,
+    ...sweepComptableChunk.en,
+    ...sweepSharedChunk.en,
+    ...sweepRhChunk.en,
   },
 }
 

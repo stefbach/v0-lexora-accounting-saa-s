@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, Building2, Eye, EyeOff, AlertCircle, CheckCircle2, Save, Play, Plus, KeyRound } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { PageHelp } from "@/components/help/PageHelp"
+import { t, getLocale } from "@/lib/i18n"
 
 type Compte = {
   id: string
@@ -30,6 +31,7 @@ type Compte = {
 }
 
 export default function BankCredentialsPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [comptes, setComptes] = useState<Compte[]>([])
   const [loading, setLoading] = useState(true)
@@ -135,8 +137,8 @@ export default function BankCredentialsPage() {
     } catch (e: any) { setError(e?.message || 'Erreur') } finally { setScrapingNow(null) }
   }
 
-  if (!societeId) return <div className="p-8"><div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Aucune société sélectionnée.</div></div>
-  if (loading) return <div className="p-8 flex items-center gap-2 text-slate-500"><Loader2 className="animate-spin h-5 w-5" /> Chargement…</div>
+  if (!societeId) return <div className="p-8"><div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{t('cui.no_societe', locale)}</div></div>
+  if (loading) return <div className="p-8 flex items-center gap-2 text-slate-500"><Loader2 className="animate-spin h-5 w-5" /> {t('cui.loading', locale)}</div>
 
   return (
     <div className="p-6 space-y-6 max-w-5xl">
@@ -159,7 +161,7 @@ export default function BankCredentialsPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={() => setCreating(v => !v)} className="bg-blue-600 hover:bg-blue-700 text-white">
-            <Plus className="h-4 w-4 mr-1" /> Ajouter un compte bancaire
+            <Plus className="h-4 w-4 mr-1" /> {t('scp.add_bank_account', locale)}
           </Button>
           <PageHelp />
         </div>
@@ -259,7 +261,7 @@ export default function BankCredentialsPage() {
             <div className="flex justify-end gap-2">
               <Button onClick={() => setCreating(false)} variant="outline">Annuler</Button>
               <Button onClick={createAccount} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                <Save className="h-4 w-4 mr-1" /> Créer le compte
+                <Save className="h-4 w-4 mr-1" /> {t('scp.create_account', locale)}
               </Button>
             </div>
           </CardContent>
@@ -268,7 +270,7 @@ export default function BankCredentialsPage() {
 
       {comptes.length === 0 && !creating ? (
         <Card><CardContent className="py-8 text-center text-slate-500">
-          Aucun compte bancaire configuré pour cette société. Clique sur <b>Ajouter un compte bancaire</b> ci-dessus pour en créer un,
+          {t('scp.no_bank_account', locale)} Clique sur <b>Ajouter un compte bancaire</b> ci-dessus pour en créer un,
           puis sur sa carte clique <b>« Configurer l'accès »</b> pour saisir le login et le mot de passe Internet Banking.
         </CardContent></Card>
       ) : comptes.map(cb => (

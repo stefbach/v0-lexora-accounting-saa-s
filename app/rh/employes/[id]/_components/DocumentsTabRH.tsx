@@ -18,6 +18,7 @@ import {
   formaterTaille, getIconeMimeType, validerFichier,
   type DocumentRH, type DocumentCategorie,
 } from "@/lib/rh/documents-rh"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -31,6 +32,7 @@ interface Props {
 // Vue complète (reçus + envoyés), filtres, upload direction=rh_vers_employe,
 // actions archivage / suppression / marquage confidentiel.
 export function DocumentsTabRH({ employeId, employeNom }: Props) {
+  const locale = getLocale()
   const [docs, setDocs] = useState<DocumentRH[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshTick, setRefreshTick] = useState(0)
@@ -112,7 +114,7 @@ export function DocumentsTabRH({ employeId, employeNom }: Props) {
           {loading ? (
             <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
           ) : docsFiltered.length === 0 ? (
-            <p className="text-center text-gray-500 text-sm py-6">Aucun document{showArchive ? '' : ' actif'}.</p>
+            <p className="text-center text-gray-500 text-sm py-6">{t('srh.docs.empty', locale)}{showArchive ? '' : t('srh.docs.empty_active_suffix', locale)}.</p>
           ) : (
             <div className="overflow-x-auto">
               <Table>

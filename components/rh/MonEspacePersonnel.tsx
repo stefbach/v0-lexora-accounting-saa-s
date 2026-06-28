@@ -25,6 +25,7 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Clock, Calendar, CalendarDays, FileText, ArrowRight, User } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -82,6 +83,7 @@ function fmtPeriode(p: string | null | undefined): string {
 }
 
 export default function MonEspacePersonnel() {
+  const locale = getLocale()
   const [loading, setLoading] = useState(true)
   const [employe, setEmploye] = useState<Employe | null>(null)
   const [pointage, setPointage] = useState<PointageToday | null>(null)
@@ -133,7 +135,7 @@ export default function MonEspacePersonnel() {
       <Card className="rounded-2xl border-l-4 border-l-amber-500">
         <CardContent className="p-6 flex items-center gap-3 text-gray-500">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-sm">Chargement de votre espace personnel…</span>
+          <span className="text-sm">{t('srh.espace.loading', locale)}</span>
         </CardContent>
       </Card>
     )
@@ -231,7 +233,7 @@ export default function MonEspacePersonnel() {
                   )}
                 </div>
               ) : (
-                <div className="text-xs text-gray-500 italic">Aucun bulletin disponible</div>
+                <div className="text-xs text-gray-500 italic">{t('srh.espace.no_payslip', locale)}</div>
               )}
             </div>
           </Link>

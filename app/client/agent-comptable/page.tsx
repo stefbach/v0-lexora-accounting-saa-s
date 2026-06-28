@@ -16,11 +16,13 @@ import { Card } from "@/components/ui/card"
 import { Loader2, Send, Bot, User, CheckCircle2, XCircle } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Msg { role: "user" | "assistant"; content: string }
 interface PendingAction { name: string; input: any; resume: string }
 
 export default function AgentComptablePage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [messages, setMessages] = useState<Msg[]>([
     { role: "assistant", content: "Bonjour 👋 Je suis votre **Expert Lexora** (compta, RH, paie, MRA + droit Maurice). Demandez-moi par exemple : « affecte l'avance de 50 000 du client Dupont à sa facture FA-2026-012 », « solde de congés de Mélanie ? », « où en est ma conformité MRA ? », ou « calcule le net pour 50 000 brut »." },
@@ -107,8 +109,8 @@ export default function AgentComptablePage() {
         <div className="flex items-center gap-3 pb-4">
           <div className="rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 p-3 text-white"><Bot className="h-6 w-6" /></div>
           <div>
-            <h1 className="text-2xl font-bold text-[#0B0F2E]">Agent comptable</h1>
-            <p className="text-sm text-gray-500">Demandez en langage naturel — je consulte, propose et exécute après votre validation</p>
+            <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('scp.agent_title', locale)}</h1>
+            <p className="text-sm text-gray-500">{t('scp.agent_subtitle', locale)}</p>
           </div>
         </div>
 
@@ -123,11 +125,11 @@ export default function AgentComptablePage() {
 
           {pending && (
             <Card className="border-amber-300 bg-amber-50 p-4 ml-11">
-              <div className="text-sm font-medium text-amber-900 mb-1">Action à confirmer</div>
+              <div className="text-sm font-medium text-amber-900 mb-1">{t('scp.action_to_confirm', locale)}</div>
               <pre className="text-xs text-gray-700 whitespace-pre-wrap mb-3">{pending.resume}</pre>
               <div className="flex gap-2">
-                <Button size="sm" onClick={confirm} disabled={busy} className="bg-emerald-600 hover:bg-emerald-700 text-white"><CheckCircle2 className="h-4 w-4 mr-1" />Confirmer</Button>
-                <Button size="sm" variant="outline" onClick={cancel} disabled={busy}><XCircle className="h-4 w-4 mr-1" />Annuler</Button>
+                <Button size="sm" onClick={confirm} disabled={busy} className="bg-emerald-600 hover:bg-emerald-700 text-white"><CheckCircle2 className="h-4 w-4 mr-1" />{t('cui.confirm', locale)}</Button>
+                <Button size="sm" variant="outline" onClick={cancel} disabled={busy}><XCircle className="h-4 w-4 mr-1" />{t('cui.cancel', locale)}</Button>
               </div>
             </Card>
           )}

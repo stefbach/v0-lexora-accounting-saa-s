@@ -614,7 +614,7 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
                            placeholder="0.00" className="h-8 text-right text-sm w-32" />
                     <Button size="sm" onClick={addExtraLine} disabled={!newLibelle.trim()}
                             className="h-8 bg-[#D4AF37] hover:bg-[#C9A630] text-[#0B0F2E]">
-                      <Plus className="w-3.5 h-3.5 mr-1" /> Ajouter
+                      <Plus className="w-3.5 h-3.5 mr-1" /> {t('cui.add', locale)}
                     </Button>
                   </div>
                 </TableCell>
@@ -720,6 +720,7 @@ const DOCS_CATALOG: Array<{ key: string; label: string; path: string; restrictTo
 ]
 
 function DocumentsDialog({ depart, onClose }: { depart: any; onClose: () => void }) {
+  const locale: Locale = getLocale()
   const availableDocs = DOCS_CATALOG.filter(d => !d.restrictTo || d.restrictTo === depart.type_depart)
   const [selected, setSelected] = useState<Set<string>>(new Set(availableDocs.map(d => d.key)))
   const [recipientEmail, setRecipientEmail] = useState(depart.email || depart.email_personnel || '')
@@ -824,7 +825,7 @@ function DocumentsDialog({ depart, onClose }: { depart: any; onClose: () => void
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose}>Fermer</Button>
+          <Button variant="outline" onClick={onClose}>{t('cui.close', locale)}</Button>
           <Button onClick={sendEmail} disabled={sending || selected.size === 0 || !recipientEmail}
                   className="bg-[#D4AF37] hover:bg-[#C9A630] text-[#0B0F2E]">
             {sending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Mail className="w-4 h-4 mr-2" />}

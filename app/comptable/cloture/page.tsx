@@ -164,7 +164,7 @@ export default function CloturePage() {
             <CardContent>
               {exercicesLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground py-3">
-                  <Loader2 className="w-4 h-4 animate-spin" /> Chargement des exercices…
+                  <Loader2 className="w-4 h-4 animate-spin" /> {t('cui.loading', locale)}
                 </div>
               ) : exercices.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-3">

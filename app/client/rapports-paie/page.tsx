@@ -399,7 +399,7 @@ export default function RapportsStatutairesPage() {
                         <TableHead>Code</TableHead>
                         <TableHead>NIC</TableHead>
                         <TableHead>Nom</TableHead>
-                        <TableHead>Prenom</TableHead>
+                        <TableHead>{t('scp.firstname', locale)}</TableHead>
                         <TableHead className="text-right">Contributions</TableHead>
                         <TableHead className="text-right">Wages</TableHead>
                         <TableHead className="text-right">Taxable</TableHead>
@@ -481,7 +481,7 @@ export default function RapportsStatutairesPage() {
                       <TableRow className="bg-[#0B0F2E]/5">
                         <TableHead>NID</TableHead>
                         <TableHead>Nom</TableHead>
-                        <TableHead>Prenom</TableHead>
+                        <TableHead>{t('scp.firstname', locale)}</TableHead>
                         <TableHead className="text-right">Wages</TableHead>
                         <TableHead className="text-right">Allowances</TableHead>
                         <TableHead className="text-right">Commission</TableHead>
@@ -546,7 +546,7 @@ export default function RapportsStatutairesPage() {
                         <TableHead>Code</TableHead>
                         <TableHead>NID</TableHead>
                         <TableHead>Nom</TableHead>
-                        <TableHead>Prenom</TableHead>
+                        <TableHead>{t('scp.firstname', locale)}</TableHead>
                         <TableHead className="text-right">Basic Salary</TableHead>
                         <TableHead className="text-right">Overtime</TableHead>
                         <TableHead className="text-right">Allowances</TableHead>
@@ -645,7 +645,7 @@ export default function RapportsStatutairesPage() {
                               <TableHead>Code</TableHead>
                               <TableHead>NID</TableHead>
                               <TableHead>Nom</TableHead>
-                              <TableHead>Prenom</TableHead>
+                              <TableHead>{t('scp.firstname', locale)}</TableHead>
                               <TableHead>Group</TableHead>
                               <TableHead>Department</TableHead>
                               <TableHead>Account No</TableHead>
@@ -685,7 +685,7 @@ export default function RapportsStatutairesPage() {
                             <TableHead>Code</TableHead>
                             <TableHead>NID</TableHead>
                             <TableHead>Nom</TableHead>
-                            <TableHead>Prenom</TableHead>
+                            <TableHead>{t('scp.firstname', locale)}</TableHead>
                             <TableHead>Group</TableHead>
                             <TableHead>Department</TableHead>
                             <TableHead className="text-right">Net Pay</TableHead>
