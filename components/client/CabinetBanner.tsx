@@ -15,6 +15,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Building2, LogOut, Loader2 } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 interface ActingAsState {
   acting_as_societe_id: string | null
@@ -28,6 +29,7 @@ interface ActingAsState {
 
 export function CabinetBanner() {
   const router = useRouter()
+  const locale = getLocale()
   const [state, setState] = useState<ActingAsState | null>(null)
   const [exiting, setExiting] = useState(false)
 
@@ -79,8 +81,8 @@ export function CabinetBanner() {
   // "Société #b010d75c" plutôt que l'UUID complet brut illisible.
   const displayName = societe?.nom
     || (state.acting_as_societe_id
-        ? `Société #${state.acting_as_societe_id.slice(0, 8)}`
-        : "Client inconnu")
+        ? t('sccl.societe_short', locale).replace('{id}', state.acting_as_societe_id.slice(0, 8))
+        : t('sccl.unknown_client', locale))
 
   return (
     <div
@@ -90,7 +92,7 @@ export function CabinetBanner() {
       <div className="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 text-sm">
           <Building2 className="h-4 w-4 flex-shrink-0" />
-          <span className="font-semibold">Vue cabinet</span>
+          <span className="font-semibold">{t('sccl.cabinet_view', locale)}</span>
           <span className="opacity-80">→</span>
           <span className="font-bold">{displayName}</span>
           {societe?.brn && (
@@ -103,7 +105,7 @@ export function CabinetBanner() {
           className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-amber-950 text-amber-50 text-xs font-semibold hover:bg-amber-900 transition-colors disabled:opacity-60"
         >
           {exiting ? <Loader2 className="h-3 w-3 animate-spin" /> : <LogOut className="h-3 w-3" />}
-          Sortir du dossier
+          {t('sccl.exit_folder', locale)}
         </button>
       </div>
     </div>

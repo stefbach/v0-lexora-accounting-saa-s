@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Search } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Compte {
   compte: string
@@ -40,15 +41,15 @@ interface Props {
   classesFilter?: string[]
 }
 
-const CLASSE_LABELS: Record<string, string> = {
-  "1": "Capitaux",
-  "2": "Immobilisations",
-  "3": "Stocks",
-  "4": "Tiers",
-  "5": "Trésorerie",
-  "6": "Charges",
-  "7": "Produits",
-  "8": "Spéciaux",
+const CLASSE_LABEL_KEYS: Record<string, string> = {
+  "1": "sccl.classe_capitaux",
+  "2": "sccl.classe_immobilisations",
+  "3": "sccl.classe_stocks",
+  "4": "sccl.classe_tiers",
+  "5": "sccl.classe_tresorerie",
+  "6": "sccl.classe_charges",
+  "7": "sccl.classe_produits",
+  "8": "sccl.classe_speciaux",
 }
 
 export function PlanComptablePicker({ open, onClose, onSelect, classesFilter }: Props) {
@@ -57,6 +58,7 @@ export function PlanComptablePicker({ open, onClose, onSelect, classesFilter }: 
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState("")
   const [classeActive, setClasseActive] = useState<string | null>(null)
+  const locale = getLocale()
 
   const load = useCallback(async (search: string, classe: string | null) => {
     setLoading(true); setError(null)
@@ -70,12 +72,12 @@ export function PlanComptablePicker({ open, onClose, onSelect, classesFilter }: 
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
       setComptes(data.comptes || [])
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur inconnue")
+      setError(e instanceof Error ? e.message : t('sccl.unknown_error', locale))
       setComptes([])
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [locale])
 
   // Load à l'ouverture + sur changement de filtres (debounced sur q)
   useEffect(() => {
@@ -96,9 +98,9 @@ export function PlanComptablePicker({ open, onClose, onSelect, classesFilter }: 
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
       <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col overflow-hidden p-0">
         <DialogHeader className="p-6 pb-3 border-b">
-          <DialogTitle className="text-[#0B0F2E]">Choisir un compte du plan comptable</DialogTitle>
+          <DialogTitle className="text-[#0B0F2E]">{t('sccl.choose_account', locale)}</DialogTitle>
           <p className="text-xs text-gray-500 mt-1">
-            Plan Comptable Maurice (PCM) — {comptes.length} comptes
+            {t('sccl.pcm_accounts_count', locale).replace('{count}', String(comptes.length))}
           </p>
         </DialogHeader>
 
@@ -108,7 +110,7 @@ export function PlanComptablePicker({ open, onClose, onSelect, classesFilter }: 
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
               autoFocus
-              placeholder="Rechercher par code (4210) ou libellé (salaires…)"
+              placeholder={t('sccl.search_account_placeholder', locale)}
               value={q}
               onChange={(e) => setQ(e.target.value)}
               className="pl-9"
@@ -123,7 +125,7 @@ export function PlanComptablePicker({ open, onClose, onSelect, classesFilter }: 
                   : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
               }`}
             >
-              Toutes
+              {t('sccl.all', locale)}
             </button>
             {classesDisplayed.map((c) => (
               <button
@@ -135,7 +137,7 @@ export function PlanComptablePicker({ open, onClose, onSelect, classesFilter }: 
                     : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
                 }`}
               >
-                {c}. {CLASSE_LABELS[c]}
+                {c}. {t(CLASSE_LABEL_KEYS[c], locale)}
               </button>
             ))}
           </div>
@@ -145,7 +147,7 @@ export function PlanComptablePicker({ open, onClose, onSelect, classesFilter }: 
         <div className="flex-1 overflow-y-auto">
           {loading && (
             <div className="flex items-center justify-center py-12 text-gray-400">
-              <Loader2 className="w-5 h-5 animate-spin mr-2" /> Chargement…
+              <Loader2 className="w-5 h-5 animate-spin mr-2" /> {t('sccl.loading', locale)}
             </div>
           )}
           {!loading && error && (
@@ -153,7 +155,7 @@ export function PlanComptablePicker({ open, onClose, onSelect, classesFilter }: 
           )}
           {!loading && !error && comptes.length === 0 && (
             <div className="p-6 text-center text-gray-400 text-sm">
-              Aucun compte ne correspond à "{q}"
+              {t('sccl.no_account_match', locale).replace('{q}', q)}
             </div>
           )}
           {!loading && !error && comptes.length > 0 && (
@@ -173,7 +175,7 @@ export function PlanComptablePicker({ open, onClose, onSelect, classesFilter }: 
                     <div className="flex items-center gap-1 shrink-0">
                       {c.sens_normal && (
                         <Badge variant="outline" className="text-[10px] px-1 py-0">
-                          {c.sens_normal === "D" ? "Débit" : "Crédit"}
+                          {c.sens_normal === "D" ? t('sccl.debit', locale) : t('sccl.credit', locale)}
                         </Badge>
                       )}
                       {c.type_compte && (
@@ -190,7 +192,7 @@ export function PlanComptablePicker({ open, onClose, onSelect, classesFilter }: 
         </div>
 
         <div className="p-4 border-t flex justify-end bg-gray-50/50">
-          <Button variant="outline" onClick={onClose}>Annuler</Button>
+          <Button variant="outline" onClick={onClose}>{t('sccl.cancel', locale)}</Button>
         </div>
       </DialogContent>
     </Dialog>

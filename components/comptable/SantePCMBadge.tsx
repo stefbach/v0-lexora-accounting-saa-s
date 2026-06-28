@@ -17,6 +17,7 @@
 import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
 import { Activity, AlertTriangle, CheckCircle2, HelpCircle } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 type Couleur = "vert" | "orange" | "rouge" | "inconnu"
 
@@ -36,11 +37,11 @@ interface OverviewResponse {
 
 const REFRESH_MS = 5 * 60 * 1000 // 5 minutes
 
-const COULEUR_STYLE: Record<Couleur, { dot: string; ring: string; label: string; pulse: boolean }> = {
-  vert:    { dot: "bg-emerald-500", ring: "ring-emerald-500/30",  label: "PCM OK",       pulse: false },
-  orange:  { dot: "bg-amber-500",   ring: "ring-amber-500/30",    label: "PCM à vérifier", pulse: false },
-  rouge:   { dot: "bg-red-500",     ring: "ring-red-500/40",      label: "PCM déséquilibré", pulse: true  },
-  inconnu: { dot: "bg-zinc-400",    ring: "ring-zinc-400/30",     label: "PCM ?",        pulse: false },
+const COULEUR_STYLE: Record<Couleur, { dot: string; ring: string; labelKey: string; pulse: boolean }> = {
+  vert:    { dot: "bg-emerald-500", ring: "ring-emerald-500/30",  labelKey: "sccl.pcm_ok",         pulse: false },
+  orange:  { dot: "bg-amber-500",   ring: "ring-amber-500/30",    labelKey: "sccl.pcm_check",      pulse: false },
+  rouge:   { dot: "bg-red-500",     ring: "ring-red-500/40",      labelKey: "sccl.pcm_unbalanced", pulse: true  },
+  inconnu: { dot: "bg-zinc-400",    ring: "ring-zinc-400/30",     labelKey: "sccl.pcm_unknown",    pulse: false },
 }
 
 export interface SantePCMBadgeProps {
@@ -55,6 +56,7 @@ export function SantePCMBadge({ compact = false, className = "" }: SantePCMBadge
   const [pire, setPire] = useState<PireSociete | null>(null)
   const [loading, setLoading] = useState(true)
   const [errored, setErrored] = useState(false)
+  const locale = getLocale()
 
   const fetchSante = useCallback(async () => {
     try {
@@ -93,6 +95,7 @@ export function SantePCMBadge({ compact = false, className = "" }: SantePCMBadge
   }, [fetchSante])
 
   const style = COULEUR_STYLE[couleur]
+  const styleLabel = t(style.labelKey, locale)
   const Icon =
     couleur === "rouge"  ? AlertTriangle :
     couleur === "orange" ? Activity      :
@@ -100,10 +103,14 @@ export function SantePCMBadge({ compact = false, className = "" }: SantePCMBadge
     HelpCircle
 
   const title = errored
-    ? "Santé PCM : erreur de récupération"
+    ? t('sccl.pcm_fetch_error', locale)
     : pire
-      ? `${style.label} — pire : ${pire.nom || pire.societe_id} (score ${pire.sante_score}/100, écart ${Number(pire.desequilibre_global).toFixed(2)} MUR)`
-      : style.label
+      ? t('sccl.pcm_worst', locale)
+          .replace('{label}', styleLabel)
+          .replace('{nom}', String(pire.nom || pire.societe_id))
+          .replace('{score}', String(pire.sante_score))
+          .replace('{ecart}', Number(pire.desequilibre_global).toFixed(2))
+      : styleLabel
 
   if (compact) {
     return (
@@ -133,7 +140,7 @@ export function SantePCMBadge({ compact = false, className = "" }: SantePCMBadge
         <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${style.dot}`} />
       </span>
       <Icon className="h-3.5 w-3.5 text-zinc-500" aria-hidden />
-      <span>{loading ? "Santé PCM…" : style.label}</span>
+      <span>{loading ? t('sccl.pcm_loading', locale) : styleLabel}</span>
     </Link>
   )
 }

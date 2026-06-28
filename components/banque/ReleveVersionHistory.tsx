@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, CheckCircle2, Archive } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 export interface ReleveVersion {
   id: string
@@ -58,6 +59,7 @@ export function ReleveVersionHistory({ releveId, open, onOpenChange }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [versions, setVersions] = useState<ReleveVersion[]>([])
+  const locale = getLocale()
 
   useEffect(() => {
     if (!open || !releveId) return
@@ -74,7 +76,7 @@ export function ReleveVersionHistory({ releveId, open, onOpenChange }: Props) {
         if (!cancelled) setVersions(d.versions || [])
       })
       .catch((e) => {
-        if (!cancelled) setError(e?.message || "Erreur de chargement")
+        if (!cancelled) setError(e?.message || t('sccl.load_error', locale))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -82,16 +84,15 @@ export function ReleveVersionHistory({ releveId, open, onOpenChange }: Props) {
     return () => {
       cancelled = true
     }
-  }, [open, releveId])
+  }, [open, releveId, locale])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Historique des versions du relevé</DialogTitle>
+          <DialogTitle>{t('sccl.releve_history_title', locale)}</DialogTitle>
           <DialogDescription>
-            Chaque ré-upload d'un même relevé (compte + période) crée une
-            nouvelle version. Seule la plus récente est active.
+            {t('sccl.releve_history_desc', locale)}
           </DialogDescription>
         </DialogHeader>
 
@@ -103,7 +104,7 @@ export function ReleveVersionHistory({ releveId, open, onOpenChange }: Props) {
           <p className="py-6 text-center text-sm text-red-600">{error}</p>
         ) : versions.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            Aucune version trouvée.
+            {t('sccl.no_version_found', locale)}
           </p>
         ) : (
           <div className="divide-y rounded border">
@@ -128,12 +129,12 @@ export function ReleveVersionHistory({ releveId, open, onOpenChange }: Props) {
                     {v.is_active ? (
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
                         <CheckCircle2 className="h-3.5 w-3.5" />
-                        Version active
+                        {t('sccl.active_version', locale)}
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                         <Archive className="h-3.5 w-3.5" />
-                        Supersédée
+                        {t('sccl.superseded', locale)}
                       </span>
                     )}
                     {v.upload_source && (
@@ -147,12 +148,12 @@ export function ReleveVersionHistory({ releveId, open, onOpenChange }: Props) {
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground space-y-0.5">
                     <div>
-                      <span className="font-medium">Importé :</span>{" "}
+                      <span className="font-medium">{t('sccl.imported_label', locale)}</span>{" "}
                       {fmtDateTime(v.created_at)}
                     </div>
                     {v.superseded_at && (
                       <div>
-                        <span className="font-medium">Supersédée le :</span>{" "}
+                        <span className="font-medium">{t('sccl.superseded_on_label', locale)}</span>{" "}
                         {fmtDateTime(v.superseded_at)}
                       </div>
                     )}

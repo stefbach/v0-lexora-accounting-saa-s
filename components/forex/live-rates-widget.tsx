@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { t, getLocale } from '@/lib/i18n'
 
 interface Rate {
   base: string
@@ -25,6 +26,7 @@ const CURRENCY_FLAGS: Record<string, string> = {
 }
 
 export function LiveRatesWidget({ base = 'EUR', refreshInterval = 60000, showOnly }: LiveRatesWidgetProps) {
+  const locale = getLocale()
   const [rates, setRates] = useState<Record<string, Rate>>({})
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
@@ -45,7 +47,7 @@ export function LiveRatesWidget({ base = 'EUR', refreshInterval = 60000, showOnl
         setError(null)
       }
     } catch (e: any) {
-      setError(e?.message ?? 'Failed to fetch rates')
+      setError(e?.message ?? t('scmsc.fx.fetch_failed', locale))
     } finally {
       setLoading(false)
     }
@@ -64,14 +66,14 @@ export function LiveRatesWidget({ base = 'EUR', refreshInterval = 60000, showOnl
           <div>
             <h3 className="font-bold flex items-center gap-2">
               <span>{CURRENCY_FLAGS[base] ?? '💱'}</span>
-              Taux de Change - Base {base}
+              {t('scmsc.fx.titre', locale).replace('{base}', base)}
             </h3>
             {lastUpdate && (
               <p className="text-xs text-gray-500 mt-0.5">
-                Mis à jour: {lastUpdate.toLocaleTimeString('fr-FR')}
+                {t('scmsc.fx.mis_a_jour', locale).replace('{time}', lastUpdate.toLocaleTimeString('fr-FR'))}
                 <span className="inline-flex items-center gap-1 ml-2 text-green-600">
                   <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                  Live
+                  {t('scmsc.fx.live', locale)}
                 </span>
               </p>
             )}
@@ -81,7 +83,7 @@ export function LiveRatesWidget({ base = 'EUR', refreshInterval = 60000, showOnl
             disabled={loading}
             className="text-sm px-3 py-1 border rounded hover:bg-white disabled:opacity-50"
           >
-            ↻ Refresh
+            {t('scmsc.fx.refresh', locale)}
           </button>
         </div>
       </div>
@@ -95,7 +97,7 @@ export function LiveRatesWidget({ base = 'EUR', refreshInterval = 60000, showOnl
 
         {loading && Object.keys(rates).length === 0 && (
           <div className="p-8 text-center text-gray-500 text-sm">
-            Chargement des taux...
+            {t('scmsc.fx.chargement_taux', locale)}
           </div>
         )}
 
@@ -106,7 +108,7 @@ export function LiveRatesWidget({ base = 'EUR', refreshInterval = 60000, showOnl
               <div>
                 <div className="font-medium text-sm">{quote}</div>
                 <div className="text-xs text-gray-500">
-                  {rate.isFixedPeg ? 'Parité fixe' : rate.source}
+                  {rate.isFixedPeg ? t('scmsc.fx.parite_fixe', locale) : rate.source}
                 </div>
               </div>
             </div>
@@ -126,7 +128,7 @@ export function LiveRatesWidget({ base = 'EUR', refreshInterval = 60000, showOnl
       </div>
 
       <div className="px-4 py-2 bg-gray-50 border-t text-xs text-gray-600 text-center">
-        Source: ECB / Frankfurter • 150+ devises supportées
+        {t('scmsc.fx.source_footer', locale)}
       </div>
     </div>
   )

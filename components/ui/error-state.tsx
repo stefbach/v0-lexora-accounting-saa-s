@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { AlertCircle, RefreshCw, Home } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { t, getLocale } from '@/lib/i18n'
 
 export interface ErrorStateProps {
   /** Error captured by the Next.js error boundary (or any other source). */
@@ -28,11 +29,13 @@ export interface ErrorStateProps {
 export function ErrorState({
   error,
   reset,
-  title = 'Une erreur est survenue',
+  title,
   description,
   homeHref = '/',
   className,
 }: ErrorStateProps) {
+  const locale = getLocale()
+  const resolvedTitle = title ?? t('scmsc.err.title', locale)
   // Log the error in dev for easier debugging.
   useEffect(() => {
     if (error && process.env.NODE_ENV !== 'production') {
@@ -41,10 +44,7 @@ export function ErrorState({
     }
   }, [error])
 
-  const friendly =
-    description ??
-    "Quelque chose s'est mal passé pendant le chargement de cette page. " +
-      'Vous pouvez réessayer ou revenir au tableau de bord.'
+  const friendly = description ?? t('scmsc.err.description', locale)
 
   return (
     <div
@@ -60,11 +60,11 @@ export function ErrorState({
       </div>
 
       <div className="max-w-md space-y-2">
-        <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+        <h2 className="text-xl font-semibold tracking-tight">{resolvedTitle}</h2>
         <p className="text-sm text-muted-foreground">{friendly}</p>
         {error?.digest && (
           <p className="text-xs text-muted-foreground/70">
-            Référence&nbsp;: <code>{error.digest}</code>
+            {t('scmsc.err.reference', locale)}&nbsp;<code>{error.digest}</code>
           </p>
         )}
       </div>
@@ -73,13 +73,13 @@ export function ErrorState({
         {reset && (
           <Button onClick={() => reset()} className="gap-2">
             <RefreshCw className="size-4" aria-hidden="true" />
-            Réessayer
+            {t('scmsc.err.reessayer', locale)}
           </Button>
         )}
         <Button asChild variant="outline" className="gap-2">
           <Link href={homeHref}>
             <Home className="size-4" aria-hidden="true" />
-            Retour au tableau de bord
+            {t('scmsc.err.retour_dashboard', locale)}
           </Link>
         </Button>
       </div>

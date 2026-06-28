@@ -19,6 +19,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { User, ArrowRight } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Props {
   /** Style sidebar (full width, padding réduit) vs header (inline). */
@@ -32,8 +33,10 @@ interface Props {
 export default function MonEspaceSalarieLink({
   compact = false,
   href = "/salarie",
-  label = "Mon espace salarié",
+  label,
 }: Props) {
+  const locale = getLocale()
+  const resolvedLabel = label ?? t('scrh.mesl_label', locale)
   const [hasEmploye, setHasEmploye] = useState<boolean | null>(null)
 
   useEffect(() => {
@@ -53,10 +56,10 @@ export default function MonEspaceSalarieLink({
       <Link
         href={href}
         className="flex items-center gap-2 px-3 py-2 mx-2 mb-2 rounded-md text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors border border-white/10"
-        title={label}
+        title={resolvedLabel}
       >
         <User className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate">{label}</span>
+        <span className="truncate">{resolvedLabel}</span>
         <ArrowRight className="h-3 w-3 ml-auto opacity-60" />
       </Link>
     )
@@ -68,7 +71,7 @@ export default function MonEspaceSalarieLink({
       className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-[#0B0F2E] transition-colors"
     >
       <User className="h-3.5 w-3.5" />
-      <span>{label}</span>
+      <span>{resolvedLabel}</span>
       <ArrowRight className="h-3 w-3 opacity-60" />
     </Link>
   )

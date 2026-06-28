@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertTriangle, XCircle, Info } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Alert {
   id: string
@@ -13,7 +14,7 @@ interface AlertsPanelProps {
   alerts: Alert[]
 }
 
-function getRelativeTime(dateString: string): string {
+function getRelativeTime(dateString: string, locale: ReturnType<typeof getLocale>): string {
   const now = new Date()
   const date = new Date(dateString)
   const diffMs = now.getTime() - date.getTime()
@@ -21,10 +22,10 @@ function getRelativeTime(dateString: string): string {
   const diffHours = Math.floor(diffMinutes / 60)
   const diffDays = Math.floor(diffHours / 24)
 
-  if (diffMinutes < 1) return "À l'instant"
-  if (diffMinutes < 60) return `Il y a ${diffMinutes} min`
-  if (diffHours < 24) return `Il y a ${diffHours}h`
-  if (diffDays < 7) return `Il y a ${diffDays}j`
+  if (diffMinutes < 1) return t('scmsc.alerts.a_linstant', locale)
+  if (diffMinutes < 60) return t('scmsc.alerts.il_y_a_min', locale).replace('{n}', String(diffMinutes))
+  if (diffHours < 24) return t('scmsc.alerts.il_y_a_h', locale).replace('{n}', String(diffHours))
+  if (diffDays < 7) return t('scmsc.alerts.il_y_a_j', locale).replace('{n}', String(diffDays))
   return date.toLocaleDateString("fr-FR")
 }
 
@@ -47,14 +48,15 @@ const alertConfig = {
 }
 
 export function AlertsPanel({ alerts }: AlertsPanelProps) {
+  const locale = getLocale()
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Alertes</CardTitle>
+        <CardTitle>{t('scmsc.alerts.titre', locale)}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {alerts.length === 0 && (
-          <p className="text-sm text-muted-foreground">Aucune alerte</p>
+          <p className="text-sm text-muted-foreground">{t('scmsc.alerts.aucune', locale)}</p>
         )}
         {alerts.map((alert) => {
           const config = alertConfig[alert.type]
@@ -71,7 +73,7 @@ export function AlertsPanel({ alerts }: AlertsPanelProps) {
               <div className="flex-1 space-y-1">
                 <p className="text-sm">{alert.message}</p>
                 <p className="text-xs text-muted-foreground">
-                  {getRelativeTime(alert.date)}
+                  {getRelativeTime(alert.date, locale)}
                 </p>
               </div>
             </div>

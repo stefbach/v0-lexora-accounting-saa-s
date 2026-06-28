@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { notifyError } from "@/lib/utils/toast"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -229,6 +230,7 @@ export function CalculDistanceWidget({
   defaultArrivee = "",
   className = "",
 }: CalculDistanceWidgetProps) {
+  const locale = getLocale()
   const [depart, setDepart] = useState(defaultDepart)
   const [arrivee, setArrivee] = useState(defaultArrivee)
   const [allerRetour, setAllerRetour] = useState(false)
@@ -258,14 +260,14 @@ export function CalculDistanceWidget({
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         notifyError(
-          "Calcul distance",
+          t('scrh.dist_calc_error', locale),
           data?.error || `HTTP ${res.status}`,
         )
         return
       }
       setResult(data as DistanceResult)
     } catch (e: unknown) {
-      notifyError("Erreur réseau", e)
+      notifyError(t('scrh.dist_network_error', locale), e)
     } finally {
       setCalculating(false)
     }
@@ -292,30 +294,30 @@ export function CalculDistanceWidget({
           style={{ color: NAVY }}
         >
           <MapPin className="h-5 w-5" style={{ color: GOLD }} />
-          Calculer une distance
+          {t('scrh.dist_title', locale)}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <AddressAutocomplete
             id="depart-adresse"
-            label="Adresse de départ"
+            label={t('scrh.dist_label_depart', locale)}
             value={depart}
             onChange={(v) => {
               setDepart(v)
               if (result) setResult(null)
             }}
-            placeholder="Ex: Rose Hill, Maurice"
+            placeholder={t('scrh.dist_ph_depart', locale)}
           />
           <AddressAutocomplete
             id="arrivee-adresse"
-            label="Adresse d'arrivée"
+            label={t('scrh.dist_label_arrivee', locale)}
             value={arrivee}
             onChange={(v) => {
               setArrivee(v)
               if (result) setResult(null)
             }}
-            placeholder="Ex: Port Louis, Maurice"
+            placeholder={t('scrh.dist_ph_arrivee', locale)}
           />
         </div>
 
@@ -332,7 +334,7 @@ export function CalculDistanceWidget({
             htmlFor="aller-retour"
             className="text-sm font-normal cursor-pointer"
           >
-            Aller-retour (×2)
+            {t('scrh.dist_round_trip', locale)}
           </Label>
         </div>
 
@@ -347,7 +349,7 @@ export function CalculDistanceWidget({
           ) : (
             <ArrowRight className="h-4 w-4 mr-2" />
           )}
-          {calculating ? "Calcul en cours…" : "Calculer la distance"}
+          {calculating ? t('scrh.dist_calculating', locale) : t('scrh.dist_calc_btn', locale)}
         </Button>
 
         {result && (
@@ -359,7 +361,7 @@ export function CalculDistanceWidget({
           >
             <div className="flex items-center gap-2 text-green-700 text-sm font-medium mb-2">
               <span aria-hidden>✅</span>
-              Distance estimée
+              {t('scrh.dist_estimated', locale)}
             </div>
             <p
               className="text-3xl font-bold"
@@ -368,30 +370,28 @@ export function CalculDistanceWidget({
               {result.total_km.toFixed(1)} km
               {allerRetour && (
                 <span className="text-sm font-normal text-gray-500 ml-2">
-                  (aller-retour)
+                  {t('scrh.dist_round_trip_suffix', locale)}
                 </span>
               )}
             </p>
             {typeof result.distance_km === "number" &&
               result.distance_km !== result.total_km && (
                 <p className="text-xs text-gray-500 mt-1">
-                  Aller simple : {result.distance_km.toFixed(1)} km
+                  {t('scrh.dist_one_way', locale).replace('{km}', result.distance_km.toFixed(1))}
                 </p>
               )}
             {result.routing_factor && (
               <p className="text-xs text-gray-500 mt-1">
-                Vol d&apos;oiseau ×{" "}
-                {result.routing_factor.toFixed(2)} (facteur routier
-                Maurice)
+                {t('scrh.dist_crow_flies', locale).replace('{f}', result.routing_factor.toFixed(2))}
               </p>
             )}
             <div className="mt-3 text-xs text-gray-600 space-y-1">
               <p>
-                <strong>De :</strong>{" "}
+                <strong>{t('scrh.dist_from', locale)}</strong>{" "}
                 {result.depart?.display_name || depart}
               </p>
               <p>
-                <strong>Vers :</strong>{" "}
+                <strong>{t('scrh.dist_to', locale)}</strong>{" "}
                 {result.arrivee?.display_name || arrivee}
               </p>
             </div>
@@ -403,11 +403,11 @@ export function CalculDistanceWidget({
                   style={{ backgroundColor: GOLD }}
                   onClick={useThisDistance}
                 >
-                  Utiliser cette distance
+                  {t('scrh.dist_use', locale)}
                 </Button>
               )}
               <Button size="sm" variant="ghost" onClick={reset}>
-                Effacer
+                {t('scrh.dist_clear', locale)}
               </Button>
             </div>
           </div>

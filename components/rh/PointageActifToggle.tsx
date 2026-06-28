@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import { Loader2, MapPin, AlertCircle } from "lucide-react"
 import { notifySuccess, notifyError } from "@/lib/utils/toast"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 
@@ -35,6 +36,7 @@ export function PointageActifToggle({
   onSaved,
   withCard = true,
 }: PointageActifToggleProps) {
+  const locale = getLocale()
   const [active, setActive] = useState(initial)
   const [pendingActivate, setPendingActivate] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -49,18 +51,18 @@ export function PointageActifToggle({
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        notifyError("Enregistrer", d.error || res.statusText)
+        notifyError(t('scrh.pat_save', locale), d.error || res.statusText)
         return
       }
       setActive(newValue)
       onSaved?.(newValue)
       notifySuccess(
         newValue
-          ? "✅ Pointage obligatoire activé — la prochaine paie déduira les absences"
-          : "Pointage obligatoire désactivé — les pointages restent enregistrés sans impact paie",
+          ? t('scrh.pat_activated', locale)
+          : t('scrh.pat_deactivated', locale),
       )
     } catch (e: unknown) {
-      notifyError("Erreur réseau", e)
+      notifyError(t('scrh.pat_network_error', locale), e)
     } finally {
       setSaving(false)
     }
@@ -74,12 +76,10 @@ export function PointageActifToggle({
   const toggleBody = (
     <>
       <p className="text-sm text-gray-600">
-        Activer la déduction automatique des absences basée sur le pointage.
+        {t('scrh.pat_intro', locale)}
       </p>
       <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
-        ⚠️ Une fois activé, tout employé sans pointage <b>ni congé approuvé</b> sera considéré
-        absent ce jour. La déduction s'applique au prochain calcul de paie (action « calculer »
-        ou « calculer_batch »).
+        {t('scrh.pat_warning', locale)}
       </div>
       <div className="flex items-center gap-3 pt-1">
         <Switch checked={active} disabled={saving} onCheckedChange={handleToggle} />
@@ -87,7 +87,7 @@ export function PointageActifToggle({
           className="text-sm font-medium"
           style={{ color: active ? "#059669" : "#6b7280" }}
         >
-          {active ? "Activé — la paie déduira les absences" : "Désactivé (mode test)"}
+          {active ? t('scrh.pat_state_on', locale) : t('scrh.pat_state_off', locale)}
         </span>
         {saving && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
       </div>
@@ -100,15 +100,13 @@ export function PointageActifToggle({
         >
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
             <h3 className="text-lg font-semibold text-amber-900 flex items-center gap-2">
-              <AlertCircle className="h-5 w-5" /> Activer le pointage obligatoire ?
+              <AlertCircle className="h-5 w-5" /> {t('scrh.pat_confirm_title', locale)}
             </h3>
             <p className="text-sm text-gray-700">
-              Êtes-vous sûr ? <b>Tout employé sans pointage</b> sur un jour ouvré, et
-              sans congé approuvé couvrant ce jour, sera considéré <b>absent</b> dès
-              le prochain calcul de paie.
+              {t('scrh.pat_confirm_body', locale)}
             </p>
             <p className="text-xs text-gray-500">
-              Cette bascule est réversible — vous pouvez la couper à tout moment.
+              {t('scrh.pat_confirm_note', locale)}
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <Button
@@ -116,7 +114,7 @@ export function PointageActifToggle({
                 onClick={() => setPendingActivate(false)}
                 disabled={saving}
               >
-                Annuler
+                {t('scrh.pat_cancel', locale)}
               </Button>
               <Button
                 onClick={async () => {
@@ -128,7 +126,7 @@ export function PointageActifToggle({
                 className="text-white hover:opacity-90"
               >
                 {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                Confirmer l'activation
+                {t('scrh.pat_confirm_btn', locale)}
               </Button>
             </div>
           </div>
@@ -143,7 +141,7 @@ export function PointageActifToggle({
     <Card className="rounded-2xl border-l-4 border-l-amber-500">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold text-amber-700 flex items-center gap-2">
-          <MapPin className="h-4 w-4" /> Pointage obligatoire
+          <MapPin className="h-4 w-4" /> {t('scrh.pat_card_title', locale)}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">{toggleBody}</CardContent>

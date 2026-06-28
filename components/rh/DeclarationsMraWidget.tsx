@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { BookOpenCheck, ArrowRight, AlertTriangle, CheckCircle2 } from "lucide-react"
 import { formaterMUR, libellePeriode, deadlineMraFromPeriode } from "@/lib/rh/declarations-mra"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -19,6 +20,7 @@ const GOLD = "#D4AF37"
  *   ⚠ en cours → CTA + compte à rebours deadline
  */
 export function DeclarationsMraWidget() {
+  const locale = getLocale()
   const [loading, setLoading] = useState(true)
   const [state, setState] = useState<{
     societe: { id: string; nom: string } | null
@@ -100,10 +102,10 @@ export function DeclarationsMraWidget() {
             <div className="flex items-center gap-2 flex-wrap">
               <p className="font-semibold text-sm" style={{ color: NAVY }}>
                 {paye
-                  ? `✅ Déclaration MRA ${periodeLabel} payée`
+                  ? t('scrh.dmra_paid', locale).replace('{p}', periodeLabel)
                   : retard
-                  ? `🚨 Déclaration MRA ${periodeLabel} EN RETARD`
-                  : `⚠ Déclaration MRA ${periodeLabel} à faire`}
+                  ? t('scrh.dmra_late', locale).replace('{p}', periodeLabel)
+                  : t('scrh.dmra_todo', locale).replace('{p}', periodeLabel)}
               </p>
               <Badge className="text-[10px] bg-slate-100 text-slate-700 border-slate-300">
                 MRA
@@ -111,28 +113,28 @@ export function DeclarationsMraWidget() {
             </div>
             {paye ? (
               <div className="mt-1.5 text-[12px] text-gray-600">
-                Total remis : <strong className="font-mono" style={{ color: NAVY }}>
+                {t('scrh.dmra_total_remitted', locale)} <strong className="font-mono" style={{ color: NAVY }}>
                   {formaterMUR(state.totalMra)}
                 </strong>
               </div>
             ) : (
               <p className="text-[12px] text-gray-600 mt-1 flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3" style={{ color: accentColor }} />
-                Deadline : <strong>{state.deadline}</strong>
+                {t('scrh.dmra_deadline', locale)} <strong>{state.deadline}</strong>
                 {retard
-                  ? <span className="text-red-700 ml-1">(dépassée de {-state.joursRestants} j)</span>
-                  : <span className="ml-1">(dans {state.joursRestants} j)</span>}
+                  ? <span className="text-red-700 ml-1">{t('scrh.dmra_overdue_by', locale).replace('{n}', String(-state.joursRestants))}</span>
+                  : <span className="ml-1">{t('scrh.dmra_in_days', locale).replace('{n}', String(state.joursRestants))}</span>}
               </p>
             )}
             {state.societe && (
               <p className="text-[11px] text-gray-400 mt-0.5 italic">
-                Société : {state.societe.nom}
+                {t('scrh.dmra_company', locale).replace('{nom}', state.societe.nom)}
               </p>
             )}
           </div>
           <Link href="/rh/declarations-mra">
             <Button size="sm" variant="outline" className="shrink-0 text-xs">
-              Voir <ArrowRight className="h-3 w-3 ml-1" />
+              {t('scrh.dmra_see', locale)} <ArrowRight className="h-3 w-3 ml-1" />
             </Button>
           </Link>
         </div>

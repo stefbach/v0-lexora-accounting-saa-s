@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, type DragEvent, type ChangeEvent } from "react"
 import { cn } from "@/lib/utils"
 import { Upload, File, X, FileText, Image, Table2 } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 interface UploadZoneProps {
   onUpload?: (files: File[]) => void
@@ -41,6 +42,7 @@ export function UploadZone({
   accept = DEFAULT_ACCEPT,
   maxSize = DEFAULT_MAX_SIZE,
 }: UploadZoneProps) {
+  const locale = getLocale()
   const [files, setFiles] = useState<File[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -52,12 +54,15 @@ export function UploadZone({
       for (const file of fileList) {
         const ext = "." + file.name.split(".").pop()?.toLowerCase()
         if (!accept.includes(ext) && !accept.includes(ext.replace(".", ""))) {
-          setError(`Format non supporté : ${file.name}`)
+          setError(t('scmsc.upload.format_non_supporte', locale).replace('{file}', file.name))
           continue
         }
         if (file.size > maxSize) {
           setError(
-            `Fichier trop volumineux : ${file.name} (${formatFileSize(file.size)}). Maximum : ${formatFileSize(maxSize)}`
+            t('scmsc.upload.fichier_trop_volumineux', locale)
+              .replace('{file}', file.name)
+              .replace('{size}', formatFileSize(file.size))
+              .replace('{max}', formatFileSize(maxSize))
           )
           continue
         }
@@ -65,7 +70,7 @@ export function UploadZone({
       }
       return valid
     },
-    [accept, maxSize]
+    [accept, maxSize, locale]
   )
 
   const addFiles = useCallback(
@@ -139,14 +144,14 @@ export function UploadZone({
         </div>
         <div className="text-center">
           <p className="text-sm font-medium">
-            Glissez-déposez vos fichiers ici
+            {t('scmsc.upload.drop_here', locale)}
           </p>
           <p className="text-xs text-muted-foreground">
-            ou cliquez pour parcourir
+            {t('scmsc.upload.or_browse', locale)}
           </p>
         </div>
         <p className="text-xs text-muted-foreground">
-          PDF, JPEG, PNG, XLSX — Max {formatFileSize(maxSize)}
+          {t('scmsc.upload.formats_hint', locale).replace('{max}', formatFileSize(maxSize))}
         </p>
         <input
           ref={inputRef}
@@ -165,7 +170,10 @@ export function UploadZone({
       {files.length > 0 && (
         <div className="space-y-2">
           <p className="text-sm font-medium">
-            {files.length} fichier{files.length > 1 ? "s" : ""} sélectionné{files.length > 1 ? "s" : ""}
+            {t(
+              files.length > 1 ? 'scmsc.upload.nb_selected_plural' : 'scmsc.upload.nb_selected',
+              locale
+            ).replace('{n}', String(files.length))}
           </p>
           <ul className="space-y-2">
             {files.map((file, index) => {
@@ -185,7 +193,7 @@ export function UploadZone({
                   <button
                     onClick={() => removeFile(index)}
                     className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-muted"
-                    title="Retirer"
+                    title={t('scmsc.upload.retirer', locale)}
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -198,7 +206,7 @@ export function UploadZone({
             className="inline-flex h-9 items-center justify-center rounded-md bg-amber-600 px-4 text-sm font-medium text-white hover:bg-amber-700 transition-colors"
           >
             <Upload className="mr-2 h-4 w-4" />
-            Téléverser
+            {t('scmsc.upload.televerser', locale)}
           </button>
         </div>
       )}

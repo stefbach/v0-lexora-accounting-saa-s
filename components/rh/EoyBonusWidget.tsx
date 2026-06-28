@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Gift, ArrowRight, Loader2, CalendarDays, AlertTriangle } from "lucide-react"
 import { formaterMontantMUR, type EoyBonusRecap } from "@/lib/rh/eoy-bonus"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -18,6 +19,7 @@ const GOLD = "#D4AF37"
  * total à payer. Sinon, simple CTA vers /rh/eoy-bonus.
  */
 export function EoyBonusWidget() {
+  const locale = getLocale()
   const [recap, setRecap] = useState<EoyBonusRecap | null>(null)
   const [loading, setLoading] = useState(true)
   const [societes, setSocietes] = useState<Array<{ id: string; nom: string }>>([])
@@ -72,7 +74,7 @@ export function EoyBonusWidget() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="font-semibold text-sm" style={{ color: NAVY }}>
-                {getWidgetTitle(now, annee, recap)}
+                {getWidgetTitle(now, annee, recap, locale)}
               </p>
               <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-300">
                 WRA S.54
@@ -83,36 +85,38 @@ export function EoyBonusWidget() {
               <>
                 <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-gray-600">
                   <span>
-                    Total : <strong className="font-mono" style={{ color: NAVY }}>{formaterMontantMUR(recap.total_bonus)}</strong>
+                    {t('scrh.eoy_total', locale)} <strong className="font-mono" style={{ color: NAVY }}>{formaterMontantMUR(recap.total_bonus)}</strong>
                   </span>
                   <span>
-                    {recap.nb_eligibles} éligible{recap.nb_eligibles > 1 ? 's' : ''}
-                    {recap.nb_non_eligibles > 0 ? ` · ${recap.nb_non_eligibles} non` : ''}
+                    {recap.nb_eligibles} {recap.nb_eligibles > 1 ? t('scrh.eoy_eligibles', locale) : t('scrh.eoy_eligible', locale)}
+                    {recap.nb_non_eligibles > 0 ? ` · ${recap.nb_non_eligibles} ${t('scrh.eoy_non_suffix', locale)}` : ''}
                   </span>
                   <span className="flex items-center gap-1">
                     <CalendarDays className="h-3 w-3" />
-                    75% avant {fmtDate(recap.date_paiement_75pct)} · 25% avant {fmtDate(recap.date_paiement_25pct)}
+                    {t('scrh.eoy_deadlines', locale).replace('{a}', fmtDate(recap.date_paiement_75pct)).replace('{b}', fmtDate(recap.date_paiement_25pct))}
                   </span>
                 </div>
                 {recap.nb_bulletins_manquants_total > 0 && (
                   <p className="text-[11px] mt-1 text-amber-700 flex items-center gap-1">
                     <AlertTriangle className="h-3 w-3" />
-                    {recap.nb_bulletins_manquants_total} bulletin{recap.nb_bulletins_manquants_total > 1 ? 's' : ''} manquant{recap.nb_bulletins_manquants_total > 1 ? 's' : ''} ({recap.nb_employes_avec_bulletins_manquants} employé{recap.nb_employes_avec_bulletins_manquants > 1 ? 's' : ''})
+                    {(recap.nb_bulletins_manquants_total > 1 ? t('scrh.eoy_missing_payslips', locale) : t('scrh.eoy_missing_payslip', locale)).replace('{n}', String(recap.nb_bulletins_manquants_total)).replace('{e}', String(recap.nb_employes_avec_bulletins_manquants))}
                   </p>
                 )}
                 <p className="text-[11px] text-gray-400 mt-0.5 italic">
-                  Société : {societeNom}{societes.length > 1 ? ` (+${societes.length - 1} autres)` : ''}
+                  {societes.length > 1
+                    ? t('scrh.eoy_company_others', locale).replace('{nom}', societeNom).replace('{n}', String(societes.length - 1))
+                    : t('scrh.eoy_company', locale).replace('{nom}', societeNom)}
                 </p>
               </>
             ) : (
               <p className="text-[12px] text-gray-600 mt-1">
-                Calculez le bonus fin d&apos;année pour vos employés (paiement 75% avant le 25/12).
+                {t('scrh.eoy_cta_desc', locale)}
               </p>
             )}
           </div>
           <Link href="/rh/eoy-bonus">
             <Button size="sm" variant="outline" className="shrink-0 text-xs">
-              Voir <ArrowRight className="h-3 w-3 ml-1" />
+              {t('scrh.eoy_see', locale)} <ArrowRight className="h-3 w-3 ml-1" />
             </Button>
           </Link>
         </div>
@@ -127,19 +131,26 @@ function fmtDate(ymd: string): string {
 }
 
 /** Titre contextuel selon le mois + l'état des calculs. */
-function getWidgetTitle(now: Date, annee: number, recap: EoyBonusRecap | null): string {
+function getWidgetTitle(
+  now: Date,
+  annee: number,
+  recap: EoyBonusRecap | null,
+  locale: ReturnType<typeof getLocale>,
+): string {
   const m = now.getMonth() + 1  // 1..12
   const d = now.getDate()
   if (m === 10 || m === 11) {
-    return `📅 EOY Bonus ${annee} : préparez le calcul`
+    return t('scrh.eoy_title_prepare', locale).replace('{a}', String(annee))
   }
   // Décembre
   if (m === 12) {
     if (d <= 18) {
       const n = recap?.nb_eligibles ?? 0
-      return `⚠ EOY 75% à payer avant le 18/12${n > 0 ? ` (${n} employé${n > 1 ? 's' : ''})` : ''}`
+      return n > 0
+        ? t('scrh.eoy_title_75_emp', locale).replace('{n}', String(n))
+        : t('scrh.eoy_title_75', locale)
     }
-    return `⚠ EOY 25% à payer avant le 31/12`
+    return t('scrh.eoy_title_25', locale)
   }
-  return `Préparez l'EOY Bonus ${annee}`
+  return t('scrh.eoy_title_default', locale).replace('{a}', String(annee))
 }

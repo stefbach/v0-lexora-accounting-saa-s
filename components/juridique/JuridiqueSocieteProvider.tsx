@@ -8,6 +8,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Building2 } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 export interface SocieteLite {
   id: string
@@ -74,6 +75,7 @@ export function useJuridiqueSociete(): Ctx {
 
 /** Sélecteur de société réutilisable (header des pages juridiques). */
 export function SocieteSelector({ className = "" }: { className?: string }) {
+  const locale = getLocale()
   const { societes, societeId, setSocieteId } = useJuridiqueSociete()
   if (societes.length === 0) return null
   if (societes.length === 1) {
@@ -89,7 +91,7 @@ export function SocieteSelector({ className = "" }: { className?: string }) {
       <Building2 className="w-4 h-4 text-[#D4AF37]" />
       <Select value={societeId} onValueChange={setSocieteId}>
         <SelectTrigger className="w-[220px] h-9 bg-white">
-          <SelectValue placeholder="Choisir une société" />
+          <SelectValue placeholder={t('scjur.societe.choose', locale)} />
         </SelectTrigger>
         <SelectContent>
           {societes.map((s) => (

@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Trash2 } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 export type SoldeSection = "banque" | "client" | "fournisseur" | "immobilisation"
 
@@ -78,6 +79,7 @@ export function SoldeOuvertureCard({
   onChange,
   accentClassName = "border-l-4 border-l-blue-500",
 }: SoldeOuvertureCardProps) {
+  const locale = getLocale()
   const updateLigne = useCallback(
     (id: string, patch: Partial<SoldeLigne>) => {
       onChange(lignes.map((l) => (l.id === id ? { ...l, ...patch } : l)))
@@ -101,13 +103,14 @@ export function SoldeOuvertureCard({
     return acc + (Number.isFinite(m) ? m : 0)
   }, 0)
 
-  const sectionLabelMap: Record<SoldeSection, string> = {
-    banque: "Actif",
-    client: "Actif",
-    fournisseur: "Passif",
-    immobilisation: "Actif",
+  const sectionLabelMap: Record<SoldeSection, "actif" | "passif"> = {
+    banque: "actif",
+    client: "actif",
+    fournisseur: "passif",
+    immobilisation: "actif",
   }
   const sens = sectionLabelMap[section]
+  const sensLabel = sens === "actif" ? t('scjur.solde.sens_actif', locale) : t('scjur.solde.sens_passif', locale)
 
   return (
     <Card className={accentClassName}>
@@ -119,35 +122,35 @@ export function SoldeOuvertureCard({
               <p className="text-sm text-muted-foreground mt-1">{description}</p>
             ) : null}
           </div>
-          <Badge variant={sens === "Actif" ? "default" : "secondary"}>{sens}</Badge>
+          <Badge variant={sens === "actif" ? "default" : "secondary"}>{sensLabel}</Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {lignes.length === 0 ? (
           <p className="text-sm text-muted-foreground italic">
-            Aucune ligne. Cliquez sur « Ajouter une ligne » pour commencer.
+            {t('scjur.solde.empty', locale)}
           </p>
         ) : (
           <div className="space-y-2">
             <div className="grid grid-cols-12 gap-2 text-xs font-medium text-muted-foreground px-1">
-              <div className="col-span-2">Compte</div>
-              <div className="col-span-3">Nom / Tiers</div>
-              <div className="col-span-2 text-right">Montant MUR</div>
-              <div className="col-span-2">Devise orig.</div>
-              <div className="col-span-2 text-right">Mt. orig.</div>
+              <div className="col-span-2">{t('scjur.solde.col_account', locale)}</div>
+              <div className="col-span-3">{t('scjur.solde.col_name_party', locale)}</div>
+              <div className="col-span-2 text-right">{t('scjur.solde.col_amount_mur', locale)}</div>
+              <div className="col-span-2">{t('scjur.solde.col_orig_currency', locale)}</div>
+              <div className="col-span-2 text-right">{t('scjur.solde.col_orig_amount', locale)}</div>
               <div className="col-span-1"></div>
             </div>
             {lignes.map((l) => (
               <div key={l.id} className="grid grid-cols-12 gap-2 items-center">
                 <Input
                   className="col-span-2"
-                  placeholder={defaultCompte || "Compte"}
+                  placeholder={defaultCompte || t('scjur.solde.ph_account', locale)}
                   value={l.compte}
                   onChange={(e) => updateLigne(l.id, { compte: e.target.value })}
                 />
                 <Input
                   className="col-span-3"
-                  placeholder="Nom tiers / libellé"
+                  placeholder={t('scjur.solde.ph_name_party', locale)}
                   value={l.nom_tiers}
                   onChange={(e) =>
                     updateLigne(l.id, { nom_tiers: e.target.value })
@@ -188,7 +191,7 @@ export function SoldeOuvertureCard({
                     variant="ghost"
                     size="icon"
                     onClick={() => removeLigne(l.id)}
-                    aria-label="Supprimer la ligne"
+                    aria-label={t('scjur.solde.delete_line', locale)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -199,10 +202,10 @@ export function SoldeOuvertureCard({
         )}
         <div className="flex items-center justify-between pt-2 border-t">
           <Button type="button" variant="outline" size="sm" onClick={addLigne}>
-            <Plus className="h-4 w-4 mr-1" /> Ajouter une ligne
+            <Plus className="h-4 w-4 mr-1" /> {t('scjur.solde.add_line', locale)}
           </Button>
           <div className="text-sm">
-            <span className="text-muted-foreground mr-2">Total :</span>
+            <span className="text-muted-foreground mr-2">{t('scjur.solde.total', locale)}</span>
             <span className="font-mono font-semibold">{fmtMUR(total)} MUR</span>
           </div>
         </div>
