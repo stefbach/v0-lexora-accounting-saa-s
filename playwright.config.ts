@@ -36,9 +36,11 @@ export default defineConfig({
       },
     },
   ],
-  // Démarre l'app Next.js pour les tests (réutilise un serveur déjà lancé en local).
+  // Démarre l'app Next.js pour les tests. En CI, le workflow playwright.yml a
+  // déjà fait `npm run build` → on lance `npm run start` (prod, rapide). En local,
+  // `npm run dev` et on réutilise un serveur déjà lancé s'il y en a un.
   webServer: {
-    command: 'npm run dev',
+    command: process.env.CI ? 'npm run start' : 'npm run dev',
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
