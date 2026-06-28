@@ -10,6 +10,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { Loader2, BanknoteIcon } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 import {
   Dialog,
   DialogContent,
@@ -51,13 +52,13 @@ interface Props {
   onSuccess?: (facture: any) => void
 }
 
-const MODES: { value: ModePaiement; label: string }[] = [
-  { value: "virement", label: "Virement bancaire" },
-  { value: "cheque", label: "Chèque" },
-  { value: "espece", label: "Espèces" },
-  { value: "carte", label: "Carte bancaire" },
-  { value: "prelevement", label: "Prélèvement" },
-  { value: "autre", label: "Autre" },
+const MODES: { value: ModePaiement; labelKey: string }[] = [
+  { value: "virement", labelKey: "scp.pay_mode_virement" },
+  { value: "cheque", labelKey: "scp.pay_mode_cheque" },
+  { value: "espece", labelKey: "scp.pay_mode_espece" },
+  { value: "carte", labelKey: "scp.pay_mode_carte" },
+  { value: "prelevement", labelKey: "scp.pay_mode_prelevement" },
+  { value: "autre", labelKey: "scp.pay_mode_autre" },
 ]
 
 function fmt(n: number, dev = "MUR"): string {
@@ -69,6 +70,7 @@ function fmt(n: number, dev = "MUR"): string {
 }
 
 export function PaiementFactureDialog({ facture, open, onOpenChange, onSuccess }: Props) {
+  const locale = getLocale()
   const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
   const [montant, setMontant] = useState<string>("")
   const [date, setDate] = useState<string>(today)
@@ -108,11 +110,11 @@ export function PaiementFactureDialog({ facture, open, onOpenChange, onSuccess }
     setError(null)
     const m = Number(montant)
     if (!Number.isFinite(m) || m <= 0) {
-      setError("Montant invalide")
+      setError(t('scp.pay_err_invalid_amount', locale))
       return
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      setError("Date invalide")
+      setError(t('scp.pay_err_invalid_date', locale))
       return
     }
     setSubmitting(true)
@@ -137,7 +139,7 @@ export function PaiementFactureDialog({ facture, open, onOpenChange, onSuccess }
       onSuccess?.(data?.facture)
       onOpenChange(false)
     } catch (e: any) {
-      setError(e?.message || "Erreur réseau")
+      setError(e?.message || t('scp.pay_err_network', locale))
     } finally {
       setSubmitting(false)
     }
@@ -149,10 +151,10 @@ export function PaiementFactureDialog({ facture, open, onOpenChange, onSuccess }
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <BanknoteIcon className="h-5 w-5 text-emerald-600" />
-            Enregistrer un paiement
+            {t('scp.pay_title', locale)}
           </DialogTitle>
           <DialogDescription>
-            Facture <span className="font-mono font-medium">{facture.numero_facture || facture.id.slice(0, 8)}</span>
+            {t('scp.pay_invoice_word', locale)} <span className="font-mono font-medium">{facture.numero_facture || facture.id.slice(0, 8)}</span>
             {" — "}
             <span>{facture.tiers || "—"}</span>
           </DialogDescription>
@@ -162,15 +164,15 @@ export function PaiementFactureDialog({ facture, open, onOpenChange, onSuccess }
           {/* Récap solde */}
           <div className="rounded-md border bg-muted/30 p-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Total facture</span>
+              <span className="text-muted-foreground">{t('scp.pay_total_invoice', locale)}</span>
               <span className="font-mono">{fmt(Number(facture.montant_ttc) || 0, devise)}</span>
             </div>
             <div className="flex justify-between mt-1">
-              <span className="text-muted-foreground">Déjà payé</span>
+              <span className="text-muted-foreground">{t('scp.pay_already_paid', locale)}</span>
               <span className="font-mono">{fmt(totalMur - soldeMur, "MUR")} ({pctPaye}%)</span>
             </div>
             <div className="flex justify-between mt-1 font-medium">
-              <span>Reste à payer</span>
+              <span>{t('scp.pay_remaining', locale)}</span>
               <span className="font-mono text-emerald-700">{fmt(soldeMur, "MUR")}</span>
             </div>
             <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -183,7 +185,7 @@ export function PaiementFactureDialog({ facture, open, onOpenChange, onSuccess }
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label htmlFor="paiement-montant">Montant ({devise})</Label>
+              <Label htmlFor="paiement-montant">{t('scp.pay_amount', locale)} ({devise})</Label>
               <Input
                 id="paiement-montant"
                 type="number"
@@ -195,7 +197,7 @@ export function PaiementFactureDialog({ facture, open, onOpenChange, onSuccess }
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="paiement-date">Date</Label>
+              <Label htmlFor="paiement-date">{t('scp.pay_date', locale)}</Label>
               <Input
                 id="paiement-date"
                 type="date"
@@ -206,7 +208,7 @@ export function PaiementFactureDialog({ facture, open, onOpenChange, onSuccess }
           </div>
 
           <div className="space-y-1">
-            <Label htmlFor="paiement-mode">Mode de paiement</Label>
+            <Label htmlFor="paiement-mode">{t('scp.pay_payment_mode', locale)}</Label>
             <Select value={mode} onValueChange={(v) => setMode(v as ModePaiement)}>
               <SelectTrigger id="paiement-mode">
                 <SelectValue />
@@ -214,7 +216,7 @@ export function PaiementFactureDialog({ facture, open, onOpenChange, onSuccess }
               <SelectContent>
                 {MODES.map((m) => (
                   <SelectItem key={m.value} value={m.value}>
-                    {m.label}
+                    {t(m.labelKey, locale)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -222,23 +224,23 @@ export function PaiementFactureDialog({ facture, open, onOpenChange, onSuccess }
           </div>
 
           <div className="space-y-1">
-            <Label htmlFor="paiement-ref">Référence (n° chèque, ref virement)</Label>
+            <Label htmlFor="paiement-ref">{t('scp.pay_ref_label', locale)}</Label>
             <Input
               id="paiement-ref"
               value={reference}
               onChange={(e) => setReference(e.target.value)}
-              placeholder="Optionnel"
+              placeholder={t('scp.pay_optional', locale)}
             />
           </div>
 
           <div className="space-y-1">
-            <Label htmlFor="paiement-notes">Notes</Label>
+            <Label htmlFor="paiement-notes">{t('scp.pay_notes', locale)}</Label>
             <Textarea
               id="paiement-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              placeholder="Optionnel"
+              placeholder={t('scp.pay_optional', locale)}
             />
           </div>
 
@@ -251,7 +253,7 @@ export function PaiementFactureDialog({ facture, open, onOpenChange, onSuccess }
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            Annuler
+            {t('cui.cancel', locale)}
           </Button>
           <Button
             onClick={handleSubmit}
@@ -259,7 +261,7 @@ export function PaiementFactureDialog({ facture, open, onOpenChange, onSuccess }
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
             {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Enregistrer
+            {t('cui.save', locale)}
           </Button>
         </DialogFooter>
       </DialogContent>
