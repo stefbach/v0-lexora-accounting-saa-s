@@ -2,6 +2,26 @@
 // Populated by Phase N parallel translation agents.
 export const hrChunk = {
   fr: {
+    // PaieValidationPanel (contrôle prépaie)
+    'hr.paieval.err_invalid_response': 'HTTP {status} — réponse invalide',
+    'hr.paieval.err_check': 'Erreur {status} lors du contrôle prépaie.',
+    'hr.paieval.err_network': 'Erreur réseau : {msg}.',
+    'hr.paieval.unknown': 'inconnue',
+    'hr.paieval.title': 'Contrôle prépaiement',
+    'hr.paieval.subtitle': 'Vérifie salaires, pointages, congés, primes et champs obligatoires avant validation finale.',
+    'hr.paieval.checking': 'Vérification...',
+    'hr.paieval.run_btn': 'Lancer le contrôle',
+    'hr.paieval.empty_hint_1': 'Cliquez sur',
+    'hr.paieval.empty_hint_2': 'pour vérifier les bulletins avant validation finale (salaires, pointages, congés, primes, champs obligatoires).',
+    'hr.paieval.employees_checked': 'Employés vérifiés',
+    'hr.paieval.period': 'Période',
+    'hr.paieval.errors': 'erreur(s)',
+    'hr.paieval.block_generation': 'Bloquent la génération',
+    'hr.paieval.warnings': 'avertissement(s)',
+    'hr.paieval.to_check': 'À vérifier',
+    'hr.paieval.all_ok': 'Tous les contrôles sont OK — vous pouvez valider les bulletins (onglet Bulletins).',
+    'hr.paieval.errors_blocking': '{n} erreur(s) bloquante(s) — corrigez avant de valider.',
+    'hr.paieval.anomalies_detail': 'Détail des anomalies',
     // salaires-compta
     'hr.salaires_compta.bc_client': 'Espace client',
     'hr.salaires_compta.bc_self': 'Salaires (Compta)',
@@ -336,6 +356,25 @@ export const hrChunk = {
   } as Record<string, string>,
 
   en: {
+    'hr.paieval.err_invalid_response': 'HTTP {status} — invalid response',
+    'hr.paieval.err_check': 'Error {status} during the pre-payroll check.',
+    'hr.paieval.err_network': 'Network error: {msg}.',
+    'hr.paieval.unknown': 'unknown',
+    'hr.paieval.title': 'Pre-payment check',
+    'hr.paieval.subtitle': 'Checks salaries, time records, leave, bonuses and required fields before final validation.',
+    'hr.paieval.checking': 'Checking...',
+    'hr.paieval.run_btn': 'Run the check',
+    'hr.paieval.empty_hint_1': 'Click',
+    'hr.paieval.empty_hint_2': 'to check the payslips before final validation (salaries, time records, leave, bonuses, required fields).',
+    'hr.paieval.employees_checked': 'Employees checked',
+    'hr.paieval.period': 'Period',
+    'hr.paieval.errors': 'error(s)',
+    'hr.paieval.block_generation': 'Block generation',
+    'hr.paieval.warnings': 'warning(s)',
+    'hr.paieval.to_check': 'To review',
+    'hr.paieval.all_ok': 'All checks pass — you can validate the payslips (Payslips tab).',
+    'hr.paieval.errors_blocking': '{n} blocking error(s) — fix before validating.',
+    'hr.paieval.anomalies_detail': 'Anomaly details',
     // salaires-compta
     'hr.salaires_compta.bc_client': 'Client space',
     'hr.salaires_compta.bc_self': 'Salaries (Accounting)',
