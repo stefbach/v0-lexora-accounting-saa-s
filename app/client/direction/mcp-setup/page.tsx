@@ -23,6 +23,7 @@ import {
   Copy, Check, AlertCircle, Terminal, Apple, Monitor, Sparkles,
   Plus, Trash2, Key, Loader2, AlertTriangle,
 } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 interface ApiKey {
   id: string
@@ -33,6 +34,7 @@ interface ApiKey {
 }
 
 export default function McpSetupPage() {
+  const locale = getLocale()
   const [origin, setOrigin] = useState<string>("")
   const [copied, setCopied] = useState<string | null>(null)
 
@@ -76,19 +78,19 @@ export default function McpSetupPage() {
         body: JSON.stringify({ name: newKeyName.trim() }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Erreur création')
+      if (!res.ok) throw new Error(data.error || t('scp.mcp_create_error', locale))
       setFreshToken(data.token)
       setNewKeyName("")
       await loadKeys()
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Erreur inconnue')
+      setError(e instanceof Error ? e.message : t('scp.mcp_unknown_error', locale))
     } finally {
       setGenerating(false)
     }
   }
 
   const revokeKey = async (id: string) => {
-    if (!confirm('Révoquer cette clé ? Tout MCP qui l\'utilise cessera de fonctionner immédiatement.')) return
+    if (!confirm(t('scp.mcp_revoke_confirm', locale))) return
     try {
       const res = await fetch(`/api/client/user-api-keys/${id}`, { method: 'DELETE' })
       if (res.ok) await loadKeys()
@@ -110,10 +112,8 @@ export default function McpSetupPage() {
               <Sparkles className="h-7 w-7" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-violet-900">Connecter Lexora à Claude Desktop</h1>
-              <p className="text-sm text-violet-700/80 mt-0.5">
-                Génère ta clé personnelle, lance une commande, c'est fini.
-              </p>
+              <h1 className="text-2xl font-bold text-violet-900">{t('scp.mcp_title', locale)}</h1>
+              <p className="text-sm text-violet-700/80 mt-0.5">{t('scp.mcp_subtitle', locale)}</p>
             </div>
           </div>
         </div>
@@ -124,21 +124,18 @@ export default function McpSetupPage() {
             <CardTitle className="text-base flex items-center gap-2">
               <Badge className="bg-violet-600">1</Badge>
               <Key className="w-4 h-4" />
-              Génère une clé API personnelle
+              {t('scp.mcp_gen_key', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-sm text-gray-600">
-              Chaque clé est <b>liée à toi</b> (pas partagée), <b>révocable</b> à tout moment,
-              et <b>hashée en base</b> — personne ne peut la voir en clair, pas même les admins Lexora.
-            </p>
+            <p className="text-sm text-gray-600">{t('scp.mcp_key_desc', locale)}</p>
 
             {/* Affichage du token fraîchement créé */}
             {freshToken && (
               <div className="rounded-md border-2 border-amber-300 bg-amber-50 p-3 space-y-2">
                 <div className="flex items-center gap-2 text-amber-900 font-semibold text-sm">
                   <AlertTriangle className="w-4 h-4" />
-                  Copie cette clé MAINTENANT — elle ne sera plus jamais affichée
+                  {t('scp.mcp_copy_now', locale)}
                 </div>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 text-xs bg-white border px-2 py-1.5 rounded font-mono break-all">
@@ -150,7 +147,7 @@ export default function McpSetupPage() {
                     className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
                   >
                     {copied === 'fresh' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copied === 'fresh' ? ' Copié' : ' Copier'}
+                    {copied === 'fresh' ? ' ' + t('scp.mcp_copied', locale) : ' ' + t('scp.mcp_copy', locale)}
                   </Button>
                 </div>
                 <button
@@ -158,7 +155,7 @@ export default function McpSetupPage() {
                   onClick={() => setFreshToken(null)}
                   className="text-xs text-amber-800 underline"
                 >
-                  J'ai copié la clé, masquer
+                  {t('scp.mcp_copied_hide', locale)}
                 </button>
               </div>
             )}
@@ -167,7 +164,7 @@ export default function McpSetupPage() {
             {!freshToken && (
               <div className="flex gap-2">
                 <Input
-                  placeholder="Nom de la clé (ex: MCP MacBook Pro, n8n production...)"
+                  placeholder={t('scp.mcp_key_name_ph', locale)}
                   value={newKeyName}
                   onChange={e => setNewKeyName(e.target.value)}
                   disabled={generating}
@@ -179,7 +176,7 @@ export default function McpSetupPage() {
                   className="bg-violet-600 hover:bg-violet-700 text-white shrink-0"
                 >
                   {generating ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}
-                  Créer
+                  {t('cui.create', locale)}
                 </Button>
               </div>
             )}
@@ -190,11 +187,11 @@ export default function McpSetupPage() {
 
             {/* Liste des clés actives */}
             <div className="mt-4">
-              <h3 className="text-xs font-semibold text-gray-600 mb-2">Clés actives :</h3>
+              <h3 className="text-xs font-semibold text-gray-600 mb-2">{t('scp.mcp_active_keys', locale)}</h3>
               {loadingKeys ? (
-                <p className="text-xs text-gray-400 italic">Chargement...</p>
+                <p className="text-xs text-gray-400 italic">{t('cui.loading', locale)}</p>
               ) : keys.length === 0 ? (
-                <p className="text-xs text-gray-500 italic">Aucune clé encore créée.</p>
+                <p className="text-xs text-gray-500 italic">{t('scp.mcp_no_keys', locale)}</p>
               ) : (
                 <div className="space-y-1.5">
                   {keys.map(k => (
@@ -206,8 +203,8 @@ export default function McpSetupPage() {
                       </div>
                       <div className="text-gray-400 shrink-0">
                         {k.last_used_at
-                          ? `Utilisée le ${new Date(k.last_used_at).toLocaleDateString('fr-FR')}`
-                          : 'Jamais utilisée'}
+                          ? `${t('scp.mcp_used_on', locale)} ${new Date(k.last_used_at).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR')}`
+                          : t('scp.mcp_never_used', locale)}
                       </div>
                       <Button
                         size="sm"
@@ -231,16 +228,16 @@ export default function McpSetupPage() {
             <CardTitle className="text-base flex items-center gap-2">
               <Badge className="bg-violet-600">2</Badge>
               <AlertCircle className="w-4 h-4 text-amber-600" />
-              Pré-requis sur ton ordinateur
+              {t('scp.mcp_prereqs', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex gap-2">
               <Badge variant="outline" className="shrink-0">•</Badge>
               <div>
-                <b>Claude Desktop installé.</b>{" "}
+                <b>{t('scp.mcp_claude_installed', locale)}</b>{" "}
                 <a className="text-blue-600 underline" href="https://claude.ai/download" target="_blank" rel="noreferrer">
-                  Télécharger
+                  {t('scp.mcp_download', locale)}
                 </a>
               </div>
             </div>
@@ -249,7 +246,7 @@ export default function McpSetupPage() {
               <div>
                 <b>Node.js v18+.</b>{" "}
                 <a className="text-blue-600 underline" href="https://nodejs.org/" target="_blank" rel="noreferrer">
-                  Télécharger Node.js
+                  {t('scp.mcp_download_node', locale)}
                 </a>
                 {" "}(Mac : <code className="bg-gray-100 px-1 rounded">brew install node</code>)
               </div>
@@ -263,13 +260,11 @@ export default function McpSetupPage() {
             <CardTitle className="text-base flex items-center gap-2">
               <Badge className="bg-violet-600">3</Badge>
               <Apple className="w-4 h-4" />
-              Mac ou Linux — Une commande
+              {t('scp.mcp_mac_linux', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-sm text-gray-600">
-              Ouvre <b>Terminal</b>, colle la commande, presse Entrée. Le script te demandera <b>l'URL Lexora</b> et <b>la clé que tu viens de générer</b>.
-            </p>
+            <p className="text-sm text-gray-600">{t('scp.mcp_mac_hint', locale)}</p>
             <CodeBlock
               code={cmdBash}
               copied={copied === "bash"}
@@ -284,20 +279,18 @@ export default function McpSetupPage() {
             <CardTitle className="text-base flex items-center gap-2">
               <Badge className="bg-violet-600">4</Badge>
               <Monitor className="w-4 h-4" />
-              Windows — Une commande
+              {t('scp.mcp_windows', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-sm text-gray-600">
-              Ouvre <b>PowerShell</b>, colle la commande, presse Entrée.
-            </p>
+            <p className="text-sm text-gray-600">{t('scp.mcp_win_hint', locale)}</p>
             <CodeBlock
               code={cmdPwsh}
               copied={copied === "pwsh"}
               onCopy={() => copy("pwsh", cmdPwsh)}
             />
             <p className="text-xs text-gray-500">
-              Si PowerShell refuse :
+              {t('scp.mcp_pwsh_fallback', locale)}
               <code className="block mt-1 bg-gray-100 px-2 py-1 rounded text-[11px]">
                 powershell -ExecutionPolicy Bypass -Command "{cmdPwsh}"
               </code>
@@ -315,12 +308,12 @@ export default function McpSetupPage() {
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <ol className="list-decimal list-inside space-y-1.5">
-              <li><b>Quitte complètement Claude Desktop</b> (Cmd+Q sur Mac, systray Quit sur Windows)</li>
-              <li><b>Relance Claude Desktop</b></li>
+              <li>{t('scp.mcp_step_quit', locale)}</li>
+              <li>{t('scp.mcp_step_relaunch', locale)}</li>
               <li>
-                Tape dans une nouvelle conversation :{" "}
+                {t('scp.mcp_step_type', locale)}{" "}
                 <span className="inline-block bg-violet-100 text-violet-900 px-2 py-0.5 rounded font-mono text-xs">
-                  Liste mes sociétés Lexora.
+                  {t('scp.mcp_example_query', locale)}
                 </span>
               </li>
             </ol>
