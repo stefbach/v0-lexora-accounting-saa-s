@@ -76,9 +76,9 @@ export default function SalairesPage() {
 
       <Card><CardContent className="p-4 flex flex-wrap gap-3">
         <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-          <SelectTrigger className="w-56"><SelectValue placeholder="Choisir une société..." /></SelectTrigger>
+          <SelectTrigger className="w-56"><SelectValue placeholder={t('cab.salaires.choose_company', locale)} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">-- Choisir une société --</SelectItem>
+            <SelectItem value="all">{t('cab.salaires.choose_company_opt', locale)}</SelectItem>
             {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
           </SelectContent>
         </Select>
@@ -101,10 +101,10 @@ export default function SalairesPage() {
           {/* KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { label: "Salaires bruts", value: fmt(totalSalaires), icon: Users, color: "text-blue-600" },
-              { label: "CSG patronale (moy.)", value: fmt(chargesSociales.csg_patronal), icon: TrendingUp, color: "text-orange-500" },
-              { label: "NSF patronal (2.5%)", value: fmt(chargesSociales.nsf_patronal), icon: TrendingUp, color: "text-orange-500" },
-              { label: "Coût total employeur", value: fmt(totalSalaires + totalChargesPatronales), icon: TrendingUp, color: "text-red-600" },
+              { label: t('cab.salaires.kpi_gross', locale), value: fmt(totalSalaires), icon: Users, color: "text-blue-600" },
+              { label: t('cab.salaires.kpi_csg_employer', locale), value: fmt(chargesSociales.csg_patronal), icon: TrendingUp, color: "text-orange-500" },
+              { label: t('cab.salaires.kpi_nsf_employer', locale), value: fmt(chargesSociales.nsf_patronal), icon: TrendingUp, color: "text-orange-500" },
+              { label: t('cab.salaires.kpi_total_cost', locale), value: fmt(totalSalaires + totalChargesPatronales), icon: TrendingUp, color: "text-red-600" },
             ].map(k => (
               <Card key={k.label}><CardContent className="p-4 flex items-center gap-3">
                 <k.icon className={`w-8 h-8 ${k.color}`} />
@@ -115,26 +115,26 @@ export default function SalairesPage() {
 
           {/* Tableau charges sociales */}
           <Card>
-            <CardHeader><CardTitle className="text-[#0B0F2E]">Décomposition des charges — Taux légaux Maurice</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-[#0B0F2E]">{t('cab.salaires.breakdown_title', locale)}</CardTitle></CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Charge</TableHead>
-                    <TableHead>Taux légal</TableHead>
-                    <TableHead>Qui paie</TableHead>
-                    <TableHead className="text-right">Montant estimé</TableHead>
-                    <TableHead>Note</TableHead>
+                    <TableHead>{t('cab.salaires.col_charge', locale)}</TableHead>
+                    <TableHead>{t('cab.salaires.col_legal_rate', locale)}</TableHead>
+                    <TableHead>{t('cab.salaires.col_who_pays', locale)}</TableHead>
+                    <TableHead className="text-right">{t('cab.salaires.col_estimated', locale)}</TableHead>
+                    <TableHead>{t('cab.salaires.col_note', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {[
-                    { label: "CSG salariale", taux: "1.5% ou 3%", qui: "Salarié", montant: totalSalaires * 0.03, note: "1.5% si brut ≤50K MUR, 3% si >50K" },
-                    { label: "CSG patronale", taux: "3% ou 6%", qui: "Employeur", montant: chargesSociales.csg_patronal, note: "3% si brut ≤50K MUR, 6% si >50K" },
-                    { label: "NSF salariale", taux: "1%", qui: "Salarié", montant: totalSalaires * 0.01, note: "National Savings Fund" },
-                    { label: "NSF patronale", taux: "2.5%", qui: "Employeur", montant: chargesSociales.nsf_patronal, note: "National Savings Fund" },
-                    { label: "HRDC (Training Levy)", taux: "1%", qui: "Employeur", montant: chargesSociales.hrdc, note: "Sur masse salariale >1.5M MUR" },
-                    { label: "PAYE", taux: "0% / 10% / 15%", qui: "Salarié", montant: 0, note: "Retenu à la source — barème progressif MRA" },
+                    { label: t('cab.salaires.charge_csg_employee', locale), taux: "1.5% ou 3%", qui: t('cab.salaires.who_employee', locale), montant: totalSalaires * 0.03, note: t('cab.salaires.note_csg_employee', locale) },
+                    { label: t('cab.salaires.charge_csg_employer', locale), taux: "3% ou 6%", qui: t('cab.salaires.who_employer', locale), montant: chargesSociales.csg_patronal, note: t('cab.salaires.note_csg_employer', locale) },
+                    { label: t('cab.salaires.charge_nsf_employee', locale), taux: "1%", qui: t('cab.salaires.who_employee', locale), montant: totalSalaires * 0.01, note: t('cab.salaires.note_nsf', locale) },
+                    { label: t('cab.salaires.charge_nsf_employer', locale), taux: "2.5%", qui: t('cab.salaires.who_employer', locale), montant: chargesSociales.nsf_patronal, note: t('cab.salaires.note_nsf', locale) },
+                    { label: t('cab.salaires.charge_hrdc', locale), taux: "1%", qui: t('cab.salaires.who_employer', locale), montant: chargesSociales.hrdc, note: t('cab.salaires.note_hrdc', locale) },
+                    { label: "PAYE", taux: "0% / 10% / 15%", qui: t('cab.salaires.who_employee', locale), montant: 0, note: t('cab.salaires.note_paye', locale) },
                   ].map(r => (
                     <TableRow key={r.label}>
                       <TableCell className="font-medium">{r.label}</TableCell>
@@ -146,23 +146,23 @@ export default function SalairesPage() {
                   ))}
                 </TableBody>
               </Table>
-              <p className="text-xs text-gray-400 mt-3">* Montants estimés basés sur les écritures comptables. Pour le calcul exact par employé, importez le fichier de paie.</p>
+              <p className="text-xs text-gray-400 mt-3">{t('cab.salaires.footnote', locale)}</p>
             </CardContent>
           </Card>
 
           {/* Comptes comptables */}
           {ecritures.length > 0 && (
             <Card>
-              <CardHeader><CardTitle className="text-[#0B0F2E]">Comptes de personnel (Classe 6)</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-[#0B0F2E]">{t('cab.salaires.accounts_title', locale)}</CardTitle></CardHeader>
               <CardContent className="p-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Compte</TableHead>
-                      <TableHead>Libellé</TableHead>
-                      <TableHead className="text-right">Total Débit</TableHead>
-                      <TableHead className="text-right">Total Crédit</TableHead>
-                      <TableHead className="text-right">Solde</TableHead>
+                      <TableHead>{t('cab.salaires.col_account', locale)}</TableHead>
+                      <TableHead>{t('cab.salaires.col_label', locale)}</TableHead>
+                      <TableHead className="text-right">{t('cab.salaires.col_total_debit', locale)}</TableHead>
+                      <TableHead className="text-right">{t('cab.salaires.col_total_credit', locale)}</TableHead>
+                      <TableHead className="text-right">{t('cab.salaires.col_balance', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
