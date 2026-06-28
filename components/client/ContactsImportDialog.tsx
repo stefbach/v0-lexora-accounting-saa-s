@@ -97,7 +97,7 @@ function parseBoolean(v: any): boolean {
   return ['oui', 'yes', 'true', '1', 'y', 'x', '✓'].includes(s)
 }
 
-function parseRow(row: Record<string, any>, idx: number): ParsedRow {
+function parseRow(row: Record<string, any>, idx: number, locale: ReturnType<typeof getLocale>): ParsedRow {
   const nom = String(pickValue(row, COL_ALIASES.nom) || '').trim()
   const email = String(pickValue(row, COL_ALIASES.email) || '').trim()
   const deviseRaw = String(pickValue(row, COL_ALIASES.devise) || 'MUR').trim().toUpperCase()
@@ -109,10 +109,10 @@ function parseRow(row: Record<string, any>, idx: number): ParsedRow {
   let error: string | null = null
   let valid = true
   if (!nom) {
-    error = 'nom manquant'
+    error = t('scp.con_err_nom_missing', locale)
     valid = false
   } else if (nom.length > 200) {
-    error = 'nom trop long (max 200)'
+    error = t('scp.con_err_nom_too_long', locale)
     valid = false
   } else if (email && !EMAIL_RE.test(email)) {
     error = `email invalide : ${email}`
@@ -177,13 +177,13 @@ export function ContactsImportDialog({ open, onOpenChange, societeId, onImported
       const buf = await file.arrayBuffer()
       const wb = XLSX.read(buf, { type: 'array' })
       const sheet = wb.Sheets[wb.SheetNames[0]]
-      if (!sheet) throw new Error('Fichier vide')
+      if (!sheet) throw new Error(t('scp.cat_err_file_empty', locale))
       const data = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: null })
-      if (data.length === 0) throw new Error('Aucune ligne trouvée dans le fichier')
-      if (data.length > 500) throw new Error(`Max 500 lignes par import. Reçu : ${data.length}`)
-      setRows(data.map((row, i) => parseRow(row, i)))
+      if (data.length === 0) throw new Error(t('scp.cat_err_no_rows', locale))
+      if (data.length > 500) throw new Error(t('scp.cat_err_max_rows', locale).replace('{n}', String(data.length)))
+      setRows(data.map((row, i) => parseRow(row, i, locale)))
     } catch (e: any) {
-      setError(e?.message || 'Erreur de parsing du fichier')
+      setError(e?.message || t('scp.cat_err_parsing', locale))
       setRows([])
     } finally {
       setParsing(false)
@@ -194,7 +194,7 @@ export function ContactsImportDialog({ open, onOpenChange, societeId, onImported
     if (!societeId) return
     const validRows = rows.filter(r => r._valid)
     if (validRows.length === 0) {
-      setError('Aucune ligne valide à importer')
+      setError(t('scp.cat_err_no_valid', locale))
       return
     }
     setImporting(true)
@@ -207,11 +207,11 @@ export function ContactsImportDialog({ open, onOpenChange, societeId, onImported
         body: JSON.stringify({ societe_id: societeId, items }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || 'Erreur import')
+      if (!res.ok) throw new Error(data?.error || t('scp.cat_err_import', locale))
       setResult({ inserted: data.inserted || 0, skipped: rows.length - (data.inserted || 0) })
       onImported?.(data.inserted || 0)
     } catch (e: any) {
-      setError(e?.message || 'Erreur import')
+      setError(e?.message || t('scp.cat_err_import', locale))
     } finally {
       setImporting(false)
     }
@@ -249,11 +249,10 @@ export function ContactsImportDialog({ open, onOpenChange, societeId, onImported
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="w-5 h-5 text-sky-600" />
-            Importer un carnet de contacts
+            {t('scp.con_title', locale)}
           </DialogTitle>
           <DialogDescription>
-            Importez en masse vos contacts clients depuis un fichier CSV ou Excel.
-            Max 500 contacts par import.
+            {t('scp.con_desc', locale)}
           </DialogDescription>
         </DialogHeader>
 
@@ -264,8 +263,8 @@ export function ContactsImportDialog({ open, onOpenChange, societeId, onImported
               onClick={() => fileRef.current?.click()}
             >
               <Upload className="w-10 h-10 mx-auto text-sky-600 mb-2" />
-              <p className="text-sm font-medium">Cliquez ou déposez votre fichier ici</p>
-              <p className="text-xs text-gray-500 mt-1">Formats acceptés : .csv, .xlsx, .xls</p>
+              <p className="text-sm font-medium">{t('scp.cat_drop_here', locale)}</p>
+              <p className="text-xs text-gray-500 mt-1">{t('scp.cat_formats', locale)}</p>
               <input
                 ref={fileRef}
                 type="file"
@@ -279,35 +278,35 @@ export function ContactsImportDialog({ open, onOpenChange, societeId, onImported
             </div>
 
             <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900 space-y-1">
-              <p className="font-semibold">📋 Colonnes acceptées (variantes possibles) :</p>
+              <p className="font-semibold">{t('scp.con_cols_expected', locale)}</p>
               <ul className="grid grid-cols-2 gap-x-4 gap-y-0.5 list-disc list-inside">
-                <li><strong>nom</strong> · name · contact (obligatoire)</li>
-                <li><strong>entreprise</strong> · company · société</li>
-                <li><strong>adresse</strong> · address · rue</li>
-                <li><strong>code_postal</strong> · cp · zip</li>
-                <li><strong>ville</strong> · city</li>
-                <li><strong>pays</strong> · country</li>
-                <li><strong>email</strong> · mail</li>
-                <li><strong>telephone</strong> · tel · phone · fixe</li>
-                <li><strong>mobile</strong> · gsm · portable</li>
+                <li><strong>nom</strong> · {t('scp.con_col_nom', locale)}</li>
+                <li><strong>entreprise</strong> · {t('scp.con_col_entreprise', locale)}</li>
+                <li><strong>adresse</strong> · {t('scp.con_col_adresse', locale)}</li>
+                <li><strong>code_postal</strong> · {t('scp.con_col_cp', locale)}</li>
+                <li><strong>ville</strong> · {t('scp.con_col_ville', locale)}</li>
+                <li><strong>pays</strong> · {t('scp.con_col_pays', locale)}</li>
+                <li><strong>email</strong> · {t('scp.con_col_email', locale)}</li>
+                <li><strong>telephone</strong> · {t('scp.con_col_tel', locale)}</li>
+                <li><strong>mobile</strong> · {t('scp.con_col_mobile', locale)}</li>
                 <li><strong>fax</strong></li>
-                <li><strong>vat_number</strong> · tva · n. tva</li>
-                <li><strong>brn</strong> (Maurice)</li>
-                <li><strong>kbis</strong> · siren · siret · rcs</li>
-                <li><strong>site_web</strong> · website</li>
-                <li><strong>devise</strong> · MUR/EUR/USD/GBP</li>
-                <li><strong>conditions_paiement</strong> · délai (0-365 j)</li>
-                <li><strong>offshore</strong> · oui/non</li>
+                <li><strong>vat_number</strong> · {t('scp.con_col_vat', locale)}</li>
+                <li><strong>brn</strong> {t('scp.con_col_brn', locale)}</li>
+                <li><strong>kbis</strong> · {t('scp.con_col_kbis', locale)}</li>
+                <li><strong>site_web</strong> · {t('scp.con_col_web', locale)}</li>
+                <li><strong>devise</strong> · {t('scp.con_col_devise', locale)}</li>
+                <li><strong>conditions_paiement</strong> · {t('scp.con_col_conditions', locale)}</li>
+                <li><strong>offshore</strong> · {t('scp.con_col_offshore', locale)}</li>
               </ul>
             </div>
 
             <Button type="button" variant="outline" size="sm" onClick={downloadTemplate} className="w-full">
               <Download className="w-4 h-4 mr-1.5" />
-              Télécharger un fichier modèle .xlsx
+              {t('scp.cat_download_template', locale)}
             </Button>
 
             {parsing && (
-              <p className="text-sm text-center text-gray-500"><Loader2 className="inline w-4 h-4 animate-spin mr-1" />Analyse du fichier…</p>
+              <p className="text-sm text-center text-gray-500"><Loader2 className="inline w-4 h-4 animate-spin mr-1" />{t('scp.cat_analyzing', locale)}</p>
             )}
             {error && (
               <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
@@ -322,27 +321,27 @@ export function ContactsImportDialog({ open, onOpenChange, societeId, onImported
             <div className="flex items-center gap-3 mb-2 text-sm">
               <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300">
                 <CheckCircle2 className="w-3 h-3 mr-1" />
-                {stats.valid} valides
+                {stats.valid} {t('scp.cat_valides', locale)}
               </Badge>
               {stats.invalid > 0 && (
                 <Badge className="bg-red-100 text-red-700 border-red-300">
                   <AlertTriangle className="w-3 h-3 mr-1" />
-                  {stats.invalid} erreurs
+                  {stats.invalid} {t('scp.cat_erreurs', locale)}
                 </Badge>
               )}
-              <span className="text-xs text-gray-500">{stats.total} lignes au total</span>
+              <span className="text-xs text-gray-500">{stats.total} {t('scp.cat_lines_total', locale)}</span>
             </div>
 
             <div className="flex-1 overflow-auto border rounded-md">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>
-                    <th className="text-left p-2 w-10">Ligne</th>
-                    <th className="text-left p-2">Nom</th>
-                    <th className="text-left p-2">Entreprise</th>
-                    <th className="text-left p-2">Email</th>
-                    <th className="text-left p-2">Ville</th>
-                    <th className="text-left p-2">VAT / BRN</th>
+                    <th className="text-left p-2 w-10">{t('scp.cat_col_line', locale)}</th>
+                    <th className="text-left p-2">{t('scp.con_th_nom', locale)}</th>
+                    <th className="text-left p-2">{t('scp.con_th_entreprise', locale)}</th>
+                    <th className="text-left p-2">{t('scp.con_th_email', locale)}</th>
+                    <th className="text-left p-2">{t('scp.con_th_ville', locale)}</th>
+                    <th className="text-left p-2">{t('scp.con_th_vat_brn', locale)}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -350,7 +349,7 @@ export function ContactsImportDialog({ open, onOpenChange, societeId, onImported
                     <tr key={i} className={`border-t ${r._valid ? '' : 'bg-red-50'}`}>
                       <td className="p-2 text-gray-400">L{r._rowIndex}</td>
                       <td className="p-2">
-                        {r.nom || <span className="text-red-600 italic">manquant</span>}
+                        {r.nom || <span className="text-red-600 italic">{t('scp.cat_missing', locale)}</span>}
                         {r._error && <div className="text-[10px] text-red-600 mt-0.5">⚠ {r._error}</div>}
                       </td>
                       <td className="p-2 text-gray-600">{r.entreprise || '—'}</td>
@@ -378,10 +377,10 @@ export function ContactsImportDialog({ open, onOpenChange, societeId, onImported
         {result && (
           <div className="text-center py-8">
             <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500 mb-3" />
-            <p className="text-lg font-semibold text-emerald-700">Import terminé</p>
+            <p className="text-lg font-semibold text-emerald-700">{t('scp.cat_import_done', locale)}</p>
             <p className="text-sm text-gray-600 mt-1">
-              <strong>{result.inserted}</strong> contact(s) ajouté(s) au carnet.
-              {result.skipped > 0 && <> {result.skipped} ligne(s) ignorée(s).</>}
+              <strong>{result.inserted}</strong> {t('scp.con_articles_added', locale)}
+              {result.skipped > 0 && <> {t('scp.cat_lines_skipped', locale).replace('{n}', String(result.skipped))}</>}
             </p>
           </div>
         )}
@@ -401,7 +400,7 @@ export function ContactsImportDialog({ open, onOpenChange, societeId, onImported
                 className="bg-sky-600 hover:bg-sky-700 text-white"
               >
                 {importing && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Importer {stats.valid} contact(s)
+                {t('scp.con_import_n', locale).replace('{n}', String(stats.valid))}
               </Button>
             )}
           </div>
