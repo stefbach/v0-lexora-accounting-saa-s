@@ -2,6 +2,7 @@
 import { useEffect, useRef } from "react"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
+import { t, getLocale } from "@/lib/i18n"
 
 const BLUE = "#4191FF"
 const GREEN = "#2ECC8A"
@@ -43,6 +44,7 @@ interface Position {
 }
 
 export default function MapComponent({ positions }: { positions: Position[] }) {
+  const locale = getLocale()
   const mapRef = useRef<L.Map | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -122,7 +124,7 @@ export default function MapComponent({ positions }: { positions: Position[] }) {
       {!hasAnyGPS && (
         <div className="p-6 text-center">
           <MapPin className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-          <p className="text-gray-500 font-medium">Aucune coordonnée GPS disponible</p>
+          <p className="text-gray-500 font-medium">{t('srh.map.no_gps', locale)}</p>
           <p className="text-xs text-gray-400 mt-1">Renseignez les adresses dans les fiches employés pour les voir sur la carte</p>
         </div>
       )}

@@ -9,6 +9,7 @@ import {
   CATEGORIE_LABELS, formaterTaille, getIconeMimeType,
   type DocumentRH,
 } from "@/lib/rh/documents-rh"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -25,6 +26,7 @@ const GOLD = "#D4AF37"
  * (l'API n'expose pas un filtre 'non_vus', mais le volume est faible).
  */
 export function DocumentsEnAttenteWidget() {
+  const locale = getLocale()
   const [docs, setDocs] = useState<DocumentRH[]>([])
   const [loading, setLoading] = useState(true)
   const [empMap, setEmpMap] = useState<Record<string, string>>({})
@@ -71,7 +73,7 @@ export function DocumentsEnAttenteWidget() {
     return (
       <Card className="border-0 shadow-sm">
         <CardContent className="p-4 flex items-center gap-2 text-sm text-gray-500">
-          <Loader2 className="h-4 w-4 animate-spin" /> Chargement des documents…
+          <Loader2 className="h-4 w-4 animate-spin" /> {t('srh.docs.loading_widget', locale)}
         </CardContent>
       </Card>
     )

@@ -29,6 +29,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Check, Pencil, Trash2, ArrowRight } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 export interface InterSocietePaire {
   key: string
@@ -104,6 +105,7 @@ export function InterSocieteRow({
   onSupprimer,
   busy = false,
 }: Props) {
+  const locale = getLocale()
   const [confirmOpen, setConfirmOpen] = React.useState(false)
 
   const isValide = paire.statut === "valide"
@@ -196,7 +198,7 @@ export function InterSocieteRow({
               title="Supprimer la paire (miroir + source)"
             >
               <Trash2 className="h-4 w-4 mr-1" />
-              <span className="hidden md:inline">Supprimer</span>
+              <span className="hidden md:inline">{t('cui.delete', locale)}</span>
             </Button>
           </div>
         </td>
@@ -205,7 +207,7 @@ export function InterSocieteRow({
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Supprimer le miroir inter-société ?</AlertDialogTitle>
+            <AlertDialogTitle>{t('scp.delete_intercompany_mirror', locale)}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
                 <p>
@@ -228,7 +230,7 @@ export function InterSocieteRow({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogCancel>{t('cui.cancel', locale)}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 setConfirmOpen(false)

@@ -99,7 +99,7 @@ function Field({ label, children, id }: { label: string; children: React.ReactNo
 // (édition d'une facture via ?id=) peuvent ne pas hydrater correctement.
 export default function NouvelleFacturePage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen text-sm text-gray-500">Chargement…</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen text-sm text-gray-500">{t('cui.loading', getLocale())}</div>}>
       <NouvelleFactureContent />
     </Suspense>
   )

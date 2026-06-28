@@ -571,7 +571,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <XCircle className="w-4 h-4 text-gray-400" />
-                        <span>Aucun compte créé</span>
+                        <span>{t('srh.emp.no_account', locale)}</span>
                       </div>
                       <p className="text-xs text-gray-500">
                         L'employé n'a pas encore d'accès à Lexora. Créez son compte et envoyez-lui ses identifiants par email.
@@ -1048,7 +1048,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
           <Card className="rounded-2xl shadow-sm overflow-hidden">
             <CardContent className="p-0">
               {conges.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">Aucune demande de conge</div>
+                <div className="text-center py-12 text-gray-500">{t('srh.emp.no_leave_request', locale)}</div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -1086,7 +1086,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
           <Card className="rounded-2xl shadow-sm overflow-hidden">
             <CardContent className="p-0">
               {bulletins.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">Aucun bulletin de paie</div>
+                <div className="text-center py-12 text-gray-500">{t('srh.emp.no_payslip', locale)}</div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -1148,7 +1148,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
           <Card className="rounded-2xl shadow-sm overflow-hidden">
             <CardContent className="p-0">
               {pointages.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">Aucun pointage enregistre</div>
+                <div className="text-center py-12 text-gray-500">{t('srh.emp.no_time_entry', locale)}</div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -1274,7 +1274,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
               />
             </div>
             <div>
-              <Label htmlFor="emp-account-pwd2" className="text-xs text-gray-500">Confirmer le mot de passe</Label>
+              <Label htmlFor="emp-account-pwd2" className="text-xs text-gray-500">{t('srh.emp.confirm_password', locale)}</Label>
               <Input
                 id="emp-account-pwd2"
                 type="password"

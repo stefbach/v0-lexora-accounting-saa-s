@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Loader2, Save, Calendar, ExternalLink, CheckCircle2, Activity } from 'lucide-react'
+import { t, getLocale } from '@/lib/i18n'
 
 type Settings = any
 
@@ -17,6 +18,7 @@ const DAYS = [
 ]
 
 export default function BookingSettingsPage() {
+  const locale = getLocale()
   const [settings, setSettings] = useState<Settings | null>(null)
   const [googleAccounts, setGoogleAccounts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -93,7 +95,7 @@ export default function BookingSettingsPage() {
     } finally { setSaving(false) }
   }
 
-  if (loading) return <div className="p-8 flex items-center gap-2"><Loader2 className="animate-spin h-5 w-5" /> Chargement…</div>
+  if (loading) return <div className="p-8 flex items-center gap-2"><Loader2 className="animate-spin h-5 w-5" /> {t('cui.loading', locale)}</div>
   if (!settings) return null
 
   const publicUrl = typeof window !== 'undefined'
@@ -104,7 +106,7 @@ export default function BookingSettingsPage() {
     <div className="container mx-auto py-6 max-w-3xl space-y-6">
       <div className="flex items-start justify-between gap-4 mb-2">
         <div>
-          <h1 className="text-2xl font-semibold flex items-center gap-2"><Calendar className="h-6 w-6" /> Prise de rendez-vous</h1>
+          <h1 className="text-2xl font-semibold flex items-center gap-2"><Calendar className="h-6 w-6" /> {t('scp.booking_title', locale)}</h1>
           <p className="text-sm text-muted-foreground">Configure ta page publique de prise de RDV connectée à Google Calendar.</p>
         </div>
         <a href={publicUrl} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1">
@@ -124,7 +126,7 @@ export default function BookingSettingsPage() {
         <CardHeader><CardTitle className="text-base">Compte Google (agenda)</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           {googleAccounts.length === 0 ? (
-            <p className="text-sm text-amber-600">Aucun compte Google connecté. Connecte-en un sur <a href="/client/settings/google-accounts" className="underline">Paramètres → Comptes Google</a>.</p>
+            <p className="text-sm text-amber-600">{t('scp.no_google_account', locale)} Connecte-en un sur <a href="/client/settings/google-accounts" className="underline">Paramètres → Comptes Google</a>.</p>
           ) : (
             <div>
               <Label>Compte à utiliser</Label>

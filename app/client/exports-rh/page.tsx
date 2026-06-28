@@ -212,6 +212,7 @@ function VirementSection({
   societe: string
   periode: string
 }) {
+  const locale = getLocale()
   const [comptesDisponibles, setComptesDisponibles] = useState<any[]>([])
   const [compteSelectionne, setCompteSelectionne] = useState("")
   const [compteEmetteur, setCompteEmetteur] = useState<any>(null)
@@ -503,7 +504,7 @@ function VirementSection({
                 <TableRow className="bg-[#0B0F2E]/5">
                   <TableHead>Banque beneficiaire</TableHead>
                   <TableHead className="text-center">Employes</TableHead>
-                  <TableHead className="text-right">Montant total</TableHead>
+                  <TableHead className="text-right">{t('scp.total_amount', locale)}</TableHead>
                   <TableHead>Devise</TableHead>
                   <TableHead>Format fichier</TableHead>
                   <TableHead className="text-center">Action</TableHead>
@@ -639,6 +640,7 @@ function MRASection({
   periode: string
   societeNom: string
 }) {
+  const locale = getLocale()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [csgRows, setCsgRows] = useState<CsgRow[]>([])
@@ -961,7 +963,7 @@ function MRASection({
       {generated && csgRows.length === 0 && payeRows.length === 0 && (
         <div className="text-center py-8 text-gray-400">
           <Calculator className="w-10 h-10 mx-auto mb-2 text-gray-300" />
-          <p className="text-sm">Aucune donnee trouvee pour cette periode.</p>
+          <p className="text-sm">{t('scp.no_data_period', locale)}</p>
         </div>
       )}
     </div>

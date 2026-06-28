@@ -12,6 +12,7 @@ import {
   formaterTaille, getIconeMimeType, validerFichier,
   type DocumentRH, type DocumentCategorie,
 } from "@/lib/rh/documents-rh"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -40,6 +41,7 @@ interface Props {
  *   - Ajouter : file input + description optionnelle + envoi
  */
 export function JustificatifDialog({ open, onOpenChange, demande, onChange }: Props) {
+  const locale = getLocale()
   const [docs, setDocs] = useState<DocumentRH[]>([])
   const [loading, setLoading] = useState(false)
   const [refreshTick, setRefreshTick] = useState(0)
@@ -98,7 +100,7 @@ export function JustificatifDialog({ open, onOpenChange, demande, onChange }: Pr
               Documents ({docs.length})
             </TabsTrigger>
             <TabsTrigger value="ajouter">
-              <Upload className="h-3.5 w-3.5 mr-1.5" /> Ajouter
+              <Upload className="h-3.5 w-3.5 mr-1.5" /> {t('cui.add', locale)}
             </TabsTrigger>
           </TabsList>
 

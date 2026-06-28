@@ -79,7 +79,7 @@ function formatDate(d: string | null): string {
 // Wrapper Suspense — requis par Next.js App Router pour useSearchParams.
 export default function ClientEcrituresPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen text-sm text-gray-500">Chargement…</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen text-sm text-gray-500">{t('cui.loading', getLocale())}</div>}>
       <ClientEcrituresContent />
     </Suspense>
   )
@@ -401,7 +401,7 @@ function ClientEcrituresContent() {
                                 size="sm"
                                 variant="outline"
                                 className="h-6 px-1.5 text-[10px]"
-                                title="Modifier l'écriture"
+                                title={t('scp.edit_entry', locale)}
                                 disabled={busyId === e.id || saving}
                                 onClick={() => openEdit(e)}
                               >
@@ -457,7 +457,7 @@ function ClientEcrituresContent() {
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h2 className="text-lg font-semibold">Modifier l'écriture</h2>
+                <h2 className="text-lg font-semibold">{t('scp.edit_entry', locale)}</h2>
                 <p className="text-xs text-gray-500 font-mono mt-1">{editing.ref_folio || editing.id.slice(0, 8)}</p>
               </div>
               <Button variant="ghost" size="sm" onClick={() => setEditing(null)} disabled={saving}>

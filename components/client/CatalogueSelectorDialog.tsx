@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react"
+import { t, getLocale } from "@/lib/i18n"
 import {
   Dialog,
   DialogContent,
@@ -63,6 +64,7 @@ export function CatalogueSelectorDialog({
   const [categorie, setCategorie] = useState<string>("__all__")
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [quantite, setQuantite] = useState(defaultQuantite)
+  const locale = getLocale()
 
   // Charge le catalogue à l'ouverture (pas pré-chargé pour économiser
   // les requêtes si l'utilisateur n'utilise jamais le dialog).
@@ -246,7 +248,7 @@ export function CatalogueSelectorDialog({
             )}
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>{t('cui.cancel', locale)}</Button>
             <Button
               onClick={handleAdd}
               disabled={selected.size === 0}

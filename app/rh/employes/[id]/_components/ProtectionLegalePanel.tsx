@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ShieldCheck, Baby, AlertTriangle, Loader2, Heart } from "lucide-react"
 import { notifySuccess, notifyError } from "@/lib/utils/toast"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Props {
   employe: {
@@ -66,6 +67,7 @@ function fmtDate(iso: string | null | undefined) {
 }
 
 export function ProtectionLegalePanel({ employe, canManage }: Props) {
+  const locale = getLocale()
   const [grossesse, setGrossesse] = useState<Grossesse | null>(null)
   const [paternite, setPaternite] = useState<Paternite | null>(null)
   const [loading, setLoading] = useState(true)
@@ -235,7 +237,7 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
     return (
       <Card className="border-dashed">
         <CardContent className="p-4 text-center text-xs text-gray-400">
-          <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Chargement protection légale...
+          <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> {t('srh.protection.loading', locale)}
         </CardContent>
       </Card>
     )
@@ -339,7 +341,7 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
           ) : null}
 
           {!grossesse && !paternite && !canManage && (
-            <p className="text-xs text-gray-500">Aucune protection légale active pour cet employé.</p>
+            <p className="text-xs text-gray-500">{t('srh.protection.none', locale)}</p>
           )}
         </CardContent>
       </Card>
@@ -428,7 +430,7 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
       <Dialog open={dialog === 'annuler-grossesse'} onOpenChange={open => { if (!open) setDialog(null) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-red-700">Annuler la grossesse ?</DialogTitle>
+            <DialogTitle className="text-red-700">{t('srh.protection.cancel_pregnancy_q', locale)}</DialogTitle>
             <DialogDescription>Action exceptionnelle. Motif documenté obligatoire.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm">
@@ -438,10 +440,10 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialog(null)}>Retour</Button>
+            <Button variant="outline" onClick={() => setDialog(null)}>{t('cui.back', locale)}</Button>
             <Button variant="destructive" onClick={annuler} disabled={actionLoading || motifAnnulation.trim().length < 3}>
               {actionLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Annuler la grossesse
+              {t('srh.protection.cancel_pregnancy', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>

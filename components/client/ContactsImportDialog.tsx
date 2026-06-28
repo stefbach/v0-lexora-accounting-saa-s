@@ -11,6 +11,7 @@
  */
 
 import { useMemo, useRef, useState } from "react"
+import { t, getLocale } from "@/lib/i18n"
 import {
   Dialog,
   DialogContent,
@@ -148,6 +149,7 @@ function parseRow(row: Record<string, any>, idx: number): ParsedRow {
 }
 
 export function ContactsImportDialog({ open, onOpenChange, societeId, onImported }: Props) {
+  const locale = getLocale()
   const fileRef = useRef<HTMLInputElement>(null)
   const [rows, setRows] = useState<ParsedRow[]>([])
   const [parsing, setParsing] = useState(false)
@@ -386,11 +388,11 @@ export function ContactsImportDialog({ open, onOpenChange, societeId, onImported
 
         <DialogFooter className="flex justify-between sm:justify-between gap-2">
           {rows.length > 0 && !result && (
-            <Button variant="ghost" onClick={reset}>Changer de fichier</Button>
+            <Button variant="ghost" onClick={reset}>{t('ssh.change_file', locale)}</Button>
           )}
           <div className="flex gap-2 ml-auto">
             <Button variant="outline" onClick={() => { reset(); onOpenChange(false) }}>
-              {result ? 'Fermer' : 'Annuler'}
+              {result ? t('cui.close', locale) : t('cui.cancel', locale)}
             </Button>
             {rows.length > 0 && !result && (
               <Button

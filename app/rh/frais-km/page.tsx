@@ -788,7 +788,7 @@ export default function FraisKmPage() {
           <Card className="border" style={{ borderColor: GOLD }}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium" style={{ color: NAVY }}>
-                <Plus className="inline h-4 w-4 mr-1" /> Ajouter un trajet
+                <Plus className="inline h-4 w-4 mr-1" /> {t('srh.fraiskm.add_trip', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">

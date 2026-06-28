@@ -518,7 +518,7 @@ export default function EoyBonusPage() {
               </div>
             )}
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setConfirmAction(null)}>Annuler</Button>
+              <Button variant="outline" onClick={() => setConfirmAction(null)}>{t('cui.cancel', locale)}</Button>
               <Button
                 onClick={() => confirmAction && runGenererOrAnnuler(
                   confirmAction.kind,
