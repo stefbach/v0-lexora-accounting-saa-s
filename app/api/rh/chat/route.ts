@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { CLAUDE_MODEL } from '@/lib/claude'
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const { message, conversation_id, employe_id } = await request.json()
     if (!message) return NextResponse.json({ error: 'Message requis' }, { status: 400 })

@@ -16,6 +16,7 @@
  * Body : { societe_id: string, action?: "audit" | "lettrer", exercice?: string }
  */
 import { NextResponse } from "next/server"
+import { apiError } from '@/lib/api-error'
 import Anthropic from "@anthropic-ai/sdk"
 import { authenticateAgentRequest } from "@/lib/agent-auth"
 import { getAdminClient } from "@/lib/supabase/admin"
@@ -104,7 +105,7 @@ async function handleAudit(societe_id: string, body: any) {
         .order("date_ecriture", { ascending: false })
     ),
   ])
-  if (!societe) return NextResponse.json({ error: "société introuvable" }, { status: 404 })
+  if (!societe) return apiError('company_not_found_lc', 404)
 
   const allEcritures = (ecritures || []).filter((e: any) =>
     exercice ? e.exercice === exercice : true

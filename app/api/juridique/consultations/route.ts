@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
@@ -56,7 +57,7 @@ export async function DELETE(request: Request) {
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
     const supabaseAuth = await createClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
     const supabase = getAdminClient()
     // Vérifie l'accès via la société de la consultation.
     const { data: row, error: e1 } = await supabase.from('juridique_consultations').select('societe_id').eq('id', id).single()
@@ -64,7 +65,7 @@ export async function DELETE(request: Request) {
     try {
       await assertSocieteAccess(supabase, user.id, row.societe_id)
     } catch (e) {
-      if (e instanceof SocieteAccessError) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      if (e instanceof SocieteAccessError) return apiError('access_denied', 403)
       throw e
     }
     const { error } = await supabase.from('juridique_consultations').delete().eq('id', id)

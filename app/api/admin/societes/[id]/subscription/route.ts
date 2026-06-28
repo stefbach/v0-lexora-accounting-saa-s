@@ -11,6 +11,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 
@@ -38,7 +39,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     .select('id, nom, plan_id, addons_actifs, periodicite, prix_mensuel_effectif, prix_periode_effectif, modules_actifs')
     .eq('id', id).maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!soc) return NextResponse.json({ error: 'Société introuvable' }, { status: 404 })
+  if (!soc) return apiError('company_not_found', 404)
 
   let plan: any = null
   if (soc.plan_id) {

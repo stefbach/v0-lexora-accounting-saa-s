@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
 import { encryptSecret } from '@/lib/crypto/symmetric'
@@ -247,7 +248,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   if (Object.keys(updates).length === 0) {
-    return NextResponse.json({ error: 'Aucun champ à mettre à jour' }, { status: 400 })
+    return apiError('no_fields_to_update', 400)
   }
 
   const { data, error } = await admin.from('email_accounts').update(updates).eq('id', id).select('*').single()

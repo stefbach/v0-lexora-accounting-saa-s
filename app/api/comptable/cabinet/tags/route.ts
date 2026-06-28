@@ -11,6 +11,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 
@@ -31,7 +32,7 @@ async function requireComptable() {
 
 export async function GET() {
   const ctx = await requireComptable()
-  if (!ctx) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+  if (!ctx) return apiError('unauthorized', 401)
   const { supabase, cabinetOwnerId } = ctx
   const { data, error } = await supabase
     .from('cabinet_tags')
@@ -44,7 +45,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const ctx = await requireComptable()
-  if (!ctx) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+  if (!ctx) return apiError('unauthorized', 401)
   const { supabase, cabinetOwnerId } = ctx
   const { libelle, couleur, icone } = await request.json()
   if (!libelle?.trim()) return NextResponse.json({ error: 'libelle requis' }, { status: 400 })
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   const ctx = await requireComptable()
-  if (!ctx) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+  if (!ctx) return apiError('unauthorized', 401)
   const { supabase } = ctx
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
@@ -82,7 +83,7 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   const ctx = await requireComptable()
-  if (!ctx) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+  if (!ctx) return apiError('unauthorized', 401)
   const { supabase } = ctx
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
@@ -95,7 +96,7 @@ export async function DELETE(request: Request) {
 // PUT — toggle assignation tag ↔ société
 export async function PUT(request: Request) {
   const ctx = await requireComptable()
-  if (!ctx) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+  if (!ctx) return apiError('unauthorized', 401)
   const { user, supabase } = ctx
   const { searchParams } = new URL(request.url)
   const tag_id = searchParams.get('tag_id')

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { apiError } from '@/lib/api-error'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -26,7 +27,7 @@ export async function GET(
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    if (!user) return apiError('not_authenticated', 401)
 
     const supabase = getAdminClient()
     const { id } = await params
@@ -37,7 +38,7 @@ export async function GET(
       .eq('id', id)
       .single()
 
-    if (error || !doc) return NextResponse.json({ error: 'Document non trouvé' }, { status: 404 })
+    if (error || !doc) return apiError('document_not_found', 404)
     if (!doc.storage_path) return NextResponse.json({ error: 'Fichier non disponible' }, { status: 404 })
 
     // Access control
@@ -55,7 +56,7 @@ export async function GET(
     const sameSociete = dossier?.societe_id && profile?.societe_id === dossier.societe_id
 
     if (!isOwner && !isAdminRole && !isAssignedComptable && !sameSociete) {
-      return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
+      return apiError('unauthorized_access', 403)
     }
 
     // Generate short-lived signed URL (60s)

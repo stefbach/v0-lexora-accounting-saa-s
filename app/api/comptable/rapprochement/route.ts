@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createEcrituresForPayment, createEcrituresForFacture } from '@/lib/accounting/ecritures-factures'
 import { safeInsertBnq } from '@/lib/accounting/bnq-dedupe'
 import { analyzeAllTransactions, MatchingTransaction, MatchingFacture } from '@/lib/accounting/matching-engine'
@@ -170,7 +171,7 @@ export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
@@ -541,7 +542,7 @@ export async function POST(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const supabase = getAdminClient()
     const body = await request.json()
@@ -1980,11 +1981,11 @@ export async function POST(request: Request) {
         const { data: releveMulti } = await supabase
           .from('releves_bancaires').select('id, transactions_json, compte_bancaire_id')
           .eq('id', releve_id).single()
-        if (!releveMulti) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
+        if (!releveMulti) return apiError('statement_not_found', 404)
 
         const txIdxM = parseInt(String(transaction_id).split('-').pop() || '0')
         const txsM = [...(releveMulti.transactions_json || [])]
-        if (txIdxM >= txsM.length) return NextResponse.json({ error: 'Transaction non trouvée' }, { status: 404 })
+        if (txIdxM >= txsM.length) return apiError('transaction_not_found', 404)
 
         const prevTxM = { ...txsM[txIdxM] }
         const txAmount = Math.max(Number(prevTxM.debit) || 0, Number(prevTxM.credit) || 0)
@@ -2148,7 +2149,7 @@ export async function POST(request: Request) {
       if (classification && !facture_id && !ecriture_id) {
         const { data: releve } = await supabase
           .from('releves_bancaires').select('id, transactions_json, compte_bancaire_id').eq('id', releve_id).single()
-        if (!releve) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
+        if (!releve) return apiError('statement_not_found', 404)
         // Résoudre la devise du compte bancaire du relevé (fallback si tx.devise absent)
         let releveDeviseMC = 'MUR'
         if (releve.compte_bancaire_id) {
@@ -2158,7 +2159,7 @@ export async function POST(request: Request) {
 
         const txIdx = parseInt(transaction_id.split('-').pop() || '0')
         const txs = [...(releve.transactions_json || [])]
-        if (txIdx >= txs.length) return NextResponse.json({ error: 'Transaction non trouvée' }, { status: 404 })
+        if (txIdx >= txs.length) return apiError('transaction_not_found', 404)
 
         // B3 — Bloquer si la période de la transaction est verrouillée
         const txDate = txs[txIdx]?.date
@@ -2413,11 +2414,11 @@ export async function POST(request: Request) {
 
       const { data: releve } = await supabase
         .from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
-      if (!releve) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
+      if (!releve) return apiError('statement_not_found', 404)
 
       const txIdx = parseInt(transaction_id.split('-').pop() || '0')
       const txs = [...(releve.transactions_json || [])]
-      if (txIdx >= txs.length) return NextResponse.json({ error: 'Transaction non trouvée' }, { status: 404 })
+      if (txIdx >= txs.length) return apiError('transaction_not_found', 404)
 
       const lettreCode = `M${String(Date.now()).slice(-4)}`
       const reconcileDate = new Date().toISOString()
@@ -2660,11 +2661,11 @@ export async function POST(request: Request) {
       const { data: releveP } = await supabase
         .from('releves_bancaires').select('id, transactions_json, compte_bancaire_id')
         .eq('id', releve_id).single()
-      if (!releveP) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
+      if (!releveP) return apiError('statement_not_found', 404)
 
       const txIdxP = parseInt(String(transaction_id).split('-').pop() || '0')
       const txsP = [...(releveP.transactions_json || [])]
-      if (txIdxP >= txsP.length) return NextResponse.json({ error: 'Transaction non trouvée' }, { status: 404 })
+      if (txIdxP >= txsP.length) return apiError('transaction_not_found', 404)
 
       const prevTxP = { ...txsP[txIdxP] }
       const txAmountP = Math.max(Number(prevTxP.debit) || 0, Number(prevTxP.credit) || 0)
@@ -2996,7 +2997,7 @@ export async function POST(request: Request) {
 
       const { data: releve, error: relErr } = await supabase
         .from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
-      if (relErr || !releve) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
+      if (relErr || !releve) return apiError('statement_not_found', 404)
 
       const txIdx = parseInt(String(transaction_id).split('-').pop() || '0')
       const txs = [...(releve.transactions_json || [])]
@@ -3054,7 +3055,7 @@ export async function POST(request: Request) {
 
       const { data: releve } = await supabase
         .from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
-      if (!releve) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
+      if (!releve) return apiError('statement_not_found', 404)
 
       const txIdx = parseInt(transaction_id.split('-').pop() || '0')
       const txs = [...(releve.transactions_json || [])]
@@ -3305,11 +3306,11 @@ export async function POST(request: Request) {
 
       const { data: releve } = await supabase
         .from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
-      if (!releve) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
+      if (!releve) return apiError('statement_not_found', 404)
 
       const txIdx = parseInt((transaction_id || '').split('-').pop() || '0')
       const txs = [...(releve.transactions_json || [])]
-      if (txIdx >= txs.length) return NextResponse.json({ error: 'Transaction non trouvée' }, { status: 404 })
+      if (txIdx >= txs.length) return apiError('transaction_not_found', 404)
 
       const tx = txs[txIdx]
       const txAmount = Number(tx.credit) > 0 ? Number(tx.credit) : Number(tx.debit)

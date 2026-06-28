@@ -25,6 +25,7 @@
  * Réponse 502 : { error, status: 'failed' } (échec robot)
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { generateCitXml } from '@/lib/accounting/mra-xml'
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) {
-      return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+      return apiError('unauthorized', 401)
     }
 
     const body = (await request.json()) as Body

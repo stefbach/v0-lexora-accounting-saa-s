@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { apiError } from '@/lib/api-error'
 import { createClient as adminClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
@@ -13,7 +14,7 @@ export async function GET() {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    if (!user) return apiError('not_authenticated', 401)
 
     const admin = getAdmin()
     const { data: profile } = await admin.from('profiles').select('role, societe_id').eq('id', user.id).maybeSingle()

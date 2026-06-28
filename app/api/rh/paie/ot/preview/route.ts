@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getActiveSocieteIdFromCookies } from '@/lib/client/active-societe'
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) {
-      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+      return apiError('not_authenticated', 401)
     }
 
     // 2. Société active : query param `societe_id` prioritaire, fallback
@@ -73,7 +74,7 @@ export async function GET(request: Request) {
 
     const role = (link?.role ?? '') as string
     if (!ALLOWED_ROLES.includes(role as (typeof ALLOWED_ROLES)[number])) {
-      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      return apiError('access_denied', 403)
     }
 
     // 4. Validation periode (searchParams déjà parsé en étape 2)

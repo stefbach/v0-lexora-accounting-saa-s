@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { apiError } from '@/lib/api-error'
 import { getAdminClient as getAdmin } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
@@ -8,7 +9,7 @@ export async function GET(request: Request) {
   try {
     // Accepte session web OU header X-Internal-Token (MCP, bot, cron).
     const user = await resolveUserAuth(request)
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    if (!user) return apiError('not_authenticated', 401)
 
     const admin = getAdmin()
     const { data: profile } = await admin.from('profiles').select('role, societe_id').eq('id', user.id).maybeSingle()
@@ -99,7 +100,7 @@ export async function POST(request: Request) {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    if (!user) return apiError('not_authenticated', 401)
 
     const body = await request.json()
     if (!body.nom) return NextResponse.json({ error: 'Le nom est requis' }, { status: 400 })
@@ -192,7 +193,7 @@ export async function PATCH(request: Request) {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    if (!user) return apiError('not_authenticated', 401)
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })

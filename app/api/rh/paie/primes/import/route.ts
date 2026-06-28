@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getActiveSocieteIdFromCookies } from '@/lib/client/active-societe'
@@ -122,7 +123,7 @@ export async function POST(request: Request) {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) {
-      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+      return apiError('not_authenticated', 401)
     }
 
     // 2. Parse body — fait avant le role check pour pouvoir extraire le
@@ -131,10 +132,10 @@ export async function POST(request: Request) {
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: 'Format de la requête invalide' }, { status: 400 })
+      return apiError('invalid_request_format', 400)
     }
     if (!body || typeof body !== 'object') {
-      return NextResponse.json({ error: 'Format de la requête invalide' }, { status: 400 })
+      return apiError('invalid_request_format', 400)
     }
     const { periode, lignes: rawLignes, societe_id: societeIdFromBody } = body as {
       periode?: unknown
@@ -168,7 +169,7 @@ export async function POST(request: Request) {
       .maybeSingle()
     const role = (link?.role ?? '') as string
     if (!ALLOWED_ROLES.includes(role as (typeof ALLOWED_ROLES)[number])) {
-      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      return apiError('access_denied', 403)
     }
 
     // 5. Validation forme du body (periode + lignes).

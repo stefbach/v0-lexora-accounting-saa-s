@@ -11,6 +11,7 @@
  * destinataire (ou rôle admin/direction de la société).
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient as createSupabase } from '@supabase/supabase-js'
 
@@ -28,7 +29,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ token: stri
   try {
     const supabase = await createServerClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const { token } = await ctx.params
     if (!token) return NextResponse.json({ error: 'token requis' }, { status: 400 })
@@ -57,7 +58,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ token: stri
       if (!us) {
         const { data: prof } = await admin.from('profiles').select('role').eq('id', user.id).maybeSingle()
         if (!['admin', 'super_admin'].includes(prof?.role || '')) {
-          return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+          return apiError('access_denied_company', 403)
         }
       }
     }

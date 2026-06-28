@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { getAdminClient } from '@/lib/supabase/admin'
 import {
   assertSocieteAccess,
@@ -69,7 +70,7 @@ const fmtDate = (d: string | null | undefined): string => {
 export async function GET(request: Request) {
   try {
     const user = await resolveUserAuth(request)
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')

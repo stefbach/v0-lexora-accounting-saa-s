@@ -26,6 +26,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient as createSupabase } from '@supabase/supabase-js'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
@@ -47,7 +48,7 @@ const DEFAULT_LIMIT = 100
 export async function POST(request: Request) {
   try {
     const user = await resolveUserAuth(request)
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const body = await request.json()
     const {
@@ -159,7 +160,7 @@ export async function POST(request: Request) {
 // GET : retourne la whitelist + schémas (utile pour Claude de découvrir les tables)
 export async function GET(request: Request) {
   const user = await resolveUserAuth(request)
-  if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+  if (!user) return apiError('unauthorized', 401)
 
   return NextResponse.json({
     tables: Object.entries(MCP_TABLE_WHITELIST).map(([name, cfg]) => ({

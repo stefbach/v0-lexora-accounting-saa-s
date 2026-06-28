@@ -4,6 +4,7 @@
  * Liste des snapshots historiques. Auth : admin + rh.
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getSnapshotsSociete } from '@/lib/rh/ias19-provisions'
@@ -22,13 +23,13 @@ export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const supabase = getAdminClient()
     const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
     const role = (prof as { role?: string } | null)?.role || ''
     if (!['admin', 'rh'].includes(role)) {
-      return NextResponse.json({ error: 'Accès réservé RH/admin' }, { status: 403 })
+      return apiError('hr_admin_only', 403)
     }
 
     const { searchParams } = new URL(request.url)

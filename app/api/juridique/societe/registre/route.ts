@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
@@ -23,7 +24,7 @@ export async function GET(request: Request) {
     if (!societeId || !registre) return NextResponse.json({ error: 'societe_id et registre requis' }, { status: 400 })
     const a = await authed(); if (a.error) return a.error
     try { await assertSocieteAccess(a.supabase, a.user.id, societeId) }
-    catch (e) { if (e instanceof SocieteAccessError) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 }); throw e }
+    catch (e) { if (e instanceof SocieteAccessError) return apiError('access_denied', 403); throw e }
     const { data, error } = await a.supabase
       .from('juridique_registre_entries')
       .select('id, data, created_at')
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
     }
     const a = await authed(); if (a.error) return a.error
     try { await assertSocieteAccess(a.supabase, a.user.id, body.societe_id) }
-    catch (e) { if (e instanceof SocieteAccessError) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 }); throw e }
+    catch (e) { if (e instanceof SocieteAccessError) return apiError('access_denied', 403); throw e }
     const { data, error } = await a.supabase
       .from('juridique_registre_entries')
       .insert({ societe_id: body.societe_id, registre: body.registre, data: body.data ?? {}, created_by: a.user.id })
@@ -66,7 +67,7 @@ export async function DELETE(request: Request) {
     const { data: row, error: e1 } = await a.supabase.from('juridique_registre_entries').select('societe_id').eq('id', id).single()
     if (e1 || !row) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
     try { await assertSocieteAccess(a.supabase, a.user.id, row.societe_id) }
-    catch (e) { if (e instanceof SocieteAccessError) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 }); throw e }
+    catch (e) { if (e instanceof SocieteAccessError) return apiError('access_denied', 403); throw e }
     const { error } = await a.supabase.from('juridique_registre_entries').delete().eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true })

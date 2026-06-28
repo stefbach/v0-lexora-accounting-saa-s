@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { resolveOwnership, canManageEmploye } from '@/lib/rh/ownership'
 
@@ -41,7 +42,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
     const { id } = await params
     const { data, error } = await supabase.from('pointages').select('*, employe:employes(nom,prenom,poste,salaire_base)').eq('id', id).single()
     if (error) throw error
@@ -55,7 +56,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
     const { id } = await params
     const body = await request.json()
 

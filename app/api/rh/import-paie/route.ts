@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getUserSocieteIds, userHasAccessToSociete } from '@/lib/rh/access'
@@ -117,7 +118,7 @@ export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     // Sprint 1 — role gate : seuls admin/RH/comptables peuvent lire
     // l'historique d'import paie (il contient des montants nets sensibles).
@@ -205,7 +206,7 @@ export async function POST(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     // Sprint 1 — role gate : import paie = écriture massive de bulletins,
     // restreint aux rôles admin/RH/comptable uniquement.
@@ -375,7 +376,7 @@ export async function POST(request: Request) {
 
       // Multi-tenant: verify user has access to this société
       const hasAccessImport = await userHasAccessToSociete(user.id, societe_id)
-      if (!hasAccessImport) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+      if (!hasAccessImport) return apiError('access_denied_company', 403)
       const periodeDate = `${periode}-01`
       let created = 0, updated = 0, errors: string[] = []
       const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
@@ -616,7 +617,7 @@ export async function POST(request: Request) {
       const { societe_id, periode, employes } = body
       if (!societe_id || !periode || !employes?.length) return NextResponse.json({ error: 'Données manquantes' }, { status: 400 })
       const hasAccessEoy = await userHasAccessToSociete(user.id, societe_id)
-      if (!hasAccessEoy) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+      if (!hasAccessEoy) return apiError('access_denied_company', 403)
 
       const year = String(periode).slice(0, 4)
       const eoyPeriode = `${year}-12-25` // jour distinct → pas de collision

@@ -10,6 +10,7 @@
  * Auth : session web owner.
  */
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { googleCalendarFetch } from '@/lib/google/calendar-client'
@@ -19,7 +20,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(_req: NextRequest) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+  if (!user) return apiError('not_authenticated', 401)
 
   const admin = getAdminClient()
   const { data: settings } = await admin

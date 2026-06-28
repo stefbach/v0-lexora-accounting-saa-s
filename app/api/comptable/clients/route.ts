@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { apiError } from '@/lib/api-error'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
@@ -17,7 +18,7 @@ export async function GET() {
     const { data: { user } } = await supabaseAuth.auth.getUser()
 
     if (!user) {
-      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+      return apiError('not_authenticated', 401)
     }
 
     const supabase = getAdminClient()
@@ -33,7 +34,7 @@ export async function GET() {
 
     // Admin and comptable roles can access
     if (!['admin', 'super_admin', 'comptable', 'comptable_dedie', 'client_admin'].includes(role)) {
-      return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
+      return apiError('unauthorized_access', 403)
     }
 
     if (['admin', 'super_admin', 'comptable'].includes(role)) {

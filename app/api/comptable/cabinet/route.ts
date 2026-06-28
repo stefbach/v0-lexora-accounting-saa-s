@@ -18,6 +18,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 
@@ -29,7 +30,7 @@ export async function GET() {
   try {
     const auth = await createClient()
     const { data: { user }, error: authError } = await auth.auth.getUser()
-    if (authError || !user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (authError || !user) return apiError('unauthorized', 401)
 
     const supabase = getAdminClient()
     const { data: profile } = await supabase

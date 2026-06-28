@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getTauxChange, convertToMUR } from '@/lib/taux-change'
@@ -20,13 +21,13 @@ export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     // Verify role
     const supabase = getAdminClient()
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
     if (!profile || !['comptable', 'comptable_dedie', 'admin', 'super_admin', 'client_admin'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      return apiError('access_denied', 403)
     }
 
     const { searchParams } = new URL(request.url)
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
 
     // Multi-tenant: verify user has access to this société
     const hasAccess = await userHasAccessToSociete(user.id, societe_id)
-    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+    if (!hasAccess) return apiError('access_denied_company', 403)
 
     // Fetch bank accounts
     const { data: comptes, error: comptesError } = await supabase
@@ -161,7 +162,7 @@ export async function PATCH(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const supabase = getAdminClient()
     const body = await request.json()
@@ -174,7 +175,7 @@ export async function PATCH(request: Request) {
     if (!compte) return NextResponse.json({ error: 'Compte non trouvé' }, { status: 404 })
 
     const hasAccess = await userHasAccessToSociete(user.id, compte.societe_id)
-    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    if (!hasAccess) return apiError('access_denied', 403)
 
     const { error } = await supabase.from('comptes_bancaires').update({ nom_compte }).eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

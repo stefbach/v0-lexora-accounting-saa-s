@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import { resolveInternalAuth } from '@/lib/lexora-internal-auth'
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
     } else {
       const supabaseAuth = await createServerClient()
       const { data: { user: sessionUser } } = await supabaseAuth.auth.getUser()
-      if (!sessionUser) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+      if (!sessionUser) return apiError('unauthorized', 401)
       user = { id: sessionUser.id, email: sessionUser.email }
     }
 
@@ -478,7 +479,7 @@ export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')

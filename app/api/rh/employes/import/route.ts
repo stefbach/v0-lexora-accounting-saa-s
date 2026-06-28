@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { apiError } from '@/lib/api-error'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const supabase = getAdminClient()
     const formData = await request.formData()

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { userHasAccessToEmploye } from '@/lib/rh/access'
@@ -55,18 +56,18 @@ export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const { searchParams } = new URL(request.url)
     const employe_id = searchParams.get('employe_id')
     if (!employe_id) return NextResponse.json({ error: 'employe_id requis' }, { status: 400 })
 
     const hasAccess = await userHasAccessToEmploye(user.id, employe_id)
-    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    if (!hasAccess) return apiError('access_denied', 403)
 
     const supabase = getAdminClient()
     const { data: emp } = await supabase.from('employes').select('*').eq('id', employe_id).single()
-    if (!emp) return NextResponse.json({ error: 'Employé introuvable' }, { status: 404 })
+    if (!emp) return apiError('employee_not_found_alt', 404)
 
     // Override possible via query string (mode preview avant confirmation)
     const dateDepartParam = searchParams.get('date_depart') || emp.date_depart

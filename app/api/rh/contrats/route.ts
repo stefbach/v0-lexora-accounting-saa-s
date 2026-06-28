@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createSbClient } from '@supabase/supabase-js'
 import { resolveOwnership } from '@/lib/rh/ownership'
@@ -22,7 +23,7 @@ export async function GET(request: Request) {
   try {
     const supabaseAuth = await createClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     // Service-role client pour éviter toute issue RLS sur la lecture
     const supabase = getAdminClient()
@@ -139,7 +140,7 @@ export async function POST(request: Request) {
   try {
     const supabaseAuth = await createClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const supabase = getAdminClient()
     const body = await request.json()
@@ -170,7 +171,7 @@ export async function POST(request: Request) {
       .eq('id', employe_id)
       .single()
 
-    if (empErr || !employe) return NextResponse.json({ error: 'Employé introuvable' }, { status: 404 })
+    if (empErr || !employe) return apiError('employee_not_found_alt', 404)
 
     // Sprint 15 FIX 6+7 — motif_cdd et periode_essai_jours stockés dans
     // le contrat. Colonnes optionnelles (mig 028 les a ou pas) → best-effort.

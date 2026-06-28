@@ -10,6 +10,7 @@
  * GET  → liste des grossesses actives (déclarées + congé en cours)
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getUserSocieteIds } from '@/lib/rh/access'
@@ -95,10 +96,10 @@ export async function POST(request: Request) {
     }
     // Contrôle accès société
     const { data: emp } = await supabase.from('employes').select('societe_id').eq('id', employe_id).maybeSingle()
-    if (!emp) return NextResponse.json({ error: 'Employé non trouvé' }, { status: 404 })
+    if (!emp) return apiError('employee_not_found', 404)
     const accessibleIds = await getUserSocieteIds(auth.user!.id)
     if (!accessibleIds.includes(emp.societe_id)) {
-      return NextResponse.json({ error: 'Accès refusé à cet employé' }, { status: 403 })
+      return apiError('access_denied_employee', 403)
     }
     const r = await declarerGrossesse(supabase, {
       employe_id,

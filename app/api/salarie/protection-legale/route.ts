@@ -9,6 +9,7 @@
  * retournée — UI salarié = transparence sans détails confidentiels.
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+  if (!user) return apiError('unauthorized', 401)
 
   // Récupérer l'employé via auth_user_id (pas email car plus fiable)
   const { data: emp } = await supabase

@@ -29,6 +29,7 @@
  *   - Audit log via bulletin_decomptabilisation_log (action=rh_reconstruction)
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import {
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
       data: { user },
     } = await supabaseAuth.auth.getUser()
     if (!user) {
-      return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+      return apiError('unauthorized', 401)
     }
 
     const supabase = getAdminClient()

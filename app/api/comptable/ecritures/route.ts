@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { checkPeriodLock } from '@/lib/accounting/period-lock'
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
       await assertSocieteAccess(supabase, user.id, societe_id)
     } catch (err) {
       if (err instanceof SocieteAccessError) {
-        return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+        return apiError('access_denied_company', 403)
       }
       throw err
     }
@@ -159,7 +160,7 @@ export async function POST(request: Request) {
       await assertSocieteAccess(supabase, user.id, societe_id)
     } catch (err) {
       if (err instanceof SocieteAccessError) {
-        return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+        return apiError('access_denied_company', 403)
       }
       throw err
     }

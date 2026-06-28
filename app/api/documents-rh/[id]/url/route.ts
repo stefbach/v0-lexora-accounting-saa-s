@@ -7,6 +7,7 @@
  * c'était un doc entrant (rh_vers_employe) non encore consulté.
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getDocument, getSignedUrl, marquerCommeVu } from '@/lib/rh/documents-rh'
@@ -28,7 +29,7 @@ export async function GET(
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const params = await (Promise.resolve(context.params) as Promise<Record<string, string>>)
     const id = String(params.id || '')
@@ -47,14 +48,14 @@ export async function GET(
     // Contrôle d'accès côté employé : doc doit lui appartenir et ne pas être confidentiel.
     if (!isRH) {
       if (doc.confidentiel_rh_only) {
-        return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+        return apiError('access_denied', 403)
       }
       const { data: selfEmp } = await supabase
         .from('employes').select('id')
         .or(`auth_user_id.eq.${user.id},email.eq.${user.email}`)
         .limit(1).maybeSingle()
       if (!selfEmp || (selfEmp as { id: string }).id !== doc.employe_id) {
-        return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+        return apiError('access_denied', 403)
       }
       // Marquer comme vu (side-effect non-bloquant).
       if (doc.direction === 'rh_vers_employe' && !doc.vu_par_destinataire_le) {

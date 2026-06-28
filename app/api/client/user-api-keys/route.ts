@@ -7,6 +7,7 @@
  * POST   → crée une nouvelle clé, renvoie le token EN CLAIR une seule fois
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { generateApiToken } from '@/lib/supabase/api-keys'
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+  if (!user) return apiError('not_authenticated', 401)
 
   const admin = getAdminClient()
   const { data, error } = await admin
@@ -33,7 +34,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+  if (!user) return apiError('not_authenticated', 401)
 
   const body = await request.json().catch(() => ({}))
   const name = String(body?.name || '').trim().slice(0, 80)

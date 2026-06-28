@@ -50,6 +50,8 @@ import { sweepUiRhChunk } from './i18n/sweep_ui_rh'
 import { sweepUiClChunk } from './i18n/sweep_ui_cl'
 import { sweepUiJurChunk } from './i18n/sweep_ui_jur'
 import { sweepUiFxChunk } from './i18n/sweep_ui_fx'
+import { sweepUiConfChunk } from './i18n/sweep_ui_conf'
+import { sweepApierrChunk } from './i18n/sweep_apierr'
 
 export type Locale = 'fr' | 'en'
 
@@ -711,6 +713,8 @@ const translations: Record<Locale, Record<string, string>> = {
     ...sweepUiClChunk.fr,
     ...sweepUiJurChunk.fr,
     ...sweepUiFxChunk.fr,
+    ...sweepUiConfChunk.fr,
+    ...sweepApierrChunk.fr,
   },
   en: {
     ...baseTranslations.en,
@@ -766,6 +770,8 @@ const translations: Record<Locale, Record<string, string>> = {
     ...sweepUiClChunk.en,
     ...sweepUiJurChunk.en,
     ...sweepUiFxChunk.en,
+    ...sweepUiConfChunk.en,
+    ...sweepApierrChunk.en,
   },
 }
 
@@ -781,6 +787,8 @@ export function getLocale(): Locale {
 export function setLocale(locale: Locale) {
   if (typeof window !== 'undefined') {
     localStorage.setItem('lexora_locale', locale)
+    // Miroir en cookie pour que le serveur (routes API, RSC) connaisse la langue.
+    document.cookie = `lexora_locale=${locale}; path=/; max-age=31536000; samesite=lax`
     window.location.reload()
   }
 }

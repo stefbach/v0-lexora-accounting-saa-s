@@ -4,6 +4,7 @@
  * PUT                   — update société fields + upsert parametres_paie_mra
  */
 import { createClient } from '@/lib/supabase/server'
+import { apiError } from '@/lib/api-error'
 import { createClient as adminClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    if (!user) return apiError('not_authenticated', 401)
 
     const societeId = req.nextUrl.searchParams.get('societe_id')
     const admin = getAdmin()
@@ -124,7 +125,7 @@ export async function PUT(req: NextRequest) {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    if (!user) return apiError('not_authenticated', 401)
 
     const body = await req.json()
     const { id: societeId, params_paie, ...societeFields } = body

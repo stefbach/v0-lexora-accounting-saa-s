@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { apiError } from '@/lib/api-error'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -19,7 +20,7 @@ export async function GET(
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    if (!user) return apiError('not_authenticated', 401)
 
     const supabase = getAdminClient()
     const { id } = await params
@@ -31,7 +32,7 @@ export async function GET(
       .eq('id', id)
       .single()
 
-    if (error || !doc) return NextResponse.json({ error: 'Document non trouvé' }, { status: 404 })
+    if (error || !doc) return apiError('document_not_found', 404)
 
     // Fetch dossier separately
     let dossier: any = null
@@ -49,7 +50,7 @@ export async function GET(
     const sameSociete = dossier?.societe_id && profile?.societe_id === dossier.societe_id
 
     if (!isOwner && !isAdminRole && !isAssignedComptable && !sameSociete) {
-      return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
+      return apiError('unauthorized_access', 403)
     }
 
     // Generate a short-lived signed URL for download
@@ -82,7 +83,7 @@ export async function PATCH(
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    if (!user) return apiError('not_authenticated', 401)
 
     const supabase = getAdminClient()
     const { id } = await params
@@ -95,7 +96,7 @@ export async function PATCH(
       .single()
 
     if (fetchError || !existingDoc) {
-      return NextResponse.json({ error: 'Document non trouvé' }, { status: 404 })
+      return apiError('document_not_found', 404)
     }
 
     // Access control — société-based, not just uploaded_by
@@ -122,7 +123,7 @@ export async function PATCH(
     }
 
     if (!isOwner && !isDossierClient && !isDossierComptable && !isComptableOrAdmin && !hasSocieteAccess) {
-      return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
+      return apiError('unauthorized_access', 403)
     }
 
     const body = await request.json()
@@ -173,7 +174,7 @@ export async function PATCH(
     }
 
     if (Object.keys(updateFields).length === 0) {
-      return NextResponse.json({ error: 'Aucun champ à mettre à jour' }, { status: 400 })
+      return apiError('no_fields_to_update', 400)
     }
 
     const { data: updated, error: updateError } = await supabase
@@ -200,7 +201,7 @@ export async function DELETE(
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    if (!user) return apiError('not_authenticated', 401)
 
     const supabase = getAdminClient()
     const { id } = await params

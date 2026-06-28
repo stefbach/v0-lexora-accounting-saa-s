@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { userHasAccessToEmploye } from '@/lib/rh/access'
@@ -47,7 +48,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { id: employeId } = await params
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    if (!user) return apiError('not_authenticated', 401)
 
     const supabase = getAdminClient()
 
@@ -56,19 +57,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .from('profiles').select('role').eq('id', user.id).maybeSingle()
     const role = profileCaller?.role || ''
     if (!ALLOWED_ROLES.includes(role)) {
-      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      return apiError('access_denied', 403)
     }
 
     // Multi-tenant : l'admin doit avoir accès à cet employé.
     const hasAccess = await userHasAccessToEmploye(user.id, employeId)
     if (!hasAccess) {
-      return NextResponse.json({ error: 'Accès refusé à cet employé' }, { status: 403 })
+      return apiError('access_denied_employee', 403)
     }
 
     // Body validation.
     let body: unknown
     try { body = await req.json() } catch {
-      return NextResponse.json({ error: 'Format de la requête invalide' }, { status: 400 })
+      return apiError('invalid_request_format', 400)
     }
     const { password } = (body || {}) as { password?: unknown }
     if (typeof password !== 'string' || password.length < 8) {
@@ -82,7 +83,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .eq('id', employeId)
       .maybeSingle()
     if (!emp) {
-      return NextResponse.json({ error: 'Employé introuvable' }, { status: 404 })
+      return apiError('employee_not_found_alt', 404)
     }
     if (!emp.email) {
       return NextResponse.json({ error: 'Email employé manquant — renseigner avant création de compte' }, { status: 400 })

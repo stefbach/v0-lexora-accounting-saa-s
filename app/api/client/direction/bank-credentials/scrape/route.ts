@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
@@ -14,7 +15,7 @@ export const maxDuration = 120 // Playwright peut être lent
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+  if (!user) return apiError('not_authenticated', 401)
 
   const compteId = req.nextUrl.searchParams.get('compte_id')
   if (!compteId) return NextResponse.json({ error: 'compte_id requis' }, { status: 400 })
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
     .from('user_societes').select('role')
     .eq('user_id', user.id).eq('societe_id', compte.societe_id).maybeSingle()
   if (!['direction', 'client_admin', 'admin', 'super_admin'].includes(us?.role || '')) {
-    return NextResponse.json({ error: 'Accès réservé à la direction' }, { status: 403 })
+    return apiError('management_only', 403)
   }
 
   const result = await scrapeBankAccount({

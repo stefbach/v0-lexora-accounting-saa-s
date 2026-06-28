@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
 import { testEmailAccount, checkResendDomainStatus, type EmailAccount } from '@/lib/email/router'
@@ -11,7 +12,7 @@ import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
  */
 export async function POST(req: NextRequest) {
   const user = await resolveUserAuth(req)
-  if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+  if (!user) return apiError('not_authenticated', 401)
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
 

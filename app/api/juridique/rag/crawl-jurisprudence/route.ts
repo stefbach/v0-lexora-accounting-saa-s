@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { fetchDocText, chunkLoi } from '@/lib/juridique/rag/ingest-loi'
@@ -42,10 +43,10 @@ export async function POST(request: Request) {
   try {
     const supabaseAuth = await createClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
     const { data: profile } = await supabaseAuth.from('profiles').select('role').eq('id', user.id).single()
     if (!['admin', 'super_admin'].includes(profile?.role || '')) {
-      return NextResponse.json({ error: 'Réservé aux administrateurs' }, { status: 403 })
+      return apiError('admins_only', 403)
     }
 
     const b = await request.json().catch(() => ({})) as {

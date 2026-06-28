@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createSbClient } from '@supabase/supabase-js'
 import { genererContrat, verifierContrat } from '@/lib/rh/expertRH'
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
     // On garde le client user-auth UNIQUEMENT pour valider la session.
     const supabaseAuth = await createClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
     // Toutes les opérations DB passent par l'admin client (bypass RLS).
     const supabase = getAdminClient()
 
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
         await assertSocieteAccess(supabase, user.id, body.societe_id)
       } catch (err) {
         if (err instanceof SocieteAccessError) {
-          return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+          return apiError('access_denied_company', 403)
         }
         throw err
       }

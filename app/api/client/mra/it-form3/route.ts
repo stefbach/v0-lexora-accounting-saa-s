@@ -11,6 +11,7 @@
  * Auth multi-mode.
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient as createSupabase } from '@supabase/supabase-js'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
@@ -42,7 +43,7 @@ async function loadAggregate(admin: any, societe_id: string, annee: number) {
 export async function GET(request: Request) {
   try {
     const user = await resolveUserAuth(request)
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
     const anneeStr = searchParams.get('annee') || String(new Date().getFullYear() - 1)
@@ -79,7 +80,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const user = await resolveUserAuth(request)
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
     const body = await request.json().catch(() => ({})) as any
     const societe_id = String(body?.societe_id || '')
     const annee = Number(body?.annee || (new Date().getFullYear() - 1))

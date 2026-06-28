@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 
 // POST /api/contrats/[id]/pdf — Exporter le contrat (retourne le HTML pour impression)
@@ -11,7 +12,7 @@ export async function POST(
     const { id } = await params
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const { data: contrat, error } = await supabase
       .from('contrats_clients')

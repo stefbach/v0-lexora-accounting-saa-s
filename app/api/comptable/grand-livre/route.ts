@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { fetchAllPaginated } from '@/lib/supabase/paginate'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
   try {
     // FIX MCP : resolveUserAuth pour outil MCP `get_grand_livre`.
     const user = await resolveUserAuth(request)
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const supabase = getAdminClient()
     const { searchParams } = new URL(request.url)

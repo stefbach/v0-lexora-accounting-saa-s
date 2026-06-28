@@ -7,6 +7,7 @@
  * POST /api/rdv/settings (auth session — owner) → crée si pas encore
  */
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
   if (adminMode) {
     const supabase = await createServerClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    if (!user) return apiError('not_authenticated', 401)
     const { data } = await admin
       .from('booking_settings')
       .select(`${PUBLIC_FIELDS}, ${OWNER_FIELDS}`)
@@ -84,7 +85,7 @@ function sanitize(body: any): Record<string, any> {
 export async function POST(req: NextRequest) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+  if (!user) return apiError('not_authenticated', 401)
 
   const body = await req.json().catch(() => ({}))
   if (!body?.google_account_email) {
