@@ -43,6 +43,7 @@ import { sweepCompClChunk } from './i18n/sweep_comp_cl'
 import { sweepCompMiscChunk } from './i18n/sweep_comp_misc'
 import { sweepAppRhChunk } from './i18n/sweep_app_rh'
 import { sweepAppMiscChunk } from './i18n/sweep_app_misc'
+import { sweepPcmChunk } from './i18n/sweep_pcm'
 
 export type Locale = 'fr' | 'en'
 
@@ -697,6 +698,7 @@ const translations: Record<Locale, Record<string, string>> = {
     ...sweepCompMiscChunk.fr,
     ...sweepAppRhChunk.fr,
     ...sweepAppMiscChunk.fr,
+    ...sweepPcmChunk.fr,
   },
   en: {
     ...baseTranslations.en,
@@ -745,6 +747,7 @@ const translations: Record<Locale, Record<string, string>> = {
     ...sweepCompMiscChunk.en,
     ...sweepAppRhChunk.en,
     ...sweepAppMiscChunk.en,
+    ...sweepPcmChunk.en,
   },
 }
 
