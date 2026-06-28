@@ -13,6 +13,7 @@
  */
 
 import { useState } from "react"
+import { t, getLocale } from "@/lib/i18n"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -50,6 +51,7 @@ export function PaieValidationPanel({
       du parent si des actions corrigent l'anomalie (ex: publier planning). */
   onValidated?: () => void
 }) {
+  const locale = getLocale()
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<ValidationResult | null>(null)
   const [error, setError] = useState("")
@@ -68,17 +70,17 @@ export function PaieValidationPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ societe_id: societe, periode }),
       })
-      const data = await res.json().catch(() => ({ error: `HTTP ${res.status} — réponse invalide` }))
+      const data = await res.json().catch(() => ({ error: t('hr.paieval.err_invalid_response', locale).replace('{status}', String(res.status)) }))
       if (!res.ok || data.error) {
         console.error("[PaieValidationPanel] error", res.status, data?.error || data)
-        setError(data.error || `Erreur ${res.status} lors du contrôle prépaie.`)
+        setError(data.error || t('hr.paieval.err_check', locale).replace('{status}', String(res.status)))
         return
       }
       setResult(data)
       onValidated?.()
     } catch (e: any) {
       console.error("[PaieValidationPanel] exception", e)
-      setError(`Erreur réseau : ${e?.message || "inconnue"}.`)
+      setError(t('hr.paieval.err_network', locale).replace('{msg}', e?.message || t('hr.paieval.unknown', locale)))
     } finally {
       setLoading(false)
     }
@@ -93,9 +95,9 @@ export function PaieValidationPanel({
       {/* Action bar */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-lg font-bold" style={{ color: NAVY }}>Contrôle prépaiement</h2>
+          <h2 className="text-lg font-bold" style={{ color: NAVY }}>{t('hr.paieval.title', locale)}</h2>
           <p className="text-sm text-gray-500">
-            Vérifie salaires, pointages, congés, primes et champs obligatoires avant validation finale.
+            {t('hr.paieval.subtitle', locale)}
           </p>
         </div>
         <Button
@@ -107,7 +109,7 @@ export function PaieValidationPanel({
           {loading
             ? <Loader2 className="w-4 h-4 animate-spin" />
             : <ShieldCheck className="w-4 h-4" />}
-          {loading ? "Vérification..." : "Lancer le contrôle"}
+          {loading ? t('hr.paieval.checking', locale) : t('hr.paieval.run_btn', locale)}
         </Button>
       </div>
 
@@ -120,8 +122,7 @@ export function PaieValidationPanel({
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3 text-sm text-blue-800">
           <ShieldCheck className="w-5 h-5 text-blue-500 shrink-0" />
           <p>
-            Cliquez sur <strong>Lancer le contrôle</strong> pour vérifier les bulletins avant validation finale
-            (salaires, pointages, congés, primes, champs obligatoires).
+            {t('hr.paieval.empty_hint_1', locale)} <strong>{t('hr.paieval.run_btn', locale)}</strong> {t('hr.paieval.empty_hint_2', locale)}
           </p>
         </div>
       )}
@@ -136,8 +137,8 @@ export function PaieValidationPanel({
                   <span className="text-white font-bold text-sm">{result.nb_employes}</span>
                 </div>
                 <div>
-                  <p className="text-sm font-medium">Employés vérifiés</p>
-                  <p className="text-xs text-gray-500">Période {result.periode}</p>
+                  <p className="text-sm font-medium">{t('hr.paieval.employees_checked', locale)}</p>
+                  <p className="text-xs text-gray-500">{t('hr.paieval.period', locale)} {result.periode}</p>
                 </div>
               </CardContent>
             </Card>
@@ -147,8 +148,8 @@ export function PaieValidationPanel({
                   ? <XCircle className="w-10 h-10 text-red-500 shrink-0" />
                   : <CheckCircle2 className="w-10 h-10 text-green-500 shrink-0" />}
                 <div>
-                  <p className="text-sm font-medium">{erreurs.length} erreur(s)</p>
-                  <p className="text-xs text-gray-500">Bloquent la génération</p>
+                  <p className="text-sm font-medium">{erreurs.length} {t('hr.paieval.errors', locale)}</p>
+                  <p className="text-xs text-gray-500">{t('hr.paieval.block_generation', locale)}</p>
                 </div>
               </CardContent>
             </Card>
@@ -158,8 +159,8 @@ export function PaieValidationPanel({
                   ? <AlertTriangle className="w-10 h-10 text-orange-500 shrink-0" />
                   : <CheckCircle2 className="w-10 h-10 text-green-500 shrink-0" />}
                 <div>
-                  <p className="text-sm font-medium">{avertissements.length} avertissement(s)</p>
-                  <p className="text-xs text-gray-500">À vérifier</p>
+                  <p className="text-sm font-medium">{avertissements.length} {t('hr.paieval.warnings', locale)}</p>
+                  <p className="text-xs text-gray-500">{t('hr.paieval.to_check', locale)}</p>
                 </div>
               </CardContent>
             </Card>
@@ -169,14 +170,14 @@ export function PaieValidationPanel({
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
               <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
               <p className="text-sm text-green-800 font-medium">
-                Tous les contrôles sont OK — vous pouvez valider les bulletins (onglet Bulletins).
+                {t('hr.paieval.all_ok', locale)}
               </p>
             </div>
           ) : erreurs.length > 0 ? (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
               <XCircle className="w-5 h-5 text-red-600 shrink-0" />
               <p className="text-sm text-red-800 font-medium">
-                {erreurs.length} erreur(s) bloquante(s) — corrigez avant de valider.
+                {t('hr.paieval.errors_blocking', locale).replace('{n}', String(erreurs.length))}
               </p>
             </div>
           ) : null}
@@ -185,7 +186,7 @@ export function PaieValidationPanel({
             <Card>
               <CardHeader>
                 <CardTitle className="text-base" style={{ color: NAVY }}>
-                  Détail des anomalies ({result.anomalies.length})
+                  {t('hr.paieval.anomalies_detail', locale)} ({result.anomalies.length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
