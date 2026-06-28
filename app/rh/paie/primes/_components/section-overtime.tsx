@@ -55,6 +55,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { notifySuccess, notifyError, notifyWarning } from "@/lib/utils/toast"
+import { t, getLocale } from "@/lib/i18n"
 
 import type {
   OvertimeAlerteSemaine,
@@ -173,6 +174,7 @@ function montantLigne(taux: number, ot15: number, ot2: number): number {
 // ─── Composant principal ────────────────────────────────────────────────────
 
 export function SectionOvertime({ societeId }: Props) {
+  const locale = getLocale()
   const [periode, setPeriode] = useState<string>(periodeCourante)
   const [employes, setEmployes] = useState<EmployeActif[]>([])
   const [loadingEmployes, setLoadingEmployes] = useState(false)
@@ -217,7 +219,7 @@ export function SectionOvertime({ societeId }: Props) {
         setEmployes(list)
       })
       .catch(() => {
-        if (!cancelled) notifyError('Charger employés')
+        if (!cancelled) notifyError(t('sarh.ot.err_charger_employes', locale))
       })
       .finally(() => {
         if (!cancelled) setLoadingEmployes(false)
@@ -300,15 +302,15 @@ export function SectionOvertime({ societeId }: Props) {
       const url = `/api/rh/paie/ot/preview?societe_id=${encodeURIComponent(societeId)}&periode=${encodeURIComponent(periode)}`
       const res = await fetch(url)
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Erreur réseau' }))
-        notifyError('Charger suggestions', err.error)
+        const err = await res.json().catch(() => ({ error: t('sarh.ot.erreur_reseau', locale) }))
+        notifyError(t('sarh.ot.err_charger_suggestions', locale), err.error)
         return
       }
       const data = await res.json()
       setPreview(Array.isArray(data.lignes) ? data.lignes : [])
       setValidatedSuggestions(new Set())
     } catch (e: unknown) {
-      notifyError('Charger suggestions', e instanceof Error ? e : 'Erreur réseau')
+      notifyError(t('sarh.ot.err_charger_suggestions', locale), e instanceof Error ? e : t('sarh.ot.erreur_reseau', locale))
     } finally {
       setLoadingPreview(false)
     }
@@ -414,15 +416,23 @@ export function SectionOvertime({ societeId }: Props) {
         const nbUps = result.nb_lignes_upsert ?? 0
         if (result.bulletins_bloques && result.bulletins_bloques.length > 0) {
           notifyWarning(
-            `${nbUps} OT enregistré(s), ${nbBul} bulletin(s) mis à jour. `
-            + `${result.bulletins_bloques.length} bulletin(s) verrouillé(s) — déverrouiller pour les inclure.`,
+            t('sarh.ot.warn_bloques', locale)
+              .replace('{nbUps}', String(nbUps))
+              .replace('{nbBul}', String(nbBul))
+              .replace('{n}', String(result.bulletins_bloques.length)),
           )
         } else if (result.warnings && result.warnings.length > 0) {
           notifySuccess(
-            `${nbBul} bulletin(s) mis à jour (${result.warnings.length} avertissement(s) non bloquant(s)).`,
+            t('sarh.ot.ok_warnings', locale)
+              .replace('{nbBul}', String(nbBul))
+              .replace('{n}', String(result.warnings.length)),
           )
         } else {
-          notifySuccess(`${nbBul} bulletin(s) mis à jour, ${nbUps} ligne(s) journalière(s) enregistrée(s).`)
+          notifySuccess(
+            t('sarh.ot.ok_saved', locale)
+              .replace('{nbBul}', String(nbBul))
+              .replace('{nbUps}', String(nbUps)),
+          )
         }
         // Reload depuis la DB pour que l'utilisateur voie les saisies
         // persistées (replace l'état local par la vérité serveur — évite
@@ -430,7 +440,7 @@ export function SectionOvertime({ societeId }: Props) {
         await reloadSaisies().catch(() => {})
         return
       }
-      const err = await res.json().catch(() => ({ error: 'Erreur réseau' }))
+      const err = await res.json().catch(() => ({ error: t('sarh.ot.erreur_reseau', locale) }))
       if (res.status === 400) {
         if (Array.isArray(err.erreurs_validation) && err.erreurs_validation.length > 0) {
           const detail = err.erreurs_validation
@@ -442,21 +452,21 @@ export function SectionOvertime({ societeId }: Props) {
             })
             .join(' | ')
           const reste = err.erreurs_validation.length - 3
-          notifyError('Validation', `${detail}${reste > 0 ? ` (+${reste} autre(s))` : ''}`)
+          notifyError(t('sarh.ot.err_validation', locale), `${detail}${reste > 0 ? ` (+${reste} autre(s))` : ''}`)
         } else if (Array.isArray(err.details) && err.details.length > 0) {
-          notifyError('Format invalide', `${err.details[0].path} — ${err.details[0].error}`)
+          notifyError(t('sarh.ot.err_format', locale), `${err.details[0].path} — ${err.details[0].error}`)
         } else {
-          notifyError('Enregistrer OT', err.error ?? 'Erreur de validation')
+          notifyError(t('sarh.ot.err_enregistrer', locale), err.error ?? t('sarh.ot.err_validation_default', locale))
         }
       } else if (res.status === 403) {
-        notifyError('Enregistrer OT', "Accès refusé — rôle requis manquant")
+        notifyError(t('sarh.ot.err_enregistrer', locale), t('sarh.ot.err_acces', locale))
       } else if (res.status === 401) {
-        notifyError('Enregistrer OT', 'Session expirée — reconnectez-vous')
+        notifyError(t('sarh.ot.err_enregistrer', locale), t('sarh.ot.err_session', locale))
       } else {
-        notifyError('Enregistrer OT', err.error ?? "Erreur inconnue")
+        notifyError(t('sarh.ot.err_enregistrer', locale), err.error ?? t('sarh.ot.err_inconnue', locale))
       }
     } catch (e: unknown) {
-      notifyError('Enregistrer OT', e instanceof Error ? e : 'Erreur réseau')
+      notifyError(t('sarh.ot.err_enregistrer', locale), e instanceof Error ? e : t('sarh.ot.erreur_reseau', locale))
     } finally {
       setSaving(false)
     }
@@ -505,11 +515,11 @@ export function SectionOvertime({ societeId }: Props) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Heures supplémentaires</CardTitle>
+          <CardTitle>{t('sarh.ot.heures_sup', locale)}</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-gray-600">
-            Sélectionnez une société pour gérer les heures supplémentaires.
+            {t('sarh.ot.selectionnez', locale)}
           </p>
         </CardContent>
       </Card>
@@ -519,9 +529,9 @@ export function SectionOvertime({ societeId }: Props) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Heures supplémentaires</CardTitle>
+        <CardTitle>{t('sarh.ot.heures_sup', locale)}</CardTitle>
         <p className="text-sm text-gray-600 mt-1">
-          Saisie détaillée par date — calcul WRA 2019 (×1.5 et ×2)
+          {t('sarh.ot.saisie_desc', locale)}
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -529,7 +539,7 @@ export function SectionOvertime({ societeId }: Props) {
         {/* Zone 1 : période + bouton */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">Période :</span>
+            <span className="text-sm font-medium">{t('sarh.ot.periode', locale)}</span>
             <Select value={periode} onValueChange={setPeriode}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue />
@@ -550,12 +560,12 @@ export function SectionOvertime({ societeId }: Props) {
             {loadingPreview
               ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               : <Calculator className="h-4 w-4 mr-2" />}
-            Charger suggestions planning
+            {t('sarh.ot.charger_suggestions', locale)}
           </Button>
           <span className="text-xs text-gray-500 ml-auto">
             {loadingEmployes
-              ? 'Chargement…'
-              : `${employes.length} employé(s) actif(s)`}
+              ? t('sarh.ot.chargement', locale)
+              : t('sarh.ot.employes_actifs', locale).replace('{n}', String(employes.length))}
           </span>
         </div>
 
@@ -566,7 +576,7 @@ export function SectionOvertime({ societeId }: Props) {
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-medium text-blue-900">
-                  {suggestionsAvecOT.length} suggestion(s) OT depuis le planning
+                  {t('sarh.ot.suggestions_count', locale).replace('{n}', String(suggestionsAvecOT.length))}
                 </p>
                 <Button
                   type="button"
@@ -575,7 +585,7 @@ export function SectionOvertime({ societeId }: Props) {
                   className="text-blue-700 hover:text-blue-900 hover:bg-blue-100"
                   onClick={() => setDialogOpen(true)}
                 >
-                  Voir détail
+                  {t('sarh.ot.voir_detail', locale)}
                 </Button>
               </div>
               <p className="text-xs text-blue-800 mt-1 truncate">
@@ -599,14 +609,10 @@ export function SectionOvertime({ societeId }: Props) {
               >
                 <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0" />
                 <p className="text-sm text-amber-900">
-                  <span className="font-medium">{a.employe_nom}</span>
-                  {' — semaine du '}
-                  {a.alerte.debut_semaine.slice(8, 10)}
-                  /
-                  {a.alerte.debut_semaine.slice(5, 7)}
-                  {' : '}
-                  <span className="font-medium">{fmtHeures(a.alerte.heures_totales)}</span>
-                  {' dans le planning, dépasse 55h max WRA'}
+                  {t('sarh.ot.alerte_wra', locale)
+                    .replace('{nom}', a.employe_nom)
+                    .replace('{date}', `${a.alerte.debut_semaine.slice(8, 10)}/${a.alerte.debut_semaine.slice(5, 7)}`)
+                    .replace('{h}', fmtHeures(a.alerte.heures_totales))}
                 </p>
               </div>
             ))}
@@ -616,30 +622,30 @@ export function SectionOvertime({ societeId }: Props) {
         {/* Zone 4 : tableau saisie */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium">OT validés à payer</h3>
+            <h3 className="text-sm font-medium">{t('sarh.ot.ot_a_payer', locale)}</h3>
             <Button type="button" variant="outline" size="sm" onClick={addLigne}>
               <Plus className="h-4 w-4 mr-1" />
-              Ajouter une ligne
+              {t('sarh.ot.ajouter_ligne', locale)}
             </Button>
           </div>
 
           {saisies.length === 0 ? (
             <p className="text-sm text-gray-500 italic py-4 text-center border border-dashed rounded-md">
-              Aucun OT saisi. Ajoutez une ligne ou validez une suggestion ci-dessus.
+              {t('sarh.ot.aucun_ot', locale)}
             </p>
           ) : (
             <div className="border rounded-md overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[180px]">Employé</TableHead>
-                    <TableHead className="text-right">Salaire</TableHead>
-                    <TableHead className="text-right">Taux/h</TableHead>
-                    <TableHead className="min-w-[140px]">Date</TableHead>
-                    <TableHead className="text-right w-[100px]">OT ×1.5</TableHead>
-                    <TableHead className="text-right w-[100px]">OT ×2</TableHead>
-                    <TableHead className="min-w-[140px]">Motif</TableHead>
-                    <TableHead className="text-right">Montant</TableHead>
+                    <TableHead className="min-w-[180px]">{t('sarh.ot.th_employe', locale)}</TableHead>
+                    <TableHead className="text-right">{t('sarh.ot.th_salaire', locale)}</TableHead>
+                    <TableHead className="text-right">{t('sarh.ot.th_taux', locale)}</TableHead>
+                    <TableHead className="min-w-[140px]">{t('sarh.ot.th_date', locale)}</TableHead>
+                    <TableHead className="text-right w-[100px]">{t('sarh.ot.th_ot15', locale)}</TableHead>
+                    <TableHead className="text-right w-[100px]">{t('sarh.ot.th_ot2', locale)}</TableHead>
+                    <TableHead className="min-w-[140px]">{t('sarh.ot.th_motif', locale)}</TableHead>
+                    <TableHead className="text-right">{t('sarh.ot.th_montant', locale)}</TableHead>
                     <TableHead className="w-[40px]"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -660,7 +666,7 @@ export function SectionOvertime({ societeId }: Props) {
                             onValueChange={v => updateLigne(ligne.id, { employe_id: v })}
                           >
                             <SelectTrigger className="h-8">
-                              <SelectValue placeholder="Choisir…" />
+                              <SelectValue placeholder={t('sarh.ot.ph_choisir', locale)} />
                             </SelectTrigger>
                             <SelectContent>
                               {employes.map(e => (
@@ -715,7 +721,7 @@ export function SectionOvertime({ societeId }: Props) {
                           <Input
                             type="text"
                             className="h-8"
-                            placeholder="Optionnel"
+                            placeholder={t('sarh.ot.ph_optionnel', locale)}
                             value={ligne.motif}
                             onChange={e => updateLigne(ligne.id, { motif: e.target.value })}
                           />
@@ -730,7 +736,7 @@ export function SectionOvertime({ societeId }: Props) {
                             size="sm"
                             className="h-8 w-8 p-0"
                             onClick={() => removeLigne(ligne.id)}
-                            aria-label="Supprimer la ligne"
+                            aria-label={t('sarh.ot.supprimer_ligne', locale)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -747,17 +753,17 @@ export function SectionOvertime({ societeId }: Props) {
         {/* Zone 5 : récap + sauver */}
         <div className="flex flex-wrap items-center gap-4 pt-4 border-t">
           <div className="text-sm">
-            <span className="text-gray-600">Total OT du mois : </span>
+            <span className="text-gray-600">{t('sarh.ot.total_mois', locale)}</span>
             <span className="font-semibold tabular-nums">{fmtMUR(totalMontant)}</span>
           </div>
           <div className="text-sm">
-            <span className="text-gray-600">Employé(s) concerné(s) : </span>
+            <span className="text-gray-600">{t('sarh.ot.employes_concernes', locale)}</span>
             <span className="font-semibold tabular-nums">{employesConcernes}</span>
           </div>
           {lignesIncompletes && (
             <div className="text-sm text-amber-700">
               {/* hint discret quand certaines lignes ne sont pas finalisées */}
-              Complétez l'employé et la date sur toutes les lignes saisies.
+              {t('sarh.ot.completez', locale)}
             </div>
           )}
           <Button
@@ -769,7 +775,7 @@ export function SectionOvertime({ societeId }: Props) {
             {saving
               ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               : <Save className="h-4 w-4 mr-2" />}
-            Enregistrer et intégrer aux bulletins
+            {t('sarh.ot.enregistrer_integrer', locale)}
           </Button>
         </div>
       </CardContent>
@@ -778,7 +784,7 @@ export function SectionOvertime({ societeId }: Props) {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Suggestions depuis le planning</DialogTitle>
+            <DialogTitle>{t('sarh.ot.dialog_titre', locale)}</DialogTitle>
           </DialogHeader>
           <div className="flex justify-end">
             <Button
@@ -788,17 +794,17 @@ export function SectionOvertime({ societeId }: Props) {
               onClick={validerToutesSuggestions}
               disabled={suggestionsAvecOT.every(p => validatedSuggestions.has(p.employe_id))}
             >
-              Tout valider
+              {t('sarh.ot.tout_valider', locale)}
             </Button>
           </div>
           <div className="border rounded-md overflow-x-auto max-h-[60vh]">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Employé</TableHead>
-                  <TableHead className="text-right">OT ×1.5</TableHead>
-                  <TableHead className="text-right">OT ×2</TableHead>
-                  <TableHead className="text-right">Montant suggéré</TableHead>
+                  <TableHead>{t('sarh.ot.th_employe', locale)}</TableHead>
+                  <TableHead className="text-right">{t('sarh.ot.th_ot15', locale)}</TableHead>
+                  <TableHead className="text-right">{t('sarh.ot.th_ot2', locale)}</TableHead>
+                  <TableHead className="text-right">{t('sarh.ot.th_montant_suggere', locale)}</TableHead>
                   <TableHead className="w-[200px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -826,8 +832,8 @@ export function SectionOvertime({ societeId }: Props) {
                           onClick={() => validerSuggestion(p)}
                         >
                           {dejaValide
-                            ? <><Check className="h-3 w-3 mr-1" /> Validé</>
-                            : 'Valider cette suggestion'}
+                            ? <><Check className="h-3 w-3 mr-1" /> {t('sarh.ot.valide', locale)}</>
+                            : t('sarh.ot.valider_suggestion', locale)}
                         </Button>
                       </TableCell>
                     </TableRow>

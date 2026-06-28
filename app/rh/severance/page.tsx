@@ -112,7 +112,7 @@ export default function SeverancePage() {
 
   const calculer = async () => {
     if (!employeId || !dateLicenciement) {
-      setFeedback('⚠ Employé + date de licenciement requis.')
+      setFeedback(t('sarh.sev.fb_emp_date_required', locale))
       return
     }
     setCalculating(true)
@@ -132,10 +132,10 @@ export default function SeverancePage() {
         }),
       })
       const d = await res.json()
-      if (!res.ok) { setFeedback(`⚠ ${d?.error || `HTTP ${res.status}`}`); setResultat(null); return }
+      if (!res.ok) { setFeedback(t('sarh.sev.fb_warn_prefix', locale).replace('{msg}', String(d?.error || `HTTP ${res.status}`))); setResultat(null); return }
       setResultat(d.calcul as SeveranceCalcul)
     } catch (e: any) {
-      setFeedback(`⚠ ${e?.message || 'erreur'}`)
+      setFeedback(t('sarh.sev.fb_warn_prefix', locale).replace('{msg}', String(e?.message || t('sarh.sev.error', locale))))
       setResultat(null)
     } finally { setCalculating(false) }
   }
@@ -162,15 +162,15 @@ export default function SeverancePage() {
         }),
       })
       const d = await res.json()
-      if (!res.ok) { setFeedback(`⚠ ${d?.error || `HTTP ${res.status}`}`); return }
-      setFeedback(`✅ Simulation ${d.id?.slice(0, 8)} sauvegardée.`)
+      if (!res.ok) { setFeedback(t('sarh.sev.fb_warn_prefix', locale).replace('{msg}', String(d?.error || `HTTP ${res.status}`))); return }
+      setFeedback(t('sarh.sev.fb_sim_saved', locale).replace('{id}', String(d.id?.slice(0, 8))))
       await loadHistorique()
     } finally { setSaving(false) }
   }
 
   const rowAction = async (id: string, kind: 'valider' | 'supprimer') => {
-    if (kind === 'supprimer' && !confirm('Annuler (soft delete) cette simulation ?')) return
-    if (kind === 'valider' && !confirm('Valider cette simulation ? Action irréversible.')) return
+    if (kind === 'supprimer' && !confirm(t('sarh.sev.confirm_cancel_sim', locale))) return
+    if (kind === 'valider' && !confirm(t('sarh.sev.confirm_validate_sim', locale))) return
     setRowLoading(id)
     try {
       const url = kind === 'valider'
@@ -178,8 +178,8 @@ export default function SeverancePage() {
         : `/api/rh/severance/${id}`
       const res = await fetch(url, { method: kind === 'valider' ? 'PATCH' : 'DELETE' })
       const d = await res.json()
-      if (!res.ok) { setFeedback(`⚠ ${d?.error || `HTTP ${res.status}`}`); return }
-      setFeedback(kind === 'valider' ? '✅ Simulation validée.' : '✅ Simulation annulée.')
+      if (!res.ok) { setFeedback(t('sarh.sev.fb_warn_prefix', locale).replace('{msg}', String(d?.error || `HTTP ${res.status}`))); return }
+      setFeedback(kind === 'valider' ? t('sarh.sev.fb_sim_validated', locale) : t('sarh.sev.fb_sim_cancelled', locale))
       await loadHistorique()
     } finally { setRowLoading(null) }
   }
@@ -315,13 +315,13 @@ export default function SeverancePage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Line label={t('rha.b.sev.seniority', locale)} value={formaterAnciennete(resultat.anciennete_annees, resultat.anciennete_mois_additionnels)} hint={`${resultat.anciennete_total_mois.toFixed(2)} mois au total`} />
+              <Line label={t('rha.b.sev.seniority', locale)} value={formaterAnciennete(resultat.anciennete_annees, resultat.anciennete_mois_additionnels)} hint={t('sarh.sev.months_total', locale).replace('{n}', resultat.anciennete_total_mois.toFixed(2))} />
               <Line label={t('rha.b.sev.last_complete_month', locale)} value={formaterSeverance(resultat.dernier_mois_remuneration)} />
               <Line label={t('rha.b.sev.avg_12_months', locale)} value={formaterSeverance(resultat.moyenne_12_mois)} />
               <Line
                 label={t('rha.b.sev.base_retained', locale)}
-                value={`${formaterSeverance(resultat.mois_remuneration_retenu)} (${resultat.base_mois_retenue === 'dernier_mois' ? 'dernier mois' : 'moyenne 12 mois'})`}
-                hint="Règle WRA S.70 : on retient le plus élevé des deux."
+                value={`${formaterSeverance(resultat.mois_remuneration_retenu)} (${resultat.base_mois_retenue === 'dernier_mois' ? t('sarh.sev.last_month', locale) : t('sarh.sev.avg_12_months_label', locale)})`}
+                hint={t('sarh.sev.base_retained_hint', locale)}
               />
               <div className="pt-2 border-t">
                 <Line label={t('rha.b.sev.gross', locale)} value={formaterSeverance(resultat.severance_brut)} hint={`3 × ${formaterSeverance(resultat.mois_remuneration_retenu)} × (${resultat.anciennete_total_mois.toFixed(2)} / 12)`} />
@@ -391,7 +391,7 @@ export default function SeverancePage() {
                             <a
                               href={`/api/rh/severance/${s.id}/pdf`}
                               target="_blank" rel="noopener noreferrer"
-                              title="Télécharger PDF officiel"
+                              title={t('sarh.sev.download_pdf_title', locale)}
                             >
                               <Button size="sm" variant="ghost" className="h-7">
                                 <FileDown className="h-3.5 w-3.5" />
@@ -402,7 +402,7 @@ export default function SeverancePage() {
                                 size="sm" variant="ghost" className="h-7 text-emerald-600"
                                 onClick={() => rowAction(s.id, 'valider')}
                                 disabled={rowLoading === s.id}
-                                title="Valider"
+                                title={t('sarh.sev.validate', locale)}
                               >
                                 <CheckCircle2 className="h-3.5 w-3.5" />
                               </Button>
@@ -412,7 +412,7 @@ export default function SeverancePage() {
                                 size="sm" variant="ghost" className="h-7 text-red-600"
                                 onClick={() => rowAction(s.id, 'supprimer')}
                                 disabled={rowLoading === s.id}
-                                title="Annuler (soft delete)"
+                                title={t('sarh.sev.cancel_soft_delete', locale)}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
@@ -433,8 +433,8 @@ export default function SeverancePage() {
             <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="text-sm text-amber-900 space-y-1">
               <p className="font-semibold">{t('rha.b.sev.reminders_title', locale)}</p>
-              <p>Éligibilité : minimum 12 mois d&apos;ancienneté continue + licenciement non justifié ou redundancy injustifiée.</p>
-              <p>La simulation utilise les bulletins de paie valides/comptabilisés/payés. Si aucun bulletin n&apos;est trouvé, dernier_mois / moyenne_12 sont à 0 — à compléter manuellement si besoin.</p>
+              <p>{t('sarh.sev.reminder_eligibility', locale)}</p>
+              <p>{t('sarh.sev.reminder_payslips', locale)}</p>
             </div>
           </CardContent>
         </Card>

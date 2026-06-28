@@ -66,6 +66,32 @@ const DAYS = [
   { k: "thu", l: "Jeu" }, { k: "fri", l: "Ven" }, { k: "sat", l: "Sam" }, { k: "sun", l: "Dim" },
 ]
 
+// Lookups : valeur FR (= value stockée) → libellé traduit.
+const MARITAL_KEYS: Record<string, string> = {
+  "Celibataire": "sarh.empd.marital_celibataire",
+  "Marie(e)": "sarh.empd.marital_marie",
+  "Divorce(e)": "sarh.empd.marital_divorce",
+  "Veuf/Veuve": "sarh.empd.marital_veuf",
+}
+function maritalLabel(m: string, locale: any) {
+  const k = MARITAL_KEYS[m]
+  return k ? t(k, locale) : m
+}
+const EDUCATION_KEYS: Record<string, string> = {
+  "Primaire": "sarh.empd.edu_primaire",
+  "Secondaire": "sarh.empd.edu_secondaire",
+  "HSC": "sarh.empd.edu_hsc",
+  "Diplome": "sarh.empd.edu_diplome",
+  "Licence": "sarh.empd.edu_licence",
+  "Master": "sarh.empd.edu_master",
+  "Doctorat": "sarh.empd.edu_doctorat",
+  "Autre": "sarh.empd.edu_autre",
+}
+function educationLabel(e: string, locale: any) {
+  const k = EDUCATION_KEYS[e]
+  return k ? t(k, locale) : e
+}
+
 export default function EmployeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const locale = getLocale()
   const { id } = use(params)
@@ -104,11 +130,11 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
   const handleSubmitAccount = async () => {
     if (!employe?.id) return
     if (accountPwd.length < 8) {
-      notifyError("Mot de passe", "minimum 8 caractères")
+      notifyError(t('sarh.empd.password', locale), t('sarh.empd.password_min8', locale))
       return
     }
     if (accountPwd !== accountPwd2) {
-      notifyError("Mot de passe", "la confirmation ne correspond pas")
+      notifyError(t('sarh.empd.password', locale), t('sarh.empd.password_confirm_mismatch', locale))
       return
     }
     setAccountSubmitting(true)
@@ -124,20 +150,23 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        notifyError("Enregistrer", data.error || "erreur inconnue")
+        notifyError(t('sarh.empd.save', locale), data.error || t('sarh.empd.unknown_error', locale))
         return
       }
       if (data.email_sent === false) {
+        const smtpErr = data.email_error || t('sarh.empd.smtp_error', locale)
         notifyWarning(
-          isReset
-            ? `Mot de passe mis à jour, mais email NON envoyé : ${data.email_error || 'erreur SMTP'}. Communiquer le password manuellement.`
-            : `Compte créé, mais email NON envoyé : ${data.email_error || 'erreur SMTP'}. Communiquer le password manuellement.`,
+          (isReset
+            ? t('sarh.empd.account_reset_email_failed', locale)
+            : t('sarh.empd.account_created_email_failed', locale)
+          ).replace('{error}', smtpErr),
         )
       } else {
         notifySuccess(
-          isReset
-            ? `Mot de passe mis à jour. Email envoyé à ${employe.email}.`
-            : `Compte créé. Email envoyé à ${employe.email}.`,
+          (isReset
+            ? t('sarh.empd.account_reset_email_sent', locale)
+            : t('sarh.empd.account_created_email_sent', locale)
+          ).replace('{email}', String(employe.email)),
         )
       }
       setAccountDialogOpen(false)
@@ -148,7 +177,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         setEmploye((prev: any) => prev ? { ...prev, auth_user_id: data.auth_user_id } : prev)
       }
     } catch (e) {
-      notifyError("Erreur réseau", e)
+      notifyError(t('sarh.empd.network_error', locale), e)
     } finally {
       setAccountSubmitting(false)
     }
@@ -176,7 +205,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
       if (y) qp.set("year", y)
       if (pm) qp.set("pointage_mois", pm)
       const res = await fetch(`/api/rh/employes/${id}?${qp}`)
-      if (!res.ok) throw new Error("Employe introuvable")
+      if (!res.ok) throw new Error(t('sarh.empd.not_found', locale))
       const data = await res.json()
       setEmploye(data.employe)
       setForm((prev: any) => prev ? { ...prev } : { ...data.employe })
@@ -297,10 +326,10 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
 
   const SaveBtn = () => (
     <div className="flex items-center gap-3 justify-end pt-2">
-      {saved && <span className="text-green-600 text-sm flex items-center gap-1"><CheckCircle2 className="w-4 h-4" />Enregistre</span>}
+      {saved && <span className="text-green-600 text-sm flex items-center gap-1"><CheckCircle2 className="w-4 h-4" />{t('sarh.empd.saved', locale)}</span>}
       {error && <span className="text-red-600 text-sm">{error}</span>}
       <Button onClick={handleSave} disabled={saving} className="bg-[#0B0F2E] hover:bg-[#0B0F2E]/90 text-white px-8">
-        {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}Sauvegarder
+        {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}{t('sarh.empd.save_btn', locale)}
       </Button>
     </div>
   )
@@ -332,7 +361,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
       <div className="relative rounded-2xl overflow-hidden bg-gradient-to-r from-[#0B0F2E] via-[#0B0F2E]/95 to-[#4191FF]/80 p-6 shadow-sm">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImciIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjA1KSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiBmaWxsPSJ1cmwoI2cpIi8+PC9zdmc+')] opacity-40" />
         <div className="relative flex items-center gap-5">
-          <Button aria-label="Retour aux employés" variant="ghost" size="icon" onClick={() => router.push("/rh/employes")} className="text-white/80 hover:bg-white/10 hover:text-white shrink-0">
+          <Button aria-label={t('sarh.empd.aria_back_to_employees', locale)} variant="ghost" size="icon" onClick={() => router.push("/rh/employes")} className="text-white/80 hover:bg-white/10 hover:text-white shrink-0">
             <ArrowLeft className="w-5 h-5" aria-hidden="true" />
           </Button>
           <div
@@ -340,7 +369,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
             onClick={() => photoInputRef.current?.click()}
             role="button"
             tabIndex={0}
-            aria-label="Modifier la photo de profil"
+            aria-label={t('sarh.empd.aria_edit_photo', locale)}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); photoInputRef.current?.click() } }}
           >
             {employe.photo_url ? (
@@ -353,7 +382,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
             <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <Camera className="w-6 h-6 text-white" />
             </div>
-            <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} aria-label="Photo de profil employé" />
+            <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} aria-label={t('sarh.empd.aria_photo_input', locale)} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap">
@@ -361,11 +390,11 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
               {(() => {
                 const statut = employe.statut_enrichi || (employe.actif ? "actif" : "parti")
                 const statusMap: Record<string, { cls: string; label: string; icon: typeof CheckCircle2 }> = {
-                  actif: { cls: "bg-green-400/20 text-green-300 border-green-400/30", label: "Actif", icon: CheckCircle2 },
-                  suspendu: { cls: "bg-orange-400/20 text-orange-300 border-orange-400/30", label: "Suspendu", icon: AlertCircle },
-                  preavis: { cls: "bg-blue-400/20 text-blue-300 border-blue-400/30", label: "En préavis", icon: Clock },
-                  parti: { cls: "bg-red-400/20 text-red-300 border-red-400/30", label: "Parti", icon: XCircle },
-                  periode_essai: { cls: "bg-purple-400/20 text-purple-300 border-purple-400/30", label: "Période d'essai", icon: CircleDot },
+                  actif: { cls: "bg-green-400/20 text-green-300 border-green-400/30", label: t('sarh.empd.status_actif', locale), icon: CheckCircle2 },
+                  suspendu: { cls: "bg-orange-400/20 text-orange-300 border-orange-400/30", label: t('sarh.empd.status_suspendu', locale), icon: AlertCircle },
+                  preavis: { cls: "bg-blue-400/20 text-blue-300 border-blue-400/30", label: t('sarh.empd.status_preavis', locale), icon: Clock },
+                  parti: { cls: "bg-red-400/20 text-red-300 border-red-400/30", label: t('sarh.empd.status_parti', locale), icon: XCircle },
+                  periode_essai: { cls: "bg-purple-400/20 text-purple-300 border-purple-400/30", label: t('sarh.empd.status_periode_essai', locale), icon: CircleDot },
                 }
                 const s = statusMap[statut] || statusMap.actif
                 const Icon = s.icon
@@ -405,16 +434,16 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
               {employe.statut_wra === 'worker' ? (
                 <span
                   className="inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-100 px-3 py-1 rounded-full text-xs border border-emerald-300/30"
-                  title="Worker au sens WRA 2019 S.2 — basic ≤ 50 000 MUR/mois. Bénéficie de l'intégralité des droits WRA (AL 22j, SL 15j, VL 30j/5a, etc.)."
+                  title={t('sarh.empd.wra_worker_title', locale)}
                 >
-                  Worker (WRA intégral)
+                  {t('sarh.empd.wra_worker', locale)}
                 </span>
               ) : employe.statut_wra === 'hors_wra' ? (
                 <span
                   className="inline-flex items-center gap-1.5 bg-purple-500/20 text-purple-100 px-3 py-1 rounded-full text-xs border border-purple-300/30"
-                  title="Hors WRA — basic > 50 000 MUR/mois. Droits via contrat individuel + policy société (WRA S.3(3)(a) permet d'appliquer des conditions plus favorables)."
+                  title={t('sarh.empd.wra_hors_title', locale)}
                 >
-                  Hors WRA (basic &gt; 50 000)
+                  {t('sarh.empd.wra_hors', locale)}
                 </span>
               ) : null}
             </div>
@@ -439,15 +468,15 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
       <Tabs defaultValue="personnel" className="space-y-6">
         <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
           <TabsList className="bg-gray-100/80 backdrop-blur-sm flex-nowrap h-auto gap-1.5 p-1.5 rounded-full border border-gray-200/50 w-max">
-            <TabsTrigger value="personnel" className={triggerCls}><User className="w-4 h-4 mr-1.5" />Personnel</TabsTrigger>
-            <TabsTrigger value="emploi" className={triggerCls}><Briefcase className="w-4 h-4 mr-1.5" />Emploi</TabsTrigger>
-            <TabsTrigger value="salaire" className={triggerCls}><CreditCard className="w-4 h-4 mr-1.5" />Salaire</TabsTrigger>
-            <TabsTrigger value="avantages" className={triggerCls}><Gift className="w-4 h-4 mr-1.5" />Avantages</TabsTrigger>
-            <TabsTrigger value="conges" className={triggerCls}><CalendarDays className="w-4 h-4 mr-1.5" />Conges</TabsTrigger>
-            <TabsTrigger value="bulletins" className={triggerCls}><FileText className="w-4 h-4 mr-1.5" />Bulletins</TabsTrigger>
-            <TabsTrigger value="pointage" className={triggerCls}><Clock className="w-4 h-4 mr-1.5" />Pointage</TabsTrigger>
-            <TabsTrigger value="documents" className={triggerCls}><FolderOpen className="w-4 h-4 mr-1.5" />Documents</TabsTrigger>
-            <TabsTrigger value="historique" className={triggerCls}><History className="w-4 h-4 mr-1.5" />Historique</TabsTrigger>
+            <TabsTrigger value="personnel" className={triggerCls}><User className="w-4 h-4 mr-1.5" />{t('sarh.empd.tab_personnel', locale)}</TabsTrigger>
+            <TabsTrigger value="emploi" className={triggerCls}><Briefcase className="w-4 h-4 mr-1.5" />{t('sarh.empd.tab_emploi', locale)}</TabsTrigger>
+            <TabsTrigger value="salaire" className={triggerCls}><CreditCard className="w-4 h-4 mr-1.5" />{t('sarh.empd.tab_salaire', locale)}</TabsTrigger>
+            <TabsTrigger value="avantages" className={triggerCls}><Gift className="w-4 h-4 mr-1.5" />{t('sarh.empd.tab_avantages', locale)}</TabsTrigger>
+            <TabsTrigger value="conges" className={triggerCls}><CalendarDays className="w-4 h-4 mr-1.5" />{t('sarh.empd.tab_conges', locale)}</TabsTrigger>
+            <TabsTrigger value="bulletins" className={triggerCls}><FileText className="w-4 h-4 mr-1.5" />{t('sarh.empd.tab_bulletins', locale)}</TabsTrigger>
+            <TabsTrigger value="pointage" className={triggerCls}><Clock className="w-4 h-4 mr-1.5" />{t('sarh.empd.tab_pointage', locale)}</TabsTrigger>
+            <TabsTrigger value="documents" className={triggerCls}><FolderOpen className="w-4 h-4 mr-1.5" />{t('sarh.empd.tab_documents', locale)}</TabsTrigger>
+            <TabsTrigger value="historique" className={triggerCls}><History className="w-4 h-4 mr-1.5" />{t('sarh.empd.tab_historique', locale)}</TabsTrigger>
           </TabsList>
         </div>
 
@@ -455,7 +484,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         <TabsContent value="personnel" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="rounded-2xl shadow-sm border-l-4 border-l-[#4191FF] bg-[#f8f9fc]">
-              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><User className="w-4 h-4 text-[#4191FF]" />Identite</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><User className="w-4 h-4 text-[#4191FF]" />{t('sarh.empd.card_identite', locale)}</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-4 mb-2">
                   <div className="relative group shrink-0 cursor-pointer" onClick={() => photoInputRef.current?.click()}>
@@ -471,11 +500,11 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                     </div>
                   </div>
                   <div className="flex-1 grid grid-cols-2 gap-3">
-                    <Field label="Nom" field="nom" />
-                    <Field label="Prenom" field="prenom" />
+                    <Field label={t('sarh.empd.f_nom', locale)} field="nom" />
+                    <Field label={t('sarh.empd.f_prenom', locale)} field="prenom" />
                   </div>
                 </div>
-                <Field label="Nom usuel" field="common_name" placeholder="Nom usuel / surnom" />
+                <Field label={t('sarh.empd.f_common_name', locale)} field="common_name" placeholder={t('sarh.empd.ph_common_name', locale)} />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label htmlFor="emp-nic" className="text-xs text-gray-500">NIC</Label>
@@ -483,58 +512,58 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                   <div className="flex items-end gap-2">
                     <Checkbox checked={form.is_mauritian ?? true} onCheckedChange={v => u("is_mauritian", v)} id="mauritian" />
-                    <Label htmlFor="mauritian" className="text-sm">Mauricien(ne)</Label>
+                    <Label htmlFor="mauritian" className="text-sm">{t('sarh.empd.mauritian', locale)}</Label>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs text-gray-500" id="emp-genre-label">Genre</Label>
+                    <Label className="text-xs text-gray-500" id="emp-genre-label">{t('sarh.empd.f_genre', locale)}</Label>
                     <Select value={form.genre || form.gender || "M"} onValueChange={v => u("genre", v)}>
-                      <SelectTrigger aria-labelledby="emp-genre-label" aria-label="Genre"><SelectValue /></SelectTrigger>
-                      <SelectContent>{GENDERS.map(g => <SelectItem key={g.v} value={g.v}>{g.l}</SelectItem>)}</SelectContent>
+                      <SelectTrigger aria-labelledby="emp-genre-label" aria-label={t('sarh.empd.f_genre', locale)}><SelectValue /></SelectTrigger>
+                      <SelectContent>{GENDERS.map(g => <SelectItem key={g.v} value={g.v}>{t(`sarh.empd.gender_${g.v.toLowerCase()}`, locale)}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
-                  <Field label="Date de naissance" field="date_naissance" type="date" />
+                  <Field label={t('sarh.empd.f_date_naissance', locale)} field="date_naissance" type="date" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs text-gray-500" id="emp-statut-familial-label">Statut familial</Label>
+                    <Label className="text-xs text-gray-500" id="emp-statut-familial-label">{t('sarh.empd.f_statut_familial', locale)}</Label>
                     <Select value={form.statut_familial || ""} onValueChange={v => u("statut_familial", v)}>
-                      <SelectTrigger aria-labelledby="emp-statut-familial-label" aria-label="Statut familial"><SelectValue placeholder="Choisir..." /></SelectTrigger>
-                      <SelectContent>{MARITAL.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                      <SelectTrigger aria-labelledby="emp-statut-familial-label" aria-label={t('sarh.empd.f_statut_familial', locale)}><SelectValue placeholder={t('sarh.empd.ph_choose', locale)} /></SelectTrigger>
+                      <SelectContent>{MARITAL.map(m => <SelectItem key={m} value={m}>{maritalLabel(m, locale)}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-xs text-gray-500" id="emp-education-label">Niveau education</Label>
+                    <Label className="text-xs text-gray-500" id="emp-education-label">{t('sarh.empd.f_education', locale)}</Label>
                     <Select value={form.education || ""} onValueChange={v => u("education", v)}>
-                      <SelectTrigger aria-labelledby="emp-education-label" aria-label="Niveau education"><SelectValue placeholder="Choisir..." /></SelectTrigger>
-                      <SelectContent>{EDUCATION.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+                      <SelectTrigger aria-labelledby="emp-education-label" aria-label={t('sarh.empd.f_education', locale)}><SelectValue placeholder={t('sarh.empd.ph_choose', locale)} /></SelectTrigger>
+                      <SelectContent>{EDUCATION.map(e => <SelectItem key={e} value={e}>{educationLabel(e, locale)}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Code employe" field="code" disabled />
-                  <Field label="Badge No" field="badge_number" />
+                  <Field label={t('sarh.empd.f_code_employe', locale)} field="code" disabled />
+                  <Field label={t('sarh.empd.f_badge_no', locale)} field="badge_number" />
                 </div>
-                <Field label="Email" field="email" type="email" />
-                <Field label="Email personnel" field="email_personnel" type="email" />
+                <Field label={t('sarh.empd.f_email', locale)} field="email" type="email" />
+                <Field label={t('sarh.empd.f_email_personnel', locale)} field="email_personnel" type="email" />
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="N° Passeport" field="passport_no" />
-                  <Field label="Nationalité" field="nationalite" placeholder="MU" />
+                  <Field label={t('sarh.empd.f_passport', locale)} field="passport_no" />
+                  <Field label={t('sarh.empd.f_nationalite', locale)} field="nationalite" placeholder="MU" />
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-500" id="emp-langue-label">Langue préférée</Label>
+                  <Label className="text-xs text-gray-500" id="emp-langue-label">{t('sarh.empd.f_langue', locale)}</Label>
                   <Select value={form.langue_preferee || "FR"} onValueChange={v => u("langue_preferee", v)}>
-                    <SelectTrigger aria-labelledby="emp-langue-label" aria-label="Langue préférée"><SelectValue /></SelectTrigger>
-                    <SelectContent>{LANGUES.map(l => <SelectItem key={l.v} value={l.v}>{l.l}</SelectItem>)}</SelectContent>
+                    <SelectTrigger aria-labelledby="emp-langue-label" aria-label={t('sarh.empd.f_langue', locale)}><SelectValue /></SelectTrigger>
+                    <SelectContent>{LANGUES.map(l => <SelectItem key={l.v} value={l.v}>{t(`sarh.empd.langue_${l.v.toLowerCase()}`, locale)}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="border-t pt-3 mt-1 space-y-2">
                   <div className="flex items-center gap-2">
                     <Checkbox checked={form.situation_handicap ?? false} onCheckedChange={v => u("situation_handicap", v)} id="handicap" />
-                    <Label htmlFor="handicap" className="text-sm">Situation de handicap</Label>
+                    <Label htmlFor="handicap" className="text-sm">{t('sarh.empd.f_handicap', locale)}</Label>
                   </div>
-                  <Field label="Date dernier examen médecin du travail" field="medecin_travail_date" type="date" />
+                  <Field label={t('sarh.empd.f_medecin_travail', locale)} field="medecin_travail_date" type="date" />
                 </div>
               </CardContent>
             </Card>
@@ -543,7 +572,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
               <Card className="rounded-2xl shadow-sm border-l-4 border-l-indigo-500 bg-[#f8f9fc]">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}>
-                    <KeyRound className="w-4 h-4 text-indigo-500" />Compte utilisateur
+                    <KeyRound className="w-4 h-4 text-indigo-500" />{t('sarh.empd.card_compte', locale)}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -551,11 +580,11 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-sm">
                         <CheckCircle2 className="w-4 h-4 text-green-600" />
-                        <span>Compte actif</span>
+                        <span>{t('sarh.empd.account_active', locale)}</span>
                       </div>
                       <p className="text-xs text-gray-500">
-                        L'employé peut se connecter avec son email <span className="font-mono">{employe.email}</span>.
-                        Pour redéfinir son mot de passe et lui renvoyer ses identifiants par email.
+                        {t('sarh.empd.account_active_desc_1', locale)} <span className="font-mono">{employe.email}</span>.
+                        {' '}{t('sarh.empd.account_active_desc_2', locale)}
                       </p>
                       <Button
                         type="button"
@@ -564,7 +593,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                         onClick={() => { setAccountPwd(""); setAccountPwd2(""); setAccountDialogOpen(true) }}
                       >
                         <Mail className="w-4 h-4 mr-2" />
-                        Renvoyer credentials
+                        {t('sarh.empd.resend_credentials', locale)}
                       </Button>
                     </div>
                   ) : (
@@ -574,21 +603,21 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                         <span>{t('srh.emp.no_account', locale)}</span>
                       </div>
                       <p className="text-xs text-gray-500">
-                        L'employé n'a pas encore d'accès à Lexora. Créez son compte et envoyez-lui ses identifiants par email.
+                        {t('sarh.empd.no_account_desc', locale)}
                       </p>
                       <Button
                         type="button"
                         size="sm"
                         onClick={() => { setAccountPwd(""); setAccountPwd2(""); setAccountDialogOpen(true) }}
                         disabled={!employe?.email}
-                        title={!employe?.email ? "Renseigner d'abord l'email de l'employé" : undefined}
+                        title={!employe?.email ? t('sarh.empd.fill_email_first', locale) : undefined}
                       >
                         <KeyRound className="w-4 h-4 mr-2" />
-                        Créer compte
+                        {t('sarh.empd.create_account', locale)}
                       </Button>
                       {!employe?.email && (
                         <p className="text-xs text-amber-600">
-                          Email employé manquant — renseigner avant la création de compte.
+                          {t('sarh.empd.email_missing', locale)}
                         </p>
                       )}
                     </div>
@@ -598,29 +627,29 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
             )}
 
             <Card className="rounded-2xl shadow-sm border-l-4 border-l-green-500 bg-[#f8f9fc]">
-              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><MapPin className="w-4 h-4 text-green-500" />Contact</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><MapPin className="w-4 h-4 text-green-500" />{t('sarh.empd.card_contact', locale)}</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <Field label="Adresse" field="adresse" />
-                <Field label="Adresse 2" field="adresse2" />
+                <Field label={t('sarh.empd.f_adresse', locale)} field="adresse" />
+                <Field label={t('sarh.empd.f_adresse2', locale)} field="adresse2" />
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Code postal" field="code_postal" />
-                  <Field label="Ville" field="ville" />
+                  <Field label={t('sarh.empd.f_code_postal', locale)} field="code_postal" />
+                  <Field label={t('sarh.empd.f_ville', locale)} field="ville" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Mobile" field="mobile" />
-                  <Field label="Telephone" field="telephone" />
+                  <Field label={t('sarh.empd.f_mobile', locale)} field="mobile" />
+                  <Field label={t('sarh.empd.f_telephone', locale)} field="telephone" />
                 </div>
               </CardContent>
             </Card>
           </div>
 
           <Card className="rounded-2xl shadow-sm border-l-4 border-l-red-400 bg-[#f8f9fc]">
-            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><AlertCircle className="w-4 h-4 text-red-400" />Contact d&apos;urgence</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><AlertCircle className="w-4 h-4 text-red-400" />{t('sarh.empd.card_contact_urgence', locale)}</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Field label="Nom contact urgence" field="contact_urgence_nom" />
-                <Field label="Tél. urgence" field="contact_urgence_tel" />
-                <Field label="Relation" field="contact_urgence_relation" />
+                <Field label={t('sarh.empd.f_contact_urgence_nom', locale)} field="contact_urgence_nom" />
+                <Field label={t('sarh.empd.f_contact_urgence_tel', locale)} field="contact_urgence_tel" />
+                <Field label={t('sarh.empd.f_relation', locale)} field="contact_urgence_relation" />
               </div>
             </CardContent>
           </Card>
@@ -632,23 +661,23 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         <TabsContent value="emploi" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="rounded-2xl shadow-sm border-l-4 border-l-[#4191FF] bg-[#f8f9fc]">
-              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><Briefcase className="w-4 h-4 text-[#4191FF]" />Poste</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><Briefcase className="w-4 h-4 text-[#4191FF]" />{t('sarh.empd.card_poste', locale)}</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Date d'arrivee" field="date_arrivee" type="date" />
-                  <Field label="Poste actuel depuis" field="date_poste_actuel" type="date" />
+                  <Field label={t('sarh.empd.f_date_arrivee', locale)} field="date_arrivee" type="date" />
+                  <Field label={t('sarh.empd.f_poste_depuis', locale)} field="date_poste_actuel" type="date" />
                 </div>
-                <Field label="Poste" field="poste" />
+                <Field label={t('sarh.empd.f_poste', locale)} field="poste" />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs text-gray-500">Type de contrat</Label>
+                    <Label className="text-xs text-gray-500">{t('sarh.empd.f_type_contrat', locale)}</Label>
                     <Select value={form.type_contrat || "fulltime"} onValueChange={v => u("type_contrat", v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>{CONTRACT_TYPES.map(t => <SelectItem key={t.v} value={t.v}>{t.l}</SelectItem>)}</SelectContent>
+                      <SelectContent>{CONTRACT_TYPES.map(ct => <SelectItem key={ct.v} value={ct.v}>{t(`sarh.empd.contract_${ct.v}`, locale)}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-xs text-gray-500">Role</Label>
+                    <Label className="text-xs text-gray-500">{t('sarh.empd.f_role', locale)}</Label>
                     <Select value={form.role || "salarie"} onValueChange={v => u("role", v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>{ROLES.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
@@ -656,24 +685,24 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                 </div>
                 {form.type_contrat === "cdd" && (
-                  <Field label="Date fin de contrat" field="date_fin_contrat" type="date" />
+                  <Field label={t('sarh.empd.f_date_fin_contrat', locale)} field="date_fin_contrat" type="date" />
                 )}
-                <Field label="Date fin période d'essai" field="date_fin_periode_essai" type="date" />
-                <Field label="Departement" field="departement" />
-                <Field label="Bureau / Site" field="office_site" />
-                <Field label="Superviseur (ID)" field="supervisor_id" placeholder="UUID du superviseur" />
+                <Field label={t('sarh.empd.f_date_fin_essai', locale)} field="date_fin_periode_essai" type="date" />
+                <Field label={t('sarh.empd.f_departement', locale)} field="departement" />
+                <Field label={t('sarh.empd.f_office_site', locale)} field="office_site" />
+                <Field label={t('sarh.empd.f_supervisor', locale)} field="supervisor_id" placeholder={t('sarh.empd.ph_supervisor', locale)} />
                 {/* Shift par défaut — option B du sprint bugs paie/conges.
                     Si renseigné, le générateur de planning utilisera ce shift
                     pour l'employé au lieu du shift standard société. */}
                 <div>
-                  <Label className="text-xs text-gray-500">Shift par défaut</Label>
+                  <Label className="text-xs text-gray-500">{t('sarh.empd.f_shift', locale)}</Label>
                   <Select
                     value={form.shift_template_id ?? "__none__"}
                     onValueChange={v => u("shift_template_id", v === "__none__" ? null : v)}
                   >
-                    <SelectTrigger><SelectValue placeholder="Shift standard de la société" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('sarh.empd.ph_shift', locale)} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">Aucun (utiliser le shift standard société)</SelectItem>
+                      <SelectItem value="__none__">{t('sarh.empd.shift_none', locale)}</SelectItem>
                       {societeShifts.map(s => (
                         <SelectItem key={s.id} value={s.id}>
                           {s.code ? `${s.code} · ` : ""}{s.label}
@@ -683,16 +712,16 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                     </SelectContent>
                   </Select>
                   <p className="text-[11px] text-gray-400 mt-1">
-                    Si aucun, l'employé utilisera le premier shift de travail de la société.
+                    {t('sarh.empd.shift_hint', locale)}
                   </p>
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-500 mb-2 block">Jours de travail</Label>
+                  <Label className="text-xs text-gray-500 mb-2 block">{t('sarh.empd.f_jours_travail', locale)}</Label>
                   <div className="flex gap-3 flex-wrap">
                     {DAYS.map(d => (
                       <label key={d.k} className="flex items-center gap-1.5 text-sm">
                         <Checkbox checked={form.working_days?.[d.k] ?? false} onCheckedChange={v => uwd(d.k, !!v)} />
-                        {d.l}
+                        {t(`sarh.empd.day_${d.k}`, locale)}
                       </label>
                     ))}
                   </div>
@@ -701,15 +730,15 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
             </Card>
 
             <Card className="rounded-2xl shadow-sm border-l-4 border-l-orange-400 bg-[#f8f9fc]">
-              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base" style={{ fontFamily: "'Poppins', sans-serif" }}>Depart / Suspension</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base" style={{ fontFamily: "'Poppins', sans-serif" }}>{t('sarh.empd.card_depart', locale)}</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <Field label="Date de depart" field="date_depart" type="date" />
-                <Field label="Type de depart" field="departure_type" placeholder="Demission, Licenciement..." />
-                <Field label="Raison du depart" field="departure_reason" />
-                <Field label="Date de suspension" field="suspension_date" type="date" />
-                <Field label="Raison de suspension" field="suspension_reason" />
+                <Field label={t('sarh.empd.f_date_depart', locale)} field="date_depart" type="date" />
+                <Field label={t('sarh.empd.f_type_depart', locale)} field="departure_type" placeholder={t('sarh.empd.ph_type_depart', locale)} />
+                <Field label={t('sarh.empd.f_raison_depart', locale)} field="departure_reason" />
+                <Field label={t('sarh.empd.f_date_suspension', locale)} field="suspension_date" type="date" />
+                <Field label={t('sarh.empd.f_raison_suspension', locale)} field="suspension_reason" />
                 <div>
-                  <Label className="text-xs text-gray-500">Notes</Label>
+                  <Label className="text-xs text-gray-500">{t('sarh.empd.f_notes', locale)}</Label>
                   <Textarea value={form.notes || ""} onChange={e => u("notes", e.target.value)} rows={4} />
                 </div>
               </CardContent>
@@ -722,70 +751,70 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         <TabsContent value="salaire" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="rounded-2xl shadow-sm border-l-4 border-l-[#D4AF37] bg-[#f8f9fc]">
-              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><CreditCard className="w-4 h-4 text-[#D4AF37]" />Remuneration</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><CreditCard className="w-4 h-4 text-[#D4AF37]" />{t('sarh.empd.card_remuneration', locale)}</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <Field label="Salaire de base (MUR)" field="salaire_base" type="number" />
+                <Field label={t('sarh.empd.f_salaire_base', locale)} field="salaire_base" type="number" />
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Transport allowance" field="transport_allowance" type="number" />
                   <Field label="Petrol allowance" field="petrol_allowance" type="number" />
                 </div>
                 <Field label="Phone allowance" field="phone_allowance" type="number" />
                 <div className="border-t pt-3 mt-3">
-                  <p className="text-xs font-semibold text-gray-600 mb-2">Primes fixes mensuelles (incluses automatiquement chaque mois)</p>
+                  <p className="text-xs font-semibold text-gray-600 mb-2">{t('sarh.empd.primes_fixes_title', locale)}</p>
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="Libelle prime fixe 1" field="prime_fixe_1_libelle" placeholder="Ex: Prime de fonction" />
-                    <Field label="Montant prime fixe 1 (MUR)" field="prime_fixe_1" type="number" />
-                    <Field label="Libelle prime fixe 2" field="prime_fixe_2_libelle" placeholder="Ex: Prime anciennete" />
-                    <Field label="Montant prime fixe 2 (MUR)" field="prime_fixe_2" type="number" />
-                    <Field label="Libelle prime fixe 3" field="prime_fixe_3_libelle" placeholder="Ex: Prime logement" />
-                    <Field label="Montant prime fixe 3 (MUR)" field="prime_fixe_3" type="number" />
+                    <Field label={t('sarh.empd.f_prime_fixe_1_lib', locale)} field="prime_fixe_1_libelle" placeholder={t('sarh.empd.ph_prime_1', locale)} />
+                    <Field label={t('sarh.empd.f_prime_fixe_1', locale)} field="prime_fixe_1" type="number" />
+                    <Field label={t('sarh.empd.f_prime_fixe_2_lib', locale)} field="prime_fixe_2_libelle" placeholder={t('sarh.empd.ph_prime_2', locale)} />
+                    <Field label={t('sarh.empd.f_prime_fixe_2', locale)} field="prime_fixe_2" type="number" />
+                    <Field label={t('sarh.empd.f_prime_fixe_3_lib', locale)} field="prime_fixe_3_libelle" placeholder={t('sarh.empd.ph_prime_3', locale)} />
+                    <Field label={t('sarh.empd.f_prime_fixe_3', locale)} field="prime_fixe_3" type="number" />
                   </div>
                 </div>
                 <div className="border-t pt-3 mt-3 space-y-3">
                   <div className="flex items-center gap-3">
                     <Checkbox checked={form.nsf_csg_enabled ?? true} onCheckedChange={v => u("nsf_csg_enabled", v)} id="nsf" />
-                    <Label htmlFor="nsf" className="text-sm">NSF / CSG actif</Label>
+                    <Label htmlFor="nsf" className="text-sm">{t('sarh.empd.f_nsf_csg', locale)}</Label>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="Code contribution" field="contribution_code" placeholder="S2" />
+                    <Field label={t('sarh.empd.f_contribution_code', locale)} field="contribution_code" placeholder="S2" />
                     <div>
-                      <Label className="text-xs text-gray-500" id="emp-csg-cat-label">Categorie CSG</Label>
+                      <Label className="text-xs text-gray-500" id="emp-csg-cat-label">{t('sarh.empd.f_csg_cat', locale)}</Label>
                       <Select value={form.csg_categorie || "A"} onValueChange={v => u("csg_categorie", v)}>
-                        <SelectTrigger aria-labelledby="emp-csg-cat-label" aria-label="Categorie CSG"><SelectValue /></SelectTrigger>
+                        <SelectTrigger aria-labelledby="emp-csg-cat-label" aria-label={t('sarh.empd.f_csg_cat', locale)}><SelectValue /></SelectTrigger>
                         <SelectContent><SelectItem value="A">A</SelectItem><SelectItem value="B">B</SelectItem></SelectContent>
                       </Select>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <Checkbox checked={form.paye_enabled ?? true} onCheckedChange={v => u("paye_enabled", v)} id="paye" />
-                    <Label htmlFor="paye" className="text-sm">PAYE actif</Label>
+                    <Label htmlFor="paye" className="text-sm">{t('sarh.empd.f_paye', locale)}</Label>
                   </div>
                   <Field label="TAN" field="tan_number" placeholder="A123456789" />
-                  <Field label="EDF deduction totale" field="edf_total_deduction" type="number" />
+                  <Field label={t('sarh.empd.f_edf', locale)} field="edf_total_deduction" type="number" />
                 </div>
               </CardContent>
             </Card>
 
             <Card className="rounded-2xl shadow-sm border-l-4 border-l-[#4191FF] bg-[#f8f9fc]">
-              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base" style={{ fontFamily: "'Poppins', sans-serif" }}>Coordonnees bancaires</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base" style={{ fontFamily: "'Poppins', sans-serif" }}>{t('sarh.empd.card_bancaire', locale)}</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-3 mb-2">
                   <Checkbox checked={form.paid_by_bank_transfer ?? true} onCheckedChange={v => u("paid_by_bank_transfer", v)} id="bank" />
-                  <Label htmlFor="bank" className="text-sm">Paye par virement bancaire</Label>
+                  <Label htmlFor="bank" className="text-sm">{t('sarh.empd.f_virement', locale)}</Label>
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-500" id="emp-banque-label">Banque</Label>
+                  <Label className="text-xs text-gray-500" id="emp-banque-label">{t('sarh.empd.f_banque', locale)}</Label>
                   <Select value={form.bank_name || ""} onValueChange={v => u("bank_name", v)}>
-                    <SelectTrigger aria-labelledby="emp-banque-label" aria-label="Banque"><SelectValue placeholder="Choisir une banque..." /></SelectTrigger>
+                    <SelectTrigger aria-labelledby="emp-banque-label" aria-label={t('sarh.empd.f_banque', locale)}><SelectValue placeholder={t('sarh.empd.ph_banque', locale)} /></SelectTrigger>
                     <SelectContent>{BANQUES_MAURITIUS.map(b => <SelectItem key={b.code} value={b.code}>{b.nom}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <Field label="N. compte bancaire" field="bank_account" placeholder="000012345678" />
+                <Field label={t('sarh.empd.f_compte_bancaire', locale)} field="bank_account" placeholder="000012345678" />
                 <Field label="IBAN" field="iban" placeholder="MU17BOMM0101101030300200000MUR" />
                 <div>
-                  <Label className="text-xs text-gray-500" id="emp-devise-label">Devise salaire</Label>
+                  <Label className="text-xs text-gray-500" id="emp-devise-label">{t('sarh.empd.f_devise', locale)}</Label>
                   <Select value={form.devise_salaire || "MUR"} onValueChange={v => u("devise_salaire", v)}>
-                    <SelectTrigger aria-labelledby="emp-devise-label" aria-label="Devise salaire"><SelectValue /></SelectTrigger>
+                    <SelectTrigger aria-labelledby="emp-devise-label" aria-label={t('sarh.empd.f_devise', locale)}><SelectValue /></SelectTrigger>
                     <SelectContent>{DEVISES.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
@@ -795,11 +824,11 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
 
           {/* Régime fiscal & charges */}
           <Card className="rounded-2xl shadow-sm bg-[#f8f9fc]">
-            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><Shield className="w-4 h-4 text-[#0B0F2E]" />Régime fiscal & charges</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><Shield className="w-4 h-4 text-[#0B0F2E]" />{t('sarh.empd.card_regime', locale)}</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <Label className="text-xs text-gray-500">Régime fiscal</Label>
+                  <Label className="text-xs text-gray-500">{t('sarh.empd.f_regime_fiscal', locale)}</Label>
                   <Select value={form.regime_fiscal || "standard"} onValueChange={v => {
                     u("regime_fiscal", v)
                     if (v === "expatrie" || v === "consultant") {
@@ -812,25 +841,25 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                   }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="standard">Standard (charges MRA normales)</SelectItem>
-                      <SelectItem value="expatrie">Expatrié (hors charges MRA)</SelectItem>
-                      <SelectItem value="consultant">Consultant externe (hors tout)</SelectItem>
-                      <SelectItem value="special">Spécial (paramétrage custom)</SelectItem>
+                      <SelectItem value="standard">{t('sarh.empd.regime_standard', locale)}</SelectItem>
+                      <SelectItem value="expatrie">{t('sarh.empd.regime_expatrie', locale)}</SelectItem>
+                      <SelectItem value="consultant">{t('sarh.empd.regime_consultant', locale)}</SelectItem>
+                      <SelectItem value="special">{t('sarh.empd.regime_special', locale)}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-500">Pays de résidence</Label>
+                  <Label className="text-xs text-gray-500">{t('sarh.empd.f_pays_residence', locale)}</Label>
                   <Field label="" field="pays_residence" placeholder="MU" />
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-500">Mode de paiement</Label>
+                  <Label className="text-xs text-gray-500">{t('sarh.empd.f_mode_paiement', locale)}</Label>
                   <Select value={form.mode_paiement || "bulk"} onValueChange={v => u("mode_paiement", v)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="bulk">Bulk (MCB)</SelectItem>
-                      <SelectItem value="individuel">Virement individuel</SelectItem>
-                      <SelectItem value="especes">Espèces</SelectItem>
+                      <SelectItem value="bulk">{t('sarh.empd.mode_bulk', locale)}</SelectItem>
+                      <SelectItem value="individuel">{t('sarh.empd.mode_individuel', locale)}</SelectItem>
+                      <SelectItem value="especes">{t('sarh.empd.mode_especes', locale)}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -838,7 +867,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
 
               {(form.regime_fiscal === "special" || form.regime_fiscal === "expatrie") && (
                 <div className="p-3 border rounded-lg bg-orange-50 space-y-2">
-                  <p className="text-xs font-medium text-orange-800">Paramétrage des charges</p>
+                  <p className="text-xs font-medium text-orange-800">{t('sarh.empd.charges_config', locale)}</p>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {[
                       { key: "inclus_csg", label: "CSG" },
@@ -846,7 +875,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                       { key: "inclus_paye", label: "PAYE" },
                       { key: "inclus_training_levy", label: "Training Levy" },
                       { key: "inclus_prgf", label: "PRGF" },
-                      { key: "inclus_yeb", label: "13ème mois (YEB)" },
+                      { key: "inclus_yeb", label: t('sarh.empd.charge_yeb', locale) },
                     ].map(c => (
                       <div key={c.key} className="flex items-center gap-2">
                         <Checkbox checked={form[c.key] !== false} onCheckedChange={v => u(c.key, v)} id={c.key} />
@@ -854,15 +883,15 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                       </div>
                     ))}
                   </div>
-                  <Field label="Motif d'exemption" field="hors_charges_motif" placeholder="Ex: Travaille depuis la France, hors juridiction MRA" />
+                  <Field label={t('sarh.empd.f_motif_exemption', locale)} field="hors_charges_motif" placeholder={t('sarh.empd.ph_motif_exemption', locale)} />
                 </div>
               )}
 
               {form.regime_fiscal === "standard" && (
-                <p className="text-xs text-gray-400">Toutes les charges MRA s'appliquent (CSG, NSF, PAYE, Training Levy, PRGF, YEB)</p>
+                <p className="text-xs text-gray-400">{t('sarh.empd.hint_standard', locale)}</p>
               )}
               {form.regime_fiscal === "consultant" && (
-                <p className="text-xs text-orange-600">Aucune charge MRA ne s'applique — prestataire externe</p>
+                <p className="text-xs text-orange-600">{t('sarh.empd.hint_consultant', locale)}</p>
               )}
 
               {/* Mig 440 — pointage_exempt : à cocher pour les cadres/dirigeants
@@ -878,12 +907,10 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                   />
                   <div className="flex flex-col">
                     <Label htmlFor="pointage_exempt" className="text-sm font-medium cursor-pointer">
-                      Exempt de pointage
+                      {t('sarh.empd.f_pointage_exempt', locale)}
                     </Label>
                     <span className="text-xs text-gray-500">
-                      Cocher pour les cadres / dirigeants qui ne pointent pas. Le code paie
-                      ne comptera plus de jours d'absence automatique pour cet employé
-                      (la RH peut toujours saisir manuellement si besoin).
+                      {t('sarh.empd.pointage_exempt_hint', locale)}
                     </span>
                   </div>
                 </div>
@@ -909,30 +936,30 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                     if (v) u("prgf_motif_exemption", null)
                   }}
                 />
-                <Label htmlFor="prgf_eligible_toggle" className="text-sm">Éligible PRGF (cotise 4.5%)</Label>
+                <Label htmlFor="prgf_eligible_toggle" className="text-sm">{t('sarh.empd.prgf_eligible', locale)}</Label>
               </div>
 
               {form.inclus_prgf === false && (
                 <div className="space-y-2 p-3 border rounded bg-amber-50">
-                  <Label className="text-xs">Motif d'exemption</Label>
+                  <Label className="text-xs">{t('sarh.empd.f_prgf_motif', locale)}</Label>
                   <Select
                     value={form.prgf_motif_exemption || ""}
                     onValueChange={v => u("prgf_motif_exemption", v)}
                   >
-                    <SelectTrigger><SelectValue placeholder="Sélectionner un motif légal…" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('sarh.empd.ph_prgf_motif', locale)} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="salaire_au_dessus_200k">Salaire &gt; 200 000 MUR</SelectItem>
-                      <SelectItem value="migrant_non_citoyen">Migrant / non-citoyen</SelectItem>
+                      <SelectItem value="salaire_au_dessus_200k">{t('sarh.empd.prgf_motif_200k', locale)}</SelectItem>
+                      <SelectItem value="migrant_non_citoyen">{t('sarh.empd.prgf_motif_migrant', locale)}</SelectItem>
                       <SelectItem value="sbpf">SBPF</SelectItem>
                       <SelectItem value="sipf">SIPF</SelectItem>
                       <SelectItem value="private_pension_fsc">Private Pension Scheme FSC</SelectItem>
                       <SelectItem value="job_contractor">Job Contractor</SelectItem>
-                      <SelectItem value="apprenti">Apprenti</SelectItem>
+                      <SelectItem value="apprenti">{t('sarh.empd.prgf_motif_apprenti', locale)}</SelectItem>
                     </SelectContent>
                   </Select>
                   {form.prgf_motif_exemption === "private_pension_fsc" && (
                     <div>
-                      <Label className="text-xs">URL certificat FSC</Label>
+                      <Label className="text-xs">{t('sarh.empd.f_prgf_fsc_url', locale)}</Label>
                       <Input
                         value={form.prgf_pension_scheme_certificate_url || ""}
                         onChange={e => u("prgf_pension_scheme_certificate_url", e.target.value)}
@@ -945,7 +972,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
 
               <div className="grid md:grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">Date début cotisation PRGF</Label>
+                  <Label className="text-xs">{t('sarh.empd.f_prgf_date_debut', locale)}</Label>
                   <Input
                     type="date"
                     value={form.prgf_date_debut || ""}
@@ -953,7 +980,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Past services dus (MUR)</Label>
+                  <Label className="text-xs">{t('sarh.empd.f_prgf_past_due', locale)}</Label>
                   <Input
                     type="number"
                     value={form.prgf_past_services_montant ?? 0}
@@ -970,11 +997,11 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                       checked={form.prgf_past_services_paid === true}
                       onCheckedChange={v => u("prgf_past_services_paid", v)}
                     />
-                    <Label htmlFor="prgf_past_paid" className="text-xs">Past services payés</Label>
+                    <Label htmlFor="prgf_past_paid" className="text-xs">{t('sarh.empd.f_prgf_past_paid', locale)}</Label>
                   </div>
                   {form.prgf_past_services_paid === true && (
                     <div>
-                      <Label className="text-xs">Date paiement</Label>
+                      <Label className="text-xs">{t('sarh.empd.f_prgf_date_paiement', locale)}</Label>
                       <Input
                         type="date"
                         value={form.prgf_past_services_date_paiement || ""}
@@ -989,9 +1016,9 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
 
           {/* Historique des augmentations */}
           <Card className="rounded-2xl shadow-sm bg-[#f8f9fc]">
-            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><History className="w-4 h-4" />Historique des augmentations</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><History className="w-4 h-4" />{t('sarh.empd.card_augmentations', locale)}</CardTitle></CardHeader>
             <CardContent>
-              <p className="text-sm text-gray-400 italic">(Historique disponible prochainement)</p>
+              <p className="text-sm text-gray-400 italic">{t('sarh.empd.history_soon', locale)}</p>
             </CardContent>
           </Card>
 
@@ -1005,13 +1032,13 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         {/* ===== TAB 4: Avantages ===== */}
         <TabsContent value="avantages" className="space-y-6">
           <Card className="rounded-2xl shadow-sm border-l-4 border-l-purple-400 bg-[#f8f9fc]">
-            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><Gift className="w-4 h-4 text-purple-400" />Avantages en nature</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><Gift className="w-4 h-4 text-purple-400" />{t('sarh.empd.card_avantages', locale)}</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label="Bus fare journalier (MUR)" field="daily_bus_fare" type="number" />
-                <Field label="Prime trimestrielle (MUR)" field="prime_trimestrielle" type="number" />
-                <Field label="Equipement IT" field="it_equipment" placeholder="Laptop, ecran..." />
-                <Field label="Appareil internet" field="internet_device" placeholder="Dongle, routeur..." />
+                <Field label={t('sarh.empd.f_bus_fare', locale)} field="daily_bus_fare" type="number" />
+                <Field label={t('sarh.empd.f_prime_trim', locale)} field="prime_trimestrielle" type="number" />
+                <Field label={t('sarh.empd.f_it_equipment', locale)} field="it_equipment" placeholder={t('sarh.empd.ph_it_equipment', locale)} />
+                <Field label={t('sarh.empd.f_internet_device', locale)} field="internet_device" placeholder={t('sarh.empd.ph_internet_device', locale)} />
               </div>
             </CardContent>
           </Card>
@@ -1021,7 +1048,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         {/* ===== TAB 5: Conges ===== */}
         <TabsContent value="conges" className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[#0B0F2E]">Conges</h2>
+            <h2 className="text-lg font-semibold text-[#0B0F2E]">{t('sarh.empd.h_conges', locale)}</h2>
             <Select value={yearFilter} onValueChange={setYearFilter}>
               <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
               <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
@@ -1032,12 +1059,12 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
               {soldes.map((s: any) => (
                 <Card key={s.id} className="rounded-2xl shadow-sm">
                   <CardContent className="pt-4 text-center">
-                    <p className="text-xs text-gray-500 mb-1">{s.type_conge || "Annuel"}</p>
+                    <p className="text-xs text-gray-500 mb-1">{s.type_conge || t('sarh.empd.leave_annual', locale)}</p>
                     <p className="text-2xl font-bold text-[#0B0F2E]">{s.solde ?? s.jours_restants ?? "--"}</p>
-                    <p className="text-xs text-gray-400">jours restants</p>
+                    <p className="text-xs text-gray-400">{t('sarh.empd.days_remaining', locale)}</p>
                     {(s.jours_acquis !== undefined || s.jours_utilises !== undefined) && (
                       <p className="text-xs text-gray-400 mt-1">
-                        Acquis: {s.jours_acquis ?? "--"} / Pris: {s.jours_utilises ?? "--"}
+                        {t('sarh.empd.acquired', locale)}: {s.jours_acquis ?? "--"} / {t('sarh.empd.taken', locale)}: {s.jours_utilises ?? "--"}
                       </p>
                     )}
                   </CardContent>
@@ -1053,14 +1080,14 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Type</TableHead><TableHead>Du</TableHead><TableHead>Au</TableHead>
-                      <TableHead className="text-right">Jours</TableHead><TableHead>Statut</TableHead>
+                      <TableHead>{t('sarh.empd.th_type', locale)}</TableHead><TableHead>{t('sarh.empd.th_du', locale)}</TableHead><TableHead>{t('sarh.empd.th_au', locale)}</TableHead>
+                      <TableHead className="text-right">{t('sarh.empd.th_jours', locale)}</TableHead><TableHead>{t('sarh.empd.th_statut', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {conges.map((c: any) => (
                       <TableRow key={c.id}>
-                        <TableCell>{c.type_conge || "Annuel"}</TableCell>
+                        <TableCell>{c.type_conge || t('sarh.empd.leave_annual', locale)}</TableCell>
                         <TableCell>{fmtDate(c.date_debut)}</TableCell>
                         <TableCell>{fmtDate(c.date_fin)}</TableCell>
                         <TableCell className="text-right">{c.nb_jours ?? "--"}</TableCell>
@@ -1077,7 +1104,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         {/* ===== TAB 6: Bulletins ===== */}
         <TabsContent value="bulletins" className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[#0B0F2E]">Bulletins de paie</h2>
+            <h2 className="text-lg font-semibold text-[#0B0F2E]">{t('sarh.empd.h_bulletins', locale)}</h2>
             <Select value={yearFilter} onValueChange={setYearFilter}>
               <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
               <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
@@ -1091,8 +1118,8 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Periode</TableHead><TableHead className="text-right">Brut</TableHead>
-                      <TableHead className="text-right">Net</TableHead><TableHead>Statut</TableHead><TableHead>PDF</TableHead>
+                      <TableHead>{t('sarh.empd.th_periode', locale)}</TableHead><TableHead className="text-right">{t('sarh.empd.th_brut', locale)}</TableHead>
+                      <TableHead className="text-right">{t('sarh.empd.th_net', locale)}</TableHead><TableHead>{t('sarh.empd.th_statut', locale)}</TableHead><TableHead>PDF</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1103,7 +1130,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                         <TableCell className="text-right font-semibold">{fmt(b.salaire_net || 0)}</TableCell>
                         <TableCell>
                           <Badge className={`border-0 ${b.statut === "valide" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-700"}`}>
-                            {b.statut || "brouillon"}
+                            {b.statut || t('sarh.empd.draft', locale)}
                           </Badge>
                         </TableCell>
                         <TableCell>
@@ -1125,24 +1152,24 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         {/* ===== TAB 7: Pointage ===== */}
         <TabsContent value="pointage" className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[#0B0F2E]" id="pointage-heading">Pointage</h2>
-            <Input aria-label="Mois de pointage" type="month" value={pointageMois} onChange={e => setPointageMois(e.target.value)} className="w-48" />
+            <h2 className="text-lg font-semibold text-[#0B0F2E]" id="pointage-heading">{t('sarh.empd.h_pointage', locale)}</h2>
+            <Input aria-label={t('sarh.empd.aria_pointage_month', locale)} type="month" value={pointageMois} onChange={e => setPointageMois(e.target.value)} className="w-48" />
           </div>
           <div className="grid grid-cols-3 gap-4">
             <Card className="rounded-2xl shadow-sm"><CardContent className="pt-6 text-center">
               <Clock className="w-6 h-6 mx-auto text-[#0B0F2E] mb-2" />
               <p className="text-2xl font-bold text-[#0B0F2E]">{joursPresent}</p>
-              <p className="text-xs text-gray-500">Jours travailles</p>
+              <p className="text-xs text-gray-500">{t('sarh.empd.jours_travailles', locale)}</p>
             </CardContent></Card>
             <Card className="rounded-2xl shadow-sm"><CardContent className="pt-6 text-center">
               <AlertCircle className="w-6 h-6 mx-auto text-red-400 mb-2" />
               <p className="text-2xl font-bold text-red-500">{joursAbsence}</p>
-              <p className="text-xs text-gray-500">Jours absence</p>
+              <p className="text-xs text-gray-500">{t('sarh.empd.jours_absence', locale)}</p>
             </CardContent></Card>
             <Card className="rounded-2xl shadow-sm"><CardContent className="pt-6 text-center">
               <Clock className="w-6 h-6 mx-auto text-[#D4AF37] mb-2" />
               <p className="text-2xl font-bold text-[#D4AF37]">{totalOT.toFixed(1)}h</p>
-              <p className="text-xs text-gray-500">Heures supplementaires</p>
+              <p className="text-xs text-gray-500">{t('sarh.empd.heures_sup', locale)}</p>
             </CardContent></Card>
           </div>
           <Card className="rounded-2xl shadow-sm overflow-hidden">
@@ -1153,8 +1180,8 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead><TableHead>Arrivee</TableHead><TableHead>Depart</TableHead>
-                      <TableHead className="text-right">Heures</TableHead><TableHead className="text-right">OT</TableHead><TableHead>Statut</TableHead>
+                      <TableHead>{t('sarh.empd.th_date', locale)}</TableHead><TableHead>{t('sarh.empd.th_arrivee', locale)}</TableHead><TableHead>{t('sarh.empd.th_depart', locale)}</TableHead>
+                      <TableHead className="text-right">{t('sarh.empd.th_heures', locale)}</TableHead><TableHead className="text-right">OT</TableHead><TableHead>{t('sarh.empd.th_statut', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1193,40 +1220,40 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         {/* ===== TAB 9: Historique ===== */}
         <TabsContent value="historique" className="space-y-6">
           <Card className="rounded-2xl shadow-sm bg-[#f8f9fc]">
-            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><History className="w-4 h-4 text-[#4191FF]" />Dates cles</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><History className="w-4 h-4 text-[#4191FF]" />{t('sarh.empd.card_dates_cles', locale)}</CardTitle></CardHeader>
             <CardContent>
               <div className="relative pl-6 space-y-4">
                 <div className="absolute left-2 top-2 bottom-2 w-px bg-[#4191FF]/20" />
                 <div className="relative flex justify-between items-center">
                   <div className="absolute -left-[17px] w-3 h-3 rounded-full bg-[#4191FF] ring-4 ring-[#4191FF]/10" />
-                  <span className="text-sm text-gray-500">Date d&apos;arrivee</span>
+                  <span className="text-sm text-gray-500">{t('sarh.empd.f_date_arrivee', locale)}</span>
                   <span className="text-sm font-medium">{fmtDate(employe.date_arrivee)}</span>
                 </div>
                 <div className="relative flex justify-between items-center">
                   <div className="absolute -left-[17px] w-3 h-3 rounded-full bg-[#4191FF] ring-4 ring-[#4191FF]/10" />
-                  <span className="text-sm text-gray-500">Poste actuel depuis</span>
+                  <span className="text-sm text-gray-500">{t('sarh.empd.f_poste_depuis', locale)}</span>
                   <span className="text-sm font-medium">{fmtDate(employe.date_poste_actuel)}</span>
                 </div>
                 {employe.date_depart && (
                   <div className="relative flex justify-between items-center">
                     <div className="absolute -left-[17px] w-3 h-3 rounded-full bg-red-400 ring-4 ring-red-400/10" />
-                    <span className="text-sm text-gray-500">Date de depart</span>
+                    <span className="text-sm text-gray-500">{t('sarh.empd.f_date_depart', locale)}</span>
                     <span className="text-sm font-medium">{fmtDate(employe.date_depart)}</span>
                   </div>
                 )}
                 <div className="relative flex justify-between items-center">
                   <div className="absolute -left-[17px] w-3 h-3 rounded-full bg-[#D4AF37] ring-4 ring-[#D4AF37]/10" />
-                  <span className="text-sm text-gray-500">Poste</span>
+                  <span className="text-sm text-gray-500">{t('sarh.empd.f_poste', locale)}</span>
                   <span className="text-sm font-medium">{employe.poste || "--"}</span>
                 </div>
                 <div className="relative flex justify-between items-center">
                   <div className="absolute -left-[17px] w-3 h-3 rounded-full bg-green-400 ring-4 ring-green-400/10" />
-                  <span className="text-sm text-gray-500">Departement</span>
+                  <span className="text-sm text-gray-500">{t('sarh.empd.f_departement', locale)}</span>
                   <span className="text-sm font-medium">{employe.departement || "--"}</span>
                 </div>
                 <div className="relative flex justify-between items-center">
                   <div className="absolute -left-[17px] w-3 h-3 rounded-full bg-purple-400 ring-4 ring-purple-400/10" />
-                  <span className="text-sm text-gray-500">Role</span>
+                  <span className="text-sm text-gray-500">{t('sarh.empd.f_role', locale)}</span>
                   <span className="text-sm font-medium">{employe.role || "--"}</span>
                 </div>
               </div>
@@ -1234,13 +1261,13 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
           </Card>
 
           <Card className="rounded-2xl shadow-sm border-l-4 border-l-[#D4AF37] bg-[#f8f9fc]">
-            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base" style={{ fontFamily: "'Poppins', sans-serif" }}>Historique salaire</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base" style={{ fontFamily: "'Poppins', sans-serif" }}>{t('sarh.empd.card_hist_salaire', locale)}</CardTitle></CardHeader>
             <CardContent>
               <div className="flex justify-between items-center border-b pb-3">
-                <span className="text-sm text-gray-500">Salaire actuel</span>
+                <span className="text-sm text-gray-500">{t('sarh.empd.salaire_actuel', locale)}</span>
                 <span className="text-xl font-bold text-[#0B0F2E]">{fmt(employe.salaire_base || 0)}</span>
               </div>
-              <p className="text-xs text-gray-400 mt-3">L&apos;historique complet des modifications salariales sera disponible prochainement.</p>
+              <p className="text-xs text-gray-400 mt-3">{t('sarh.empd.hist_salaire_soon', locale)}</p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1251,17 +1278,17 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {employe?.auth_user_id ? "Renvoyer credentials" : "Créer un compte"}
+              {employe?.auth_user_id ? t('sarh.empd.dlg_resend_title', locale) : t('sarh.empd.dlg_create_title', locale)}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <p className="text-sm text-gray-600">
               {employe?.auth_user_id
-                ? <>Définissez un nouveau mot de passe pour <span className="font-mono">{employe.email}</span>. L'employé recevra un email avec ses nouveaux identifiants.</>
-                : <>Définissez un mot de passe pour <span className="font-mono">{employe.email}</span>. L'employé recevra un email avec ses identifiants et pourra se connecter immédiatement.</>}
+                ? <>{t('sarh.empd.dlg_reset_desc_1', locale)} <span className="font-mono">{employe.email}</span>. {t('sarh.empd.dlg_reset_desc_2', locale)}</>
+                : <>{t('sarh.empd.dlg_create_desc_1', locale)} <span className="font-mono">{employe.email}</span>. {t('sarh.empd.dlg_create_desc_2', locale)}</>}
             </p>
             <div>
-              <Label htmlFor="emp-account-pwd" className="text-xs text-gray-500">Mot de passe (min 8 caractères)</Label>
+              <Label htmlFor="emp-account-pwd" className="text-xs text-gray-500">{t('sarh.empd.f_password_min8', locale)}</Label>
               <Input
                 id="emp-account-pwd"
                 type="password"
@@ -1287,13 +1314,13 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                 aria-invalid={accountPwd2.length > 0 && accountPwd !== accountPwd2}
               />
               {accountPwd2.length > 0 && accountPwd !== accountPwd2 && (
-                <p className="text-xs text-red-600 mt-1">Les mots de passe ne correspondent pas.</p>
+                <p className="text-xs text-red-600 mt-1">{t('sarh.empd.passwords_mismatch', locale)}</p>
               )}
             </div>
           </div>
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" onClick={() => setAccountDialogOpen(false)} disabled={accountSubmitting}>
-              Annuler
+              {t('sarh.empd.cancel', locale)}
             </Button>
             <Button
               type="button"
@@ -1301,7 +1328,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
               disabled={accountSubmitting || accountPwd.length < 8 || accountPwd !== accountPwd2}
             >
               {accountSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Mail className="w-4 h-4 mr-2" />}
-              {employe?.auth_user_id ? "Mettre à jour et envoyer" : "Créer et envoyer"}
+              {employe?.auth_user_id ? t('sarh.empd.update_and_send', locale) : t('sarh.empd.create_and_send', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>

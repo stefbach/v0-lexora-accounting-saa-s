@@ -78,6 +78,7 @@ function NumField({
 // PE1 — Section "Période de paie" (paramétrable par société)
 // ---------------------------------------------------------------------------
 function PeriodePaieSection() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<Array<{ id: string; nom: string }>>([])
   const [societeId, setSocieteId] = useState<string>("")
   const [cfg, setCfg] = useState<PeriodePaieConfig>({ ...DEFAULT_CONFIG })
@@ -149,9 +150,9 @@ function PeriodePaieSection() {
         const d = await res.json().catch(() => ({}))
         throw new Error(d?.error || `HTTP ${res.status}`)
       }
-      setFeedback("✅ Configuration enregistrée. Les bulletins existants conservent leur période d'origine.")
+      setFeedback(t('sarh.pp.fb_config_saved', locale))
     } catch (e: any) {
-      setFeedback(`⚠ ${e?.message || "Erreur réseau"}`)
+      setFeedback(`⚠ ${e?.message || t('sarh.pp.erreur_reseau', locale)}`)
     } finally {
       setSaving(false)
     }
@@ -162,16 +163,16 @@ function PeriodePaieSection() {
       <CardHeader>
         <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
           <CalendarClock className="h-5 w-5 text-indigo-600" />
-          Période de paie
+          {t('sarh.pp.periode_title', locale)}
           <span className="ml-auto text-xs font-normal text-gray-500">PE1</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-col md:flex-row md:items-end gap-3">
           <div className="flex-1 min-w-[220px]">
-            <Label className="text-sm">Société</Label>
+            <Label className="text-sm">{t('sarh.pp.societe', locale)}</Label>
             <Select value={societeId} onValueChange={setSocieteId}>
-              <SelectTrigger><SelectValue placeholder="Choisir une société" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('sarh.pp.choisir_societe', locale)} /></SelectTrigger>
               <SelectContent>
                 {societes.map(s => (
                   <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
@@ -185,7 +186,7 @@ function PeriodePaieSection() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div className="space-y-4">
             <div>
-              <Label className="text-sm font-medium">Mode de calcul de la période</Label>
+              <Label className="text-sm font-medium">{t('sarh.pp.mode_calcul', locale)}</Label>
               <div className="space-y-1.5 mt-1.5">
                 <label className="flex items-start gap-2 cursor-pointer">
                   <input
@@ -196,8 +197,8 @@ function PeriodePaieSection() {
                     className="mt-0.5"
                   />
                   <span className="text-sm">
-                    <span className="font-medium">Mois calendaire</span>
-                    <span className="text-gray-500"> — du 1er au dernier jour du mois (défaut).</span>
+                    <span className="font-medium">{t('sarh.pp.mois_calendaire', locale)}</span>
+                    <span className="text-gray-500">{t('sarh.pp.mois_calendaire_desc', locale)}</span>
                   </span>
                 </label>
                 <label className="flex items-start gap-2 cursor-pointer">
@@ -209,8 +210,8 @@ function PeriodePaieSection() {
                     className="mt-0.5"
                   />
                   <span className="text-sm">
-                    <span className="font-medium">Période glissante avec cut-off</span>
-                    <span className="text-gray-500"> — ex. 25/03 → 24/04.</span>
+                    <span className="font-medium">{t('sarh.pp.periode_glissante', locale)}</span>
+                    <span className="text-gray-500">{t('sarh.pp.periode_glissante_desc', locale)}</span>
                   </span>
                 </label>
               </div>
@@ -218,7 +219,7 @@ function PeriodePaieSection() {
 
             {cfg.mode === 'cut_off_jour' && (
               <div>
-                <Label className="text-sm">Jour de clôture (1-31)</Label>
+                <Label className="text-sm">{t('sarh.pp.jour_cloture', locale)}</Label>
                 <Input
                   type="number" min={1} max={31}
                   value={cfg.jour_cut_off}
@@ -229,7 +230,7 @@ function PeriodePaieSection() {
             )}
 
             <div>
-              <Label className="text-sm font-medium">Date de paiement</Label>
+              <Label className="text-sm font-medium">{t('sarh.pp.date_paiement', locale)}</Label>
               <div className="space-y-1.5 mt-1.5">
                 <label className="flex items-start gap-2 cursor-pointer">
                   <input
@@ -239,7 +240,7 @@ function PeriodePaieSection() {
                     onChange={() => setCfg(c => ({ ...c, jour_paiement: null }))}
                     className="mt-0.5"
                   />
-                  <span className="text-sm">Dernier jour du mois</span>
+                  <span className="text-sm">{t('sarh.pp.dernier_jour', locale)}</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -249,7 +250,7 @@ function PeriodePaieSection() {
                     onChange={() => setCfg(c => ({ ...c, jour_paiement: c.jour_paiement ?? 28 }))}
                     className="mt-0.5"
                   />
-                  <span className="text-sm">Jour fixe :</span>
+                  <span className="text-sm">{t('sarh.pp.jour_fixe', locale)}</span>
                   <Input
                     type="number" min={1} max={31} disabled={cfg.jour_paiement == null}
                     value={cfg.jour_paiement ?? ''}
@@ -261,7 +262,7 @@ function PeriodePaieSection() {
             </div>
 
             <div>
-              <Label className="text-sm font-medium">Paiement</Label>
+              <Label className="text-sm font-medium">{t('sarh.pp.paiement', locale)}</Label>
               <div className="space-y-1.5 mt-1.5">
                 <label className="flex items-start gap-2 cursor-pointer">
                   <input
@@ -271,7 +272,7 @@ function PeriodePaieSection() {
                     onChange={() => setCfg(c => ({ ...c, offset_paiement_mois: 0 }))}
                     className="mt-0.5"
                   />
-                  <span className="text-sm">Dans le même mois que la période</span>
+                  <span className="text-sm">{t('sarh.pp.meme_mois', locale)}</span>
                 </label>
                 <label className="flex items-start gap-2 cursor-pointer">
                   <input
@@ -281,13 +282,13 @@ function PeriodePaieSection() {
                     onChange={() => setCfg(c => ({ ...c, offset_paiement_mois: 1 }))}
                     className="mt-0.5"
                   />
-                  <span className="text-sm">Le mois suivant</span>
+                  <span className="text-sm">{t('sarh.pp.mois_suivant', locale)}</span>
                 </label>
               </div>
             </div>
 
             <div>
-              <Label className="text-sm">Notes internes (optionnel)</Label>
+              <Label className="text-sm">{t('sarh.pp.notes_internes', locale)}</Label>
               <textarea
                 className="w-full text-sm border rounded-md p-2 resize-none"
                 rows={2}
@@ -300,28 +301,27 @@ function PeriodePaieSection() {
           <div className="space-y-3">
             <div className="bg-indigo-50 border border-indigo-200 rounded-md p-3 text-sm">
               <p className="font-semibold text-indigo-900 mb-1">
-                💡 Aperçu pour {new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+                {t('sarh.pp.apercu_pour', locale).replace('{month}', new Date().toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR', { month: 'long', year: 'numeric' }))}
               </p>
               <p className="text-indigo-900">{formaterPeriodeLibelle(aperçu)}</p>
               <p className="text-xs text-indigo-700 mt-1.5 font-mono">
-                Période : {aperçu.periode_debut} → {aperçu.periode_fin}
+                {t('sarh.pp.periode_label', locale).replace('{a}', aperçu.periode_debut).replace('{b}', aperçu.periode_fin)}
               </p>
               <p className="text-xs text-indigo-700 font-mono">
-                Paiement prévu : {aperçu.date_paiement}
+                {t('sarh.pp.paiement_prevu', locale).replace('{x}', aperçu.date_paiement)}
               </p>
             </div>
 
             <div className="bg-amber-50 border border-amber-300 rounded-md p-3 text-xs text-amber-900 flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold mb-0.5">Rappels légaux Maurice</p>
+                <p className="font-semibold mb-0.5">{t('sarh.pp.rappels_legaux', locale)}</p>
                 <p>
-                  WRA 2019 S.27 n'impose pas de date précise — seule la fréquence mensuelle
-                  est obligatoire. Pratique majoritaire : cut-off 24, paiement 25-28.
+                  {t('sarh.pp.rappel_wra', locale)}
                 </p>
                 <ul className="list-disc list-inside mt-1 space-y-0.5">
-                  <li>PAYE reversé à la MRA dans les 20 jours suivant la fin du mois</li>
-                  <li>La date de paiement doit figurer dans le contrat de travail</li>
+                  <li>{t('sarh.pp.rappel_paye', locale)}</li>
+                  <li>{t('sarh.pp.rappel_contrat', locale)}</li>
                 </ul>
               </div>
             </div>
@@ -339,11 +339,10 @@ function PeriodePaieSection() {
               style={{ backgroundColor: NAVY }}
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-              Enregistrer la période de paie
+              {t('sarh.pp.enregistrer_periode', locale)}
             </Button>
             <p className="text-[11px] text-gray-500 italic">
-              Seuls les nouveaux bulletins suivront la nouvelle période. Les bulletins
-              existants (verrouillés ou payés) conservent leur période d'origine.
+              {t('sarh.pp.note_nouveaux_bulletins', locale)}
             </p>
           </div>
         </div>
@@ -370,6 +369,7 @@ const EOY_DEFAULT: EoyBonusConfig = {
 }
 
 function EoyBonusSection() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<Array<{ id: string; nom: string }>>([])
   const [societeId, setSocieteId] = useState<string>("")
   const [cfg, setCfg] = useState<EoyBonusConfig>({ ...EOY_DEFAULT })
@@ -428,9 +428,9 @@ function EoyBonusSection() {
         const d = await res.json().catch(() => ({}))
         throw new Error(d?.error || `HTTP ${res.status}`)
       }
-      setFeedback("✅ Configuration EOY sauvegardée.")
+      setFeedback(t('sarh.pp.fb_eoy_saved', locale))
     } catch (e: any) {
-      setFeedback(`⚠ ${e?.message || "Erreur réseau"}`)
+      setFeedback(`⚠ ${e?.message || t('sarh.pp.erreur_reseau', locale)}`)
     } finally {
       setSaving(false)
     }
@@ -448,9 +448,9 @@ function EoyBonusSection() {
       <CardContent className="space-y-4">
         <div className="flex flex-col md:flex-row md:items-end gap-3">
           <div className="flex-1 min-w-[220px]">
-            <Label className="text-sm">Société</Label>
+            <Label className="text-sm">{t('sarh.pp.societe', locale)}</Label>
             <Select value={societeId} onValueChange={setSocieteId}>
-              <SelectTrigger><SelectValue placeholder="Choisir une société" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('sarh.pp.choisir_societe', locale)} /></SelectTrigger>
               <SelectContent>
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
@@ -461,14 +461,14 @@ function EoyBonusSection() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <Label className="text-sm">Seuil maximum (MUR/mois)</Label>
+            <Label className="text-sm">{t('sarh.pp.eoy_seuil_max', locale)}</Label>
             <Input
               type="number"
               value={cfg.seuil_max}
               onChange={e => setCfg(c => ({ ...c, seuil_max: Number(e.target.value) || 0 }))}
               className="w-48"
             />
-            <p className="text-[11px] text-gray-500 mt-1">Défaut S.54 : 100 000 MUR.</p>
+            <p className="text-[11px] text-gray-500 mt-1">{t('sarh.pp.eoy_defaut', locale)}</p>
           </div>
           <div className="flex items-start gap-2 pt-6">
             <input
@@ -479,12 +479,12 @@ function EoyBonusSection() {
               className="mt-0.5"
             />
             <Label htmlFor="inclut-hors-seuil" className="text-sm cursor-pointer">
-              Étendre aux salariés &gt; seuil
-              <p className="text-[11px] text-gray-500 font-normal">Politique interne plus généreuse.</p>
+              {t('sarh.pp.eoy_etendre', locale)}
+              <p className="text-[11px] text-gray-500 font-normal">{t('sarh.pp.eoy_politique', locale)}</p>
             </Label>
           </div>
           <div>
-            <Label className="text-sm">Date paiement 75%</Label>
+            <Label className="text-sm">{t('sarh.pp.eoy_date_75', locale)}</Label>
             <Input
               type="date"
               value={cfg.date_paiement_75pct || ''}
@@ -492,11 +492,11 @@ function EoyBonusSection() {
               className="w-48"
             />
             <p className="text-[11px] text-gray-500 mt-1">
-              Vide = auto (5 jours ouvrables avant le 25/12).
+              {t('sarh.pp.eoy_date_75_desc', locale)}
             </p>
           </div>
           <div>
-            <Label className="text-sm">Date paiement 25%</Label>
+            <Label className="text-sm">{t('sarh.pp.eoy_date_25', locale)}</Label>
             <Input
               type="date"
               value={cfg.date_paiement_25pct || ''}
@@ -504,7 +504,7 @@ function EoyBonusSection() {
               className="w-48"
             />
             <p className="text-[11px] text-gray-500 mt-1">
-              Vide = auto (dernier jour ouvrable de décembre).
+              {t('sarh.pp.eoy_date_25_desc', locale)}
             </p>
           </div>
         </div>
@@ -517,7 +517,7 @@ function EoyBonusSection() {
 
         <div className="flex justify-between items-center pt-1">
           <p className="text-[11px] text-gray-500 italic">
-            Les calculs et la génération des bonus se font depuis <code className="bg-gray-100 px-1 rounded">/rh/eoy-bonus</code>.
+            {t('sarh.pp.eoy_calculs_note', locale)} <code className="bg-gray-100 px-1 rounded">/rh/eoy-bonus</code>.
           </p>
           <Button
             onClick={save}
@@ -526,7 +526,7 @@ function EoyBonusSection() {
             style={{ backgroundColor: NAVY }}
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-            Enregistrer
+            {t('sarh.pp.enregistrer', locale)}
           </Button>
         </div>
       </CardContent>
@@ -545,6 +545,7 @@ interface DisturbanceConfig {
 const DISTURBANCE_DEFAULT: DisturbanceConfig = { active: false, multiplier: 1.0 }
 
 function DisturbanceSection() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<Array<{ id: string; nom: string }>>([])
   const [societeId, setSocieteId] = useState<string>("")
   const [cfg, setCfg] = useState<DisturbanceConfig>({ ...DISTURBANCE_DEFAULT })
@@ -599,9 +600,9 @@ function DisturbanceSection() {
         const d = await res.json().catch(() => ({}))
         throw new Error(d?.error || `HTTP ${res.status}`)
       }
-      setFeedback("✅ Paramètres disturbance enregistrés.")
+      setFeedback(t('sarh.pp.fb_dist_saved', locale))
     } catch (e: any) {
-      setFeedback(`⚠ ${e?.message || "Erreur réseau"}`)
+      setFeedback(`⚠ ${e?.message || t('sarh.pp.erreur_reseau', locale)}`)
     } finally {
       setSaving(false)
     }
@@ -619,9 +620,9 @@ function DisturbanceSection() {
       <CardContent className="space-y-4">
         <div className="flex flex-col md:flex-row md:items-end gap-3">
           <div className="flex-1 min-w-[220px]">
-            <Label className="text-sm">Société</Label>
+            <Label className="text-sm">{t('sarh.pp.societe', locale)}</Label>
             <Select value={societeId} onValueChange={setSocieteId}>
-              <SelectTrigger><SelectValue placeholder="Choisir une société" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('sarh.pp.choisir_societe', locale)} /></SelectTrigger>
               <SelectContent>
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
@@ -639,17 +640,16 @@ function DisturbanceSection() {
             className="mt-0.5"
           />
           <Label htmlFor="disturbance-active" className="text-sm cursor-pointer">
-            Activer l&apos;allocation automatique
+            {t('sarh.pp.dist_activer', locale)}
             <p className="text-[11px] text-gray-500 font-normal">
-              Si actif, chaque bulletin mensuel ajoute automatiquement la
-              disturbance allowance calculée depuis les sessions de pointage.
+              {t('sarh.pp.dist_activer_desc', locale)}
             </p>
           </Label>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <Label className="text-sm">Multiplicateur taux horaire</Label>
+            <Label className="text-sm">{t('sarh.pp.dist_multiplicateur', locale)}</Label>
             <Input
               type="number" step="0.05" min={1.0}
               value={cfg.multiplier}
@@ -657,13 +657,13 @@ function DisturbanceSection() {
               className="w-32"
             />
             <p className="text-[11px] text-gray-500 mt-1">
-              1.0 = taux horaire standard S.17A. Au-delà = politique plus généreuse.
+              {t('sarh.pp.dist_multiplicateur_desc', locale)}
             </p>
           </div>
           <div className="bg-indigo-50 border border-indigo-200 rounded-md p-3 text-[12px] text-indigo-900 space-y-1">
-            <p className="font-semibold">Unsocial hours (non modifiable — légal)</p>
-            <p>• Semaine : 22h00 → 06h00</p>
-            <p>• Weekend : samedi 13h00 → lundi 06h00</p>
+            <p className="font-semibold">{t('sarh.pp.dist_unsocial', locale)}</p>
+            <p>{t('sarh.pp.dist_semaine', locale)}</p>
+            <p>{t('sarh.pp.dist_weekend', locale)}</p>
           </div>
         </div>
 
@@ -681,7 +681,7 @@ function DisturbanceSection() {
             style={{ backgroundColor: NAVY }}
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-            Enregistrer
+            {t('sarh.pp.enregistrer', locale)}
           </Button>
         </div>
       </CardContent>
@@ -993,28 +993,28 @@ export default function ParametresPaiePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <NumField
-                label="Seuil taux réduit (MUR)"
-                desc="Salaire brut ≤ ce seuil → taux réduit"
+                label={t('sarh.pp.csg_seuil_reduit', locale)}
+                desc={t('sarh.pp.csg_seuil_reduit_desc', locale)}
                 defaultVal={params.csg_seuil_taux_reduit}
                 onCommit={setParam("csg_seuil_taux_reduit")}
               />
               <NumField
-                label="Taux réduit salarié"
-                desc="Si brut ≤ seuil"
+                label={t('sarh.pp.csg_taux_reduit', locale)}
+                desc={t('sarh.pp.csg_taux_reduit_desc', locale)}
                 defaultVal={params.csg_salarie_taux_reduit}
                 pct
                 onCommit={setParam("csg_salarie_taux_reduit")}
               />
               <NumField
-                label="Taux plein salarié"
-                desc="Si brut > seuil"
+                label={t('sarh.pp.csg_taux_plein', locale)}
+                desc={t('sarh.pp.csg_taux_plein_desc', locale)}
                 defaultVal={params.csg_salarie_taux_plein}
                 pct
                 onCommit={setParam("csg_salarie_taux_plein")}
               />
               <NumField
-                label="Taux patronal"
-                desc="6% sur salaire brut"
+                label={t('sarh.pp.csg_patronal', locale)}
+                desc={t('sarh.pp.csg_patronal_desc', locale)}
                 defaultVal={params.csg_patronal}
                 pct
                 onCommit={setParam("csg_patronal")}
@@ -1035,36 +1035,36 @@ export default function ParametresPaiePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <NumField
-                label="NSF salarié"
-                desc="National Savings Fund — salarié"
+                label={t('sarh.pp.nsf_salarie', locale)}
+                desc={t('sarh.pp.nsf_salarie_desc', locale)}
                 defaultVal={params.nsf_salarie}
                 pct
                 onCommit={setParam("nsf_salarie")}
               />
               <NumField
-                label="NSF patronal"
-                desc="National Savings Fund — employeur"
+                label={t('sarh.pp.nsf_patronal', locale)}
+                desc={t('sarh.pp.nsf_patronal_desc', locale)}
                 defaultVal={params.nsf_patronal}
                 pct
                 onCommit={setParam("nsf_patronal")}
               />
               <NumField
-                label="Training Levy (HRDC)"
-                desc="1% masse salariale"
+                label={t('sarh.pp.training_levy', locale)}
+                desc={t('sarh.pp.training_levy_desc', locale)}
                 defaultVal={params.training_levy}
                 pct
                 onCommit={setParam("training_levy")}
               />
               <NumField
-                label="PRGF taux (%)"
-                desc="4.5% des émoluments — Portable Retirement Gratuity Fund"
+                label={t('sarh.pp.prgf_taux', locale)}
+                desc={t('sarh.pp.prgf_taux_desc', locale)}
                 defaultVal={params.prgf_taux_emoluments}
                 pct
                 onCommit={setParam("prgf_taux_emoluments")}
               />
               <NumField
-                label="PRGF minimum par jour (MUR)"
-                desc="Plancher : 4.50 MUR/jour travaillé"
+                label={t('sarh.pp.prgf_min', locale)}
+                desc={t('sarh.pp.prgf_min_desc', locale)}
                 defaultVal={params.prgf_patronal_par_jour}
                 onCommit={setParam("prgf_patronal_par_jour")}
               />
@@ -1084,27 +1084,27 @@ export default function ParametresPaiePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <NumField
-                label="Seuil exonération annuel (MUR)"
-                desc="En-dessous : PAYE = 0"
+                label={t('sarh.pp.paye_seuil_exo', locale)}
+                desc={t('sarh.pp.paye_seuil_exo_desc', locale)}
                 defaultVal={params.paye_seuil_exoneration}
                 onCommit={setParam("paye_seuil_exoneration")}
               />
               <NumField
-                label="Taux tranche 1"
-                desc="Jusqu'au seuil tranche 2"
+                label={t('sarh.pp.paye_taux_1', locale)}
+                desc={t('sarh.pp.paye_taux_1_desc', locale)}
                 defaultVal={params.paye_taux_1}
                 pct
                 onCommit={setParam("paye_taux_1")}
               />
               <NumField
-                label="Seuil tranche 2 annuel (MUR)"
-                desc="Au-dessus : taux 2 s'applique"
+                label={t('sarh.pp.paye_seuil_2', locale)}
+                desc={t('sarh.pp.paye_seuil_2_desc', locale)}
                 defaultVal={params.paye_seuil_taux_2}
                 onCommit={setParam("paye_seuil_taux_2")}
               />
               <NumField
-                label="Taux tranche 2"
-                desc="Revenu annuel > seuil tranche 2"
+                label={t('sarh.pp.paye_taux_2', locale)}
+                desc={t('sarh.pp.paye_taux_2_desc', locale)}
                 defaultVal={params.paye_taux_2}
                 pct
                 onCommit={setParam("paye_taux_2")}
@@ -1117,8 +1117,8 @@ export default function ParametresPaiePage() {
               {/* Sprint 2 — night shift majoration paramétrable (mig 137) */}
               <div className="border-t pt-3 mt-3">
                 <NumField
-                  label="Majoration heures de nuit"
-                  desc="Pourcentage du salaire base ajouté pour les heures travaillées 21h-6h. Défaut WRA 2019 : 15%."
+                  label={t('sarh.pp.night_shift', locale)}
+                  desc={t('sarh.pp.night_shift_desc', locale)}
                   defaultVal={params.night_shift_pct}
                   pct
                   onCommit={setParam("night_shift_pct")}

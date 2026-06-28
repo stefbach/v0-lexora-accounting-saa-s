@@ -113,7 +113,7 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
   useEffect(() => { load() }, [load])
 
   const declarerGrossesse = async () => {
-    if (!datePresume) { notifyError('Validation', 'Date présumée accouchement requise'); return }
+    if (!datePresume) { notifyError(t('sarh.prot.validation', locale), t('sarh.prot.err_date_presumee', locale)); return }
     setActionLoading(true)
     try {
       const res = await fetch('/api/rh/maternite', {
@@ -129,8 +129,8 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
         }),
       })
       const data = await res.json()
-      if (!res.ok) { notifyError('Déclarer grossesse', data.error); return }
-      notifySuccess('Grossesse déclarée — protection WRA S.64 active.')
+      if (!res.ok) { notifyError(t('sarh.prot.declare_pregnancy', locale), data.error); return }
+      notifySuccess(t('sarh.prot.pregnancy_declared', locale))
       setDialog(null)
       setDatePresume(""); setGrossesseMultiple(false); setCommentaire(""); setCertificatUrl("")
       await load()
@@ -140,7 +140,7 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
   }
 
   const enregistrerAccouchement = async () => {
-    if (!grossesse || !dateReelle) { notifyError('Validation', 'Date réelle requise'); return }
+    if (!grossesse || !dateReelle) { notifyError(t('sarh.prot.validation', locale), t('sarh.prot.err_date_reelle', locale)); return }
     setActionLoading(true)
     try {
       const res = await fetch('/api/rh/maternite', {
@@ -155,8 +155,8 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
         }),
       })
       const data = await res.json()
-      if (!res.ok) { notifyError('Enregistrer accouchement', data.error); return }
-      notifySuccess(`Accouchement enregistré — congé jusqu'au ${fmtDate(data.conge_mat_fin)}.`)
+      if (!res.ok) { notifyError(t('sarh.prot.record_birth', locale), data.error); return }
+      notifySuccess(t('sarh.prot.birth_recorded', locale).replace('{date}', fmtDate(data.conge_mat_fin)))
       setDialog(null)
       setDateReelle(""); setNaissancePrematuree(false); setMortinaissance(false)
       await load()
@@ -167,7 +167,7 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
 
   const enregistrerRetourMat = async () => {
     if (!grossesse) return
-    if (!confirm(`Enregistrer le retour de ${employe.prenom} ${employe.nom} après congé maternité ?`)) return
+    if (!confirm(t('sarh.prot.confirm_return', locale).replace('{name}', `${employe.prenom} ${employe.nom}`))) return
     setActionLoading(true)
     try {
       const res = await fetch('/api/rh/maternite', {
@@ -176,8 +176,8 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
         body: JSON.stringify({ action: 'retour', grossesse_id: grossesse.id }),
       })
       const data = await res.json()
-      if (!res.ok) { notifyError('Enregistrer retour', data.error); return }
-      notifySuccess('Retour enregistré.')
+      if (!res.ok) { notifyError(t('sarh.prot.record_return', locale), data.error); return }
+      notifySuccess(t('sarh.prot.return_recorded', locale))
       await load()
     } finally {
       setActionLoading(false)
@@ -185,7 +185,7 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
   }
 
   const annuler = async () => {
-    if (!grossesse || !motifAnnulation) { notifyError('Validation', 'Motif requis'); return }
+    if (!grossesse || !motifAnnulation) { notifyError(t('sarh.prot.validation', locale), t('sarh.prot.err_motif', locale)); return }
     setActionLoading(true)
     try {
       const res = await fetch('/api/rh/maternite', {
@@ -198,8 +198,8 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
         }),
       })
       const data = await res.json()
-      if (!res.ok) { notifyError('Annuler grossesse', data.error); return }
-      notifySuccess('Grossesse annulée.')
+      if (!res.ok) { notifyError(t('sarh.prot.cancel_pregnancy', locale), data.error); return }
+      notifySuccess(t('sarh.prot.pregnancy_cancelled', locale))
       setDialog(null)
       setMotifAnnulation("")
       await load()
@@ -209,7 +209,7 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
   }
 
   const declarerPaternite = async () => {
-    if (!dateNaissanceEnfant) { notifyError('Validation', 'Date naissance enfant requise'); return }
+    if (!dateNaissanceEnfant) { notifyError(t('sarh.prot.validation', locale), t('sarh.prot.err_date_naissance', locale)); return }
     setActionLoading(true)
     try {
       const res = await fetch('/api/rh/paternite', {
@@ -223,8 +223,8 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
         }),
       })
       const data = await res.json()
-      if (!res.ok) { notifyError('Déclarer paternité', data.error); return }
-      notifySuccess(`Paternité déclarée — 4 sem ${data.conge_paye ? 'payées' : 'non-payées (ancienneté < 12 mois)'}.`)
+      if (!res.ok) { notifyError(t('sarh.prot.declare_paternity', locale), data.error); return }
+      notifySuccess(t('sarh.prot.paternity_declared', locale).replace('{status}', data.conge_paye ? t('sarh.prot.paid_f', locale) : t('sarh.prot.unpaid_seniority', locale)))
       setDialog(null)
       setDateNaissanceEnfant(""); setActeNaissanceUrl("")
       await load()
@@ -249,7 +249,7 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm flex items-center gap-2 text-pink-900">
             <ShieldCheck className="w-4 h-4 text-pink-600" />
-            Protection légale (WRA S.52/S.53/S.64)
+            {t('sarh.prot.title', locale)}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
@@ -260,37 +260,37 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
                 <div className="flex items-center gap-2">
                   <Baby className="w-4 h-4 text-pink-600" />
                   <span className="font-semibold text-pink-900">
-                    {grossesse.statut === 'declaree' && 'Grossesse déclarée'}
-                    {grossesse.statut === 'conge_en_cours' && 'Congé maternité en cours'}
+                    {grossesse.statut === 'declaree' && t('sarh.prot.status_declared', locale)}
+                    {grossesse.statut === 'conge_en_cours' && t('sarh.prot.status_leave_ongoing', locale)}
                   </span>
                 </div>
                 {(grossesse.statut === 'declaree' || grossesse.statut === 'conge_en_cours') && (
                   <Badge className="bg-red-100 text-red-700 hover:bg-red-100 text-[10px]">
-                    🛡️ Protégée contre licenciement
+                    {t('sarh.prot.protected_dismissal', locale)}
                   </Badge>
                 )}
               </div>
               <div className="text-xs text-gray-700 space-y-0.5">
-                <p>Date présumée : <strong>{fmtDate(grossesse.date_presume_accouchement)}</strong></p>
+                <p>{t('sarh.prot.date_presumee', locale)} <strong>{fmtDate(grossesse.date_presume_accouchement)}</strong></p>
                 {grossesse.date_reelle_accouchement && (
-                  <p>Date réelle accouchement : <strong>{fmtDate(grossesse.date_reelle_accouchement)}</strong></p>
+                  <p>{t('sarh.prot.date_reelle', locale)} <strong>{fmtDate(grossesse.date_reelle_accouchement)}</strong></p>
                 )}
                 {grossesse.conge_mat_debut && grossesse.conge_mat_fin && (
-                  <p>Congé maternité : <strong>{fmtDate(grossesse.conge_mat_debut)} → {fmtDate(grossesse.conge_mat_fin)}</strong></p>
+                  <p>{t('sarh.prot.conge_mat', locale)} <strong>{fmtDate(grossesse.conge_mat_debut)} → {fmtDate(grossesse.conge_mat_fin)}</strong></p>
                 )}
-                {grossesse.grossesse_multiple && <p className="text-pink-700">🤰🤰 Grossesse multiple (+2 semaines)</p>}
-                {grossesse.naissance_prematuree && <p className="text-pink-700">👶 Naissance prématurée (+2 semaines)</p>}
-                {grossesse.mortinaissance && <p className="text-red-700">💔 Mortinaissance — pas d&apos;allocation naissance</p>}
+                {grossesse.grossesse_multiple && <p className="text-pink-700">{t('sarh.prot.multiple', locale)}</p>}
+                {grossesse.naissance_prematuree && <p className="text-pink-700">{t('sarh.prot.premature', locale)}</p>}
+                {grossesse.mortinaissance && <p className="text-red-700">{t('sarh.prot.stillbirth', locale)}</p>}
                 <p>
-                  Allocation naissance 3 000 MUR :{" "}
+                  {t('sarh.prot.allocation', locale)}{" "}
                   {grossesse.allocation_naissance_payee ? (
                     <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[10px]">
-                      ✓ Payée {grossesse.allocation_naissance_paye_le ? `le ${fmtDate(grossesse.allocation_naissance_paye_le)}` : ''}
+                      {t('sarh.prot.paid_badge', locale)} {grossesse.allocation_naissance_paye_le ? t('sarh.prot.on_date', locale).replace('{date}', fmtDate(grossesse.allocation_naissance_paye_le)) : ''}
                     </Badge>
                   ) : grossesse.mortinaissance ? (
-                    <Badge className="bg-gray-100 text-gray-500 text-[10px]">Non applicable</Badge>
+                    <Badge className="bg-gray-100 text-gray-500 text-[10px]">{t('sarh.prot.not_applicable', locale)}</Badge>
                   ) : (
-                    <Badge className="bg-orange-100 text-orange-700 text-[10px]">En attente (sera injectée au prochain bulletin du mois)</Badge>
+                    <Badge className="bg-orange-100 text-orange-700 text-[10px]">{t('sarh.prot.pending', locale)}</Badge>
                   )}
                 </p>
               </div>
@@ -298,16 +298,16 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
                 <div className="flex gap-2 pt-2">
                   {grossesse.statut === 'declaree' && (
                     <Button size="sm" className="bg-pink-600 text-white h-7 text-xs" onClick={() => setDialog('accouchement')}>
-                      Enregistrer l&apos;accouchement
+                      {t('sarh.prot.record_birth', locale)}
                     </Button>
                   )}
                   {grossesse.statut === 'conge_en_cours' && (
                     <Button size="sm" variant="outline" className="h-7 text-xs" onClick={enregistrerRetourMat} disabled={actionLoading}>
-                      Enregistrer le retour
+                      {t('sarh.prot.record_return', locale)}
                     </Button>
                   )}
                   <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600" onClick={() => setDialog('annuler-grossesse')}>
-                    Annuler
+                    {t('sarh.prot.cancel', locale)}
                   </Button>
                 </div>
               )}
@@ -315,7 +315,7 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
           ) : isFemale && canManage ? (
             <Button size="sm" onClick={() => setDialog('declarer-grossesse')} className="bg-pink-600 text-white">
               <Heart className="w-3.5 h-3.5 mr-1" />
-              Déclarer une grossesse
+              {t('sarh.prot.declare_pregnancy_btn', locale)}
             </Button>
           ) : null}
 
@@ -325,18 +325,18 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
               <div className="flex items-center gap-2">
                 <Baby className="w-4 h-4 text-blue-600" />
                 <span className="font-semibold text-blue-900">
-                  Congé paternité ({paternite.conge_paye ? 'payé' : 'non payé'})
+                  {t('sarh.prot.paternity_leave', locale).replace('{status}', paternite.conge_paye ? t('sarh.prot.paid_m', locale) : t('sarh.prot.unpaid_m', locale))}
                 </span>
               </div>
               <p className="text-xs text-gray-700">
-                Naissance : <strong>{fmtDate(paternite.date_naissance_enfant)}</strong> ·
-                Congé : <strong>{fmtDate(paternite.conge_pat_debut)} → {fmtDate(paternite.conge_pat_fin)}</strong>
+                {t('sarh.prot.birth_label', locale)} <strong>{fmtDate(paternite.date_naissance_enfant)}</strong> ·
+                {' '}{t('sarh.prot.leave_label', locale)} <strong>{fmtDate(paternite.conge_pat_debut)} → {fmtDate(paternite.conge_pat_fin)}</strong>
               </p>
             </div>
           ) : isMale && canManage ? (
             <Button size="sm" onClick={() => setDialog('declarer-paternite')} className="bg-blue-600 text-white">
               <Baby className="w-3.5 h-3.5 mr-1" />
-              Déclarer une paternité
+              {t('sarh.prot.declare_paternity_btn', locale)}
             </Button>
           ) : null}
 
@@ -352,35 +352,35 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Heart className="w-5 h-5 text-pink-600" />
-              Déclarer une grossesse
+              {t('sarh.prot.dlg_pregnancy_title', locale)}
             </DialogTitle>
             <DialogDescription>
-              WRA S.52/S.64 — confidentialité garantie, accès réservé RH.
+              {t('sarh.prot.dlg_pregnancy_desc', locale)}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm">
             <div>
-              <Label>Date présumée d&apos;accouchement *</Label>
+              <Label>{t('sarh.prot.lbl_date_presumee', locale)}</Label>
               <Input type="date" value={datePresume} onChange={e => setDatePresume(e.target.value)} />
             </div>
             <label className="flex items-center gap-2">
               <Checkbox checked={grossesseMultiple} onCheckedChange={v => setGrossesseMultiple(!!v)} />
-              <span>Grossesse multiple (+2 semaines de congé)</span>
+              <span>{t('sarh.prot.lbl_multiple', locale)}</span>
             </label>
             <div>
-              <Label>URL certificat médical (optionnel)</Label>
+              <Label>{t('sarh.prot.lbl_certificat', locale)}</Label>
               <Input value={certificatUrl} onChange={e => setCertificatUrl(e.target.value)} placeholder="https://..." />
             </div>
             <div>
-              <Label>Commentaire (optionnel)</Label>
+              <Label>{t('sarh.prot.lbl_commentaire', locale)}</Label>
               <Textarea value={commentaire} onChange={e => setCommentaire(e.target.value)} rows={2} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialog(null)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setDialog(null)}>{t('sarh.prot.cancel', locale)}</Button>
             <Button onClick={declarerGrossesse} disabled={actionLoading} className="bg-pink-600 text-white">
               {actionLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Déclarer
+              {t('sarh.prot.declare', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -392,35 +392,35 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Baby className="w-5 h-5 text-pink-600" />
-              Enregistrer l&apos;accouchement
+              {t('sarh.prot.dlg_birth_title', locale)}
             </DialogTitle>
-            <DialogDescription>Déclenche le congé maternité + allocation 3 000 MUR au prochain bulletin.</DialogDescription>
+            <DialogDescription>{t('sarh.prot.dlg_birth_desc', locale)}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm">
             <div>
-              <Label>Date réelle d&apos;accouchement *</Label>
+              <Label>{t('sarh.prot.lbl_date_reelle', locale)}</Label>
               <Input type="date" value={dateReelle} onChange={e => setDateReelle(e.target.value)} />
             </div>
             <label className="flex items-center gap-2">
               <Checkbox checked={naissancePrematuree} onCheckedChange={v => setNaissancePrematuree(!!v)} />
-              <span>Naissance prématurée (+2 semaines)</span>
+              <span>{t('sarh.prot.lbl_premature', locale)}</span>
             </label>
             <label className="flex items-center gap-2">
               <Checkbox checked={mortinaissance} onCheckedChange={v => setMortinaissance(!!v)} />
-              <span className="text-red-700">Mortinaissance (pas d&apos;allocation)</span>
+              <span className="text-red-700">{t('sarh.prot.lbl_stillbirth', locale)}</span>
             </label>
             {mortinaissance && (
               <div className="bg-red-50 border border-red-200 rounded-md p-2 text-xs text-red-800 flex gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>L&apos;allocation naissance ne sera PAS versée. Le congé maternité reste dû selon la loi.</span>
+                <span>{t('sarh.prot.stillbirth_warning', locale)}</span>
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialog(null)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setDialog(null)}>{t('sarh.prot.cancel', locale)}</Button>
             <Button onClick={enregistrerAccouchement} disabled={actionLoading} className="bg-pink-600 text-white">
               {actionLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Enregistrer
+              {t('sarh.prot.record', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -431,11 +431,11 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="text-red-700">{t('srh.protection.cancel_pregnancy_q', locale)}</DialogTitle>
-            <DialogDescription>Action exceptionnelle. Motif documenté obligatoire.</DialogDescription>
+            <DialogDescription>{t('sarh.prot.dlg_cancel_desc', locale)}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm">
             <div>
-              <Label>Motif (requis, ≥ 3 caractères)</Label>
+              <Label>{t('sarh.prot.lbl_motif', locale)}</Label>
               <Textarea value={motifAnnulation} onChange={e => setMotifAnnulation(e.target.value)} rows={3} />
             </div>
           </div>
@@ -455,27 +455,27 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Baby className="w-5 h-5 text-blue-600" />
-              Déclarer une paternité
+              {t('sarh.prot.dlg_paternity_title', locale)}
             </DialogTitle>
             <DialogDescription>
-              WRA S.53 — 4 semaines de congé. Payées si l&apos;employé a 12 mois de service continu.
+              {t('sarh.prot.dlg_paternity_desc', locale)}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm">
             <div>
-              <Label>Date de naissance de l&apos;enfant *</Label>
+              <Label>{t('sarh.prot.lbl_date_naissance', locale)}</Label>
               <Input type="date" value={dateNaissanceEnfant} onChange={e => setDateNaissanceEnfant(e.target.value)} />
             </div>
             <div>
-              <Label>URL acte de naissance (optionnel)</Label>
+              <Label>{t('sarh.prot.lbl_acte_naissance', locale)}</Label>
               <Input value={acteNaissanceUrl} onChange={e => setActeNaissanceUrl(e.target.value)} placeholder="https://..." />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialog(null)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setDialog(null)}>{t('sarh.prot.cancel', locale)}</Button>
             <Button onClick={declarerPaternite} disabled={actionLoading} className="bg-blue-600 text-white">
               {actionLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Déclarer
+              {t('sarh.prot.declare', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>

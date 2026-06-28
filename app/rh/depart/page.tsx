@@ -28,7 +28,7 @@ const r2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100
 
 // POST le body au backend, récupère le Blob PDF, l'ouvre dans un nouvel
 // onglet. Permet d'envoyer le breakdown édité (impossible en GET).
-async function openPdfPost(url: string, body: any, filename: string) {
+async function openPdfPost(url: string, body: any, filename: string, locale: Locale) {
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -37,7 +37,7 @@ async function openPdfPost(url: string, body: any, filename: string) {
     })
     if (!res.ok) {
       const j = await res.json().catch(() => ({}))
-      alert(`Erreur : ${j.error || res.statusText}`)
+      alert(t('sarh.depart.err_prefix', locale).replace('{msg}', String(j.error || res.statusText)))
       return
     }
     const blob = await res.blob()
@@ -50,7 +50,7 @@ async function openPdfPost(url: string, body: any, filename: string) {
     }
     setTimeout(() => URL.revokeObjectURL(blobUrl), 30000)
   } catch (e: any) {
-    alert(`Erreur réseau : ${e?.message || e}`)
+    alert(t('sarh.depart.err_network_prefix', locale).replace('{msg}', String(e?.message || e)))
   }
 }
 
@@ -99,7 +99,7 @@ function DepartureForm({ societes, onCalculated, locale }: {
 
   const handleCalculer = async () => {
     if (!employeId || !dateDepart || !typeDepart) {
-      setError("Veuillez remplir tous les champs obligatoires")
+      setError(t('sarh.depart.err_fill_required', locale))
       return
     }
     setLoading(true)
@@ -111,10 +111,10 @@ function DepartureForm({ societes, onCalculated, locale }: {
         body: JSON.stringify({ action: "calculer_solde", employe_id: employeId, date_depart: dateDepart, type_depart: typeDepart }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Erreur")
+      if (!res.ok) throw new Error(data.error || t('sarh.depart.err_generic', locale))
       onCalculated(data.breakdown, { employe_id: employeId, date_depart: dateDepart, type_depart: typeDepart, raison_depart: raison })
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Erreur")
+      setError(e instanceof Error ? e.message : t('sarh.depart.err_generic', locale))
     } finally {
       setLoading(false)
     }
@@ -162,7 +162,7 @@ function DepartureForm({ societes, onCalculated, locale }: {
           <div>
             <Label>{t('rha.b.depart.lbl_type_req', locale)}</Label>
             <Select value={typeDepart} onValueChange={setTypeDepart}>
-              <SelectTrigger><SelectValue placeholder={t('rha.b.depart.loading_emps', locale).replace('Chargement', 'Choisir').replace('Loading', 'Choose')} /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('sarh.depart.choose_dots', locale)} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="demission">{t('rha.b.depart.type_demission', locale)}</SelectItem>
                 <SelectItem value="licenciement">{t('rha.b.depart.type_licenciement', locale)}</SelectItem>
@@ -187,7 +187,7 @@ function DepartureForm({ societes, onCalculated, locale }: {
           <Button
             variant="outline"
             onClick={async () => {
-              if (!employeId || !dateDepart) { setError("Employé et date requis"); return }
+              if (!employeId || !dateDepart) { setError(t('sarh.depart.err_emp_date_required', locale)); return }
               setLoading(true); setError(null)
               try {
                 const res = await fetch("/api/rh/depart", {
@@ -195,10 +195,10 @@ function DepartureForm({ societes, onCalculated, locale }: {
                   body: JSON.stringify({ action: "sortie_manuelle", employe_id: employeId, date_depart: dateDepart, type_depart: typeDepart || "demission", raison_depart: raison }),
                 })
                 const data = await res.json()
-                if (!res.ok) throw new Error(data.error || "Erreur")
-                alert(data.message || "Sortie enregistrée")
+                if (!res.ok) throw new Error(data.error || t('sarh.depart.err_generic', locale))
+                alert(data.message || t('sarh.depart.exit_recorded', locale))
                 setEmployeId(""); setDateDepart("")
-              } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erreur") }
+              } catch (e: unknown) { setError(e instanceof Error ? e.message : t('sarh.depart.err_generic', locale)) }
               finally { setLoading(false) }
             }}
             disabled={loading || !employeId || !dateDepart}
@@ -329,7 +329,7 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
           {t('rha.b.depart.settlement_for', locale)} {emp.prenom} {emp.nom}
         </CardTitle>
         <p className="text-white/70 text-sm">
-          {emp.poste || "—"} | Salaire base: {fmt(emp.salaire_base)} | Arrivée: {fmtDate(emp.date_arrivee)}
+          {emp.poste || "—"} | {t('sarh.depart.base_salary_label', locale)} {fmt(emp.salaire_base)} | {t('sarh.depart.arrival_label', locale)} {fmtDate(emp.date_arrivee)}
         </p>
       </CardHeader>
       <CardContent className="p-6 space-y-4">
@@ -350,7 +350,7 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
             className={`ml-auto ${editMode ? 'bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#C9A630]' : 'border-[#0B0F2E] text-[#0B0F2E]'}`}
           >
             <Edit2 className="w-3.5 h-3.5 mr-1.5" />
-            {editMode ? 'Verrouiller' : 'Éditer les montants'}
+            {editMode ? t('sarh.depart.lock', locale) : t('sarh.depart.edit_amounts', locale)}
           </Button>
         </div>
 
@@ -382,14 +382,14 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
               <TableCell className="font-medium">
                 {t('rha.b.depart.row_al_remain', locale)}
                 {breakdown.conges_al.restant < 0 && (
-                  <Badge variant="destructive" className="ml-2">Solde négatif</Badge>
+                  <Badge variant="destructive" className="ml-2">{t('sarh.depart.negative_balance', locale)}</Badge>
                 )}
               </TableCell>
               <TableCell className="text-center text-sm text-gray-500">
                 {breakdown.conges_al.restant.toFixed(2)} jours ({breakdown.conges_al.droit_prorata} acquis − {breakdown.conges_al.pris} pris) × {fmt(breakdown.conges_al.taux_journalier)}/j
                 {breakdown.conges_al.restant < 0 && (
                   <span className="block text-[10px] text-red-600 mt-0.5">
-                    WRA s.46 — déduction sur solde de tout compte
+                    {t('sarh.depart.wra_s46_deduction', locale)}
                   </span>
                 )}
               </TableCell>
@@ -431,13 +431,13 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
                 }
               >
                 <TableCell className="font-medium">
-                  Congés VL (WRA s.47 — 30j/5ans)
+                  {t('sarh.depart.vl_title', locale)}
                   {breakdown.conges_vl.restant < 0 && (
-                    <Badge variant="destructive" className="ml-2">Solde négatif</Badge>
+                    <Badge variant="destructive" className="ml-2">{t('sarh.depart.negative_balance', locale)}</Badge>
                   )}
                   {breakdown.conges_vl.droit === 0 && breakdown.conges_vl.restant >= 0 && (
                     <span className="block text-xs text-amber-600 mt-1">
-                      ⚠️ Non éligible : {breakdown.conges_vl.eligibility_status || 'inconnu'}
+                      {t('sarh.depart.vl_not_eligible', locale).replace('{status}', String(breakdown.conges_vl.eligibility_status || t('sarh.depart.unknown', locale)))}
                     </span>
                   )}
                 </TableCell>
@@ -453,7 +453,7 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
                     </>
                   ) : (
                     <span className="text-xs text-gray-500">
-                      Cycle : {breakdown.conges_vl.cycle_debut || 'n/a'} → {breakdown.conges_vl.cycle_fin || 'n/a'}
+                      {t('sarh.depart.cycle_label', locale)} {breakdown.conges_vl.cycle_debut || 'n/a'} → {breakdown.conges_vl.cycle_fin || 'n/a'}
                     </span>
                   )}
                 </TableCell>
@@ -468,22 +468,22 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
                       />
                     ) : fmt(breakdown.conges_vl.montant)
                   ) : (
-                    <span className="text-xs text-gray-400">— info —</span>
+                    <span className="text-xs text-gray-400">{t('sarh.depart.info_dash', locale)}</span>
                   )}
                 </TableCell>
               </TableRow>
             ) : (
               <TableRow className="bg-gray-50">
                 <TableCell className="font-medium">
-                  Congés VL (WRA s.47 — 30j/5ans)
+                  {t('sarh.depart.vl_title', locale)}
                   <span className="block text-xs text-amber-600 mt-1">
-                    ⚠️ VL non disponible — vérifier déploiement / mig 161
+                    {t('sarh.depart.vl_unavailable', locale)}
                   </span>
                 </TableCell>
                 <TableCell className="text-center text-xs text-gray-500">
-                  breakdown.conges_vl manquant
+                  {t('sarh.depart.vl_missing', locale)}
                 </TableCell>
-                <TableCell className="text-right text-xs text-gray-400">— info —</TableCell>
+                <TableCell className="text-right text-xs text-gray-400">{t('sarh.depart.info_dash', locale)}</TableCell>
               </TableRow>
             )}
 
@@ -521,7 +521,7 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
                 <TableCell className="font-medium">
                   {t('rha.b.depart.row_notice', locale)}
                   {formData.type_depart === 'licenciement_faute' && (
-                    <span className="block text-[10px] text-orange-700 mt-0.5">Préavis 1 mois (faute)</span>
+                    <span className="block text-[10px] text-orange-700 mt-0.5">{t('sarh.depart.notice_1month_fault', locale)}</span>
                   )}
                 </TableCell>
                 <TableCell className="text-center text-sm text-gray-500">
@@ -545,9 +545,9 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
                     <a
                       href={`/rh/severance?employe_id=${breakdown.employe_id}&date=${encodeURIComponent(breakdown?.date_depart || '')}`}
                       className="ml-2 text-[11px] underline text-indigo-700"
-                      title="Ouvrir le calculateur WRA S.70 avec pré-remplissage"
+                      title={t('sarh.depart.open_s70_calc_title', locale)}
                     >
-                      → calculateur S.70
+                      {t('sarh.depart.s70_calc_link', locale)}
                     </a>
                   )}
                 </TableCell>
@@ -572,12 +572,12 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
                         onChange={e => updateExtraLine(i, { libelle: e.target.value })}
                         rows={Math.max(2, (l.libelle || '').split('\n').length)}
                         className="text-sm min-h-[60px] resize-y"
-                        placeholder="Libellé (saute de ligne autorisé pour détailler)"
+                        placeholder={t('sarh.depart.label_ph_single', locale)}
                       />
                     : <span className="whitespace-pre-wrap">{l.libelle}</span>}
                   {l.note && <p className="text-[10px] text-gray-500 mt-0.5 whitespace-pre-wrap">{l.note}</p>}
                 </TableCell>
-                <TableCell className="text-center text-xs text-amber-700">Ajustement manuel</TableCell>
+                <TableCell className="text-center text-xs text-amber-700">{t('sarh.depart.manual_adjustment', locale)}</TableCell>
                 <TableCell className="text-right font-medium">
                   <div className="flex items-start justify-end gap-2">
                     {editMode
@@ -601,12 +601,12 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
                     value={newLibelle}
                     onChange={e => setNewLibelle(e.target.value)}
                     rows={Math.max(2, (newLibelle || '').split('\n').length)}
-                    placeholder={"Libellé multi-ligne autorisé\n(ex: Prime exceptionnelle\n— versée pour fidélité 2025)"}
+                    placeholder={t('sarh.depart.label_ph_multi', locale)}
                     className="text-sm min-h-[60px] resize-y"
                   />
                 </TableCell>
                 <TableCell className="text-center text-[11px] text-gray-500">
-                  Saisir un montant négatif pour une déduction
+                  {t('sarh.depart.negative_for_deduction', locale)}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-start justify-end gap-2">
@@ -657,7 +657,7 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
               variant="outline"
               onClick={() => openPdfPost('/api/rh/depart/certificat', {
                 employe_id: breakdown?.employe?.id, date_depart: formData.date_depart, type_depart: formData.type_depart,
-              }, `Certificat_${breakdown?.employe?.prenom}_${breakdown?.employe?.nom}.pdf`)}
+              }, `Certificat_${breakdown?.employe?.prenom}_${breakdown?.employe?.nom}.pdf`, locale)}
               className="border-purple-300 text-purple-700"
               type="button"
             >
@@ -668,7 +668,7 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
               onClick={() => openPdfPost('/api/rh/depart/solde-tout-compte', {
                 employe_id: breakdown?.employe?.id, date_depart: formData.date_depart, type_depart: formData.type_depart,
                 breakdown, raison_depart: formData.raison_depart,
-              }, `Solde_${breakdown?.employe?.prenom}_${breakdown?.employe?.nom}.pdf`)}
+              }, `Solde_${breakdown?.employe?.prenom}_${breakdown?.employe?.nom}.pdf`, locale)}
               className="border-emerald-300 text-emerald-700"
               type="button"
             >
@@ -678,7 +678,7 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
               variant="outline"
               onClick={() => openPdfPost('/api/rh/depart/attestation', {
                 employe_id: breakdown?.employe?.id, date_depart: formData.date_depart, type_depart: formData.type_depart,
-              }, `Attestation_${breakdown?.employe?.prenom}_${breakdown?.employe?.nom}.pdf`)}
+              }, `Attestation_${breakdown?.employe?.prenom}_${breakdown?.employe?.nom}.pdf`, locale)}
               className="border-blue-300 text-blue-700"
               type="button"
             >
@@ -712,11 +712,11 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
 }
 
 // ── Dialog : récupérer / envoyer les documents d'un départ confirmé ──
-const DOCS_CATALOG: Array<{ key: string; label: string; path: string; restrictTo?: string }> = [
-  { key: 'certificat',  label: 'Certificat de travail',     path: '/api/rh/depart/certificat' },
-  { key: 'attestation', label: 'Attestation fin contrat',   path: '/api/rh/depart/attestation' },
-  { key: 'solde',       label: 'Solde de tout compte',      path: '/api/rh/depart/solde-tout-compte' },
-  { key: 'workfare',    label: 'Déclaration Workfare TUB',  path: '/api/rh/depart/workfare', restrictTo: 'licenciement' },
+const DOCS_CATALOG: Array<{ key: string; labelKey: string; path: string; restrictTo?: string }> = [
+  { key: 'certificat',  labelKey: 'sarh.depart.doc_work_certificate',  path: '/api/rh/depart/certificat' },
+  { key: 'attestation', labelKey: 'sarh.depart.doc_end_attestation',   path: '/api/rh/depart/attestation' },
+  { key: 'solde',       labelKey: 'sarh.depart.doc_settlement',        path: '/api/rh/depart/solde-tout-compte' },
+  { key: 'workfare',    labelKey: 'sarh.depart.doc_workfare',          path: '/api/rh/depart/workfare', restrictTo: 'licenciement' },
 ]
 
 function DocumentsDialog({ depart, onClose }: { depart: any; onClose: () => void }) {
@@ -725,7 +725,7 @@ function DocumentsDialog({ depart, onClose }: { depart: any; onClose: () => void
   const [selected, setSelected] = useState<Set<string>>(new Set(availableDocs.map(d => d.key)))
   const [recipientEmail, setRecipientEmail] = useState(depart.email || depart.email_personnel || '')
   const [message, setMessage] = useState(
-    `Bonjour ${depart.prenom || ''},\n\nVous trouverez en pièces jointes les documents officiels relatifs à la fin de votre contrat de travail au sein de notre société.\n\nNous vous souhaitons une bonne continuation.\n\nCordialement.`
+    t('sarh.depart.email_body', locale).replace('{name}', String(depart.prenom || ''))
   )
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -744,8 +744,8 @@ function DocumentsDialog({ depart, onClose }: { depart: any; onClose: () => void
   }
 
   const sendEmail = async () => {
-    if (!recipientEmail) { setResult({ type: 'error', text: 'Saisis une adresse email.' }); return }
-    if (selected.size === 0) { setResult({ type: 'error', text: 'Sélectionne au moins un document.' }); return }
+    if (!recipientEmail) { setResult({ type: 'error', text: t('sarh.depart.enter_email', locale) }); return }
+    if (selected.size === 0) { setResult({ type: 'error', text: t('sarh.depart.select_one_doc', locale) }); return }
     setSending(true); setResult(null)
     try {
       const res = await fetch('/api/rh/depart/envoyer-docs', {
@@ -759,10 +759,10 @@ function DocumentsDialog({ depart, onClose }: { depart: any; onClose: () => void
         }),
       })
       const j = await res.json()
-      if (!res.ok) throw new Error(j.error || 'Erreur')
-      setResult({ type: 'success', text: `Email envoyé à ${j.recipient} avec ${j.sent_docs?.length || 0} document(s).` })
+      if (!res.ok) throw new Error(j.error || t('sarh.depart.err_generic', locale))
+      setResult({ type: 'success', text: t('sarh.depart.email_sent', locale).replace('{recipient}', String(j.recipient)).replace('{count}', String(j.sent_docs?.length || 0)) })
     } catch (e: any) {
-      setResult({ type: 'error', text: e?.message || 'Erreur' })
+      setResult({ type: 'error', text: e?.message || t('sarh.depart.err_generic', locale) })
     } finally {
       setSending(false)
     }
@@ -773,28 +773,27 @@ function DocumentsDialog({ depart, onClose }: { depart: any; onClose: () => void
       <DialogContent className="sm:max-w-2xl" aria-describedby="depart-docs-dialog-desc">
         <DialogHeader>
           <DialogTitle className="text-[#0B0F2E]">
-            Documents de fin de contrat — {depart.prenom} {depart.nom}
+            {t('sarh.depart.docs_dialog_title', locale)} {depart.prenom} {depart.nom}
           </DialogTitle>
           <DialogDescription id="depart-docs-dialog-desc">
-            Téléchargez les documents officiels (certificat, attestation, solde de tout compte)
-            ou envoyez-les par email à l'employé.
+            {t('sarh.depart.docs_dialog_desc', locale)}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div>
-            <p className="text-sm font-semibold mb-2 text-[#0B0F2E]">Sélection des documents</p>
+            <p className="text-sm font-semibold mb-2 text-[#0B0F2E]">{t('sarh.depart.docs_selection', locale)}</p>
             <div className="space-y-1">
               {availableDocs.map(d => (
                 <div key={d.key} className="flex items-center justify-between p-2 border rounded-lg hover:bg-gray-50">
                   <label className="flex items-center gap-2 flex-1 cursor-pointer">
                     <input type="checkbox" checked={selected.has(d.key)} onChange={() => toggle(d.key)} />
                     <FileText className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm">{d.label}</span>
+                    <span className="text-sm">{t(d.labelKey, locale)}</span>
                   </label>
-                  <Button size="sm" variant="ghost" onClick={() => downloadDoc(d.path, d.label)}
+                  <Button size="sm" variant="ghost" onClick={() => downloadDoc(d.path, t(d.labelKey, locale))}
                           className="text-xs text-blue-700 hover:bg-blue-50">
-                    <Download className="w-3.5 h-3.5 mr-1" /> Télécharger
+                    <Download className="w-3.5 h-3.5 mr-1" /> {t('sarh.depart.download', locale)}
                   </Button>
                 </div>
               ))}
@@ -802,18 +801,18 @@ function DocumentsDialog({ depart, onClose }: { depart: any; onClose: () => void
           </div>
 
           <div>
-            <Label className="text-sm">Destinataire (email)</Label>
+            <Label className="text-sm">{t('sarh.depart.recipient_email', locale)}</Label>
             <Input type="email" value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)}
                    placeholder="employe@example.com" />
             {!depart.email && !depart.email_personnel && (
               <p className="text-xs text-amber-700 mt-1">
-                ⚠ Aucun email enregistré sur la fiche employé — saisis l'adresse manuellement.
+                {t('sarh.depart.no_email_warning', locale)}
               </p>
             )}
           </div>
 
           <div>
-            <Label className="text-sm">Message (optionnel)</Label>
+            <Label className="text-sm">{t('sarh.depart.message_optional', locale)}</Label>
             <Textarea value={message} onChange={e => setMessage(e.target.value)} rows={5} />
           </div>
 
@@ -829,7 +828,7 @@ function DocumentsDialog({ depart, onClose }: { depart: any; onClose: () => void
           <Button onClick={sendEmail} disabled={sending || selected.size === 0 || !recipientEmail}
                   className="bg-[#D4AF37] hover:bg-[#C9A630] text-[#0B0F2E]">
             {sending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Mail className="w-4 h-4 mr-2" />}
-            Envoyer par email
+            {t('sarh.depart.send_by_email', locale)}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -857,7 +856,7 @@ function RecentDepartures({ refreshKey, onReintegrated, locale }: { refreshKey: 
   useEffect(() => { load() }, [refreshKey])
 
   const reintegrer = async (empId: string, nom: string) => {
-    if (!confirm(`Réintégrer ${nom} ? Cette action annulera le départ et remettra l'employé en statut actif.`)) return
+    if (!confirm(t('sarh.depart.confirm_reintegrate', locale).replace('{name}', String(nom)))) return
     setReintegratingId(empId)
     try {
       const res = await fetch("/api/rh/depart", {
@@ -866,11 +865,11 @@ function RecentDepartures({ refreshKey, onReintegrated, locale }: { refreshKey: 
         body: JSON.stringify({ action: "reintegrer", employe_id: empId }),
       })
       const data = await res.json()
-      if (!res.ok) { alert(data.error || "Erreur réintégration"); return }
-      alert(data.message || "Employé réintégré")
+      if (!res.ok) { alert(data.error || t('sarh.depart.err_reintegrate', locale)); return }
+      alert(data.message || t('sarh.depart.emp_reintegrated', locale))
       load()
       onReintegrated?.()
-    } catch { alert("Erreur réseau") }
+    } catch { alert(t('sarh.depart.err_network', locale)) }
     finally { setReintegratingId(null) }
   }
 
@@ -939,9 +938,9 @@ function RecentDepartures({ refreshKey, onReintegrated, locale }: { refreshKey: 
                           variant="outline"
                           className="text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
                           onClick={() => setDocsFor(d)}
-                          title="Récupérer ou envoyer les documents par email"
+                          title={t('sarh.depart.docs_btn_title', locale)}
                         >
-                          <FileText className="w-3 h-3 mr-1" /> Documents
+                          <FileText className="w-3 h-3 mr-1" /> {t('sarh.depart.documents', locale)}
                         </Button>
                         <Button
                           size="sm"
@@ -1063,14 +1062,14 @@ export default function DepartPage() {
           setBulletinComptabiliseModal({
             open: true,
             bulletin_id: data.bulletin_id,
-            message: data.error || "Bulletin déjà comptabilisé.",
+            message: data.error || t('sarh.depart.bulletin_already_posted_dot', locale),
           })
           return false
         }
       }
 
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Erreur")
+      if (!res.ok) throw new Error(data.error || t('sarh.depart.err_generic', locale))
       setConfirmResult(data)
       setBreakdown(null)
       setBreakdownAuto(null)
@@ -1078,7 +1077,7 @@ export default function DepartPage() {
       setRefreshKey(k => k + 1)
       return true
     } catch (e: unknown) {
-      notifyError("Confirmer le départ", e)
+      notifyError(t('sarh.depart.notify_confirm_departure', locale), e)
       return false
     } finally {
       setConfirming(false)
@@ -1094,7 +1093,7 @@ export default function DepartPage() {
     if (!bulletinComptabiliseModal.open) return
     const raison = raisonDecomptabilisation.trim()
     if (raison.length < 5) {
-      notifyError("Décomptabiliser", "Raison requise (5 caractères minimum).")
+      notifyError(t('sarh.depart.notify_unpost', locale), t('sarh.depart.reason_required_min5', locale))
       return
     }
     const bulletin_id = bulletinComptabiliseModal.bulletin_id
@@ -1107,10 +1106,10 @@ export default function DepartPage() {
       })
       if (!dec.ok) {
         const e = await dec.json().catch(() => ({}))
-        notifyError("Décomptabiliser", e?.error || `HTTP ${dec.status}`)
+        notifyError(t('sarh.depart.notify_unpost', locale), e?.error || `HTTP ${dec.status}`)
         return
       }
-      notifySuccess("Bulletin décomptabilisé")
+      notifySuccess(t('sarh.depart.bulletin_unposted', locale))
 
       // Fermer la modal + reset
       setBulletinComptabiliseModal({ open: false })
@@ -1118,9 +1117,9 @@ export default function DepartPage() {
 
       // Re-essai automatique de confirmer_depart.
       const ok = await confirmerDepart()
-      if (ok) notifySuccess("Départ confirmé")
+      if (ok) notifySuccess(t('sarh.depart.departure_confirmed', locale))
     } catch (e: unknown) {
-      notifyError("Décomptabiliser", e)
+      notifyError(t('sarh.depart.notify_unpost', locale), e)
     } finally {
       setDecomptabilisationLoading(false)
     }
@@ -1141,7 +1140,7 @@ export default function DepartPage() {
           <div>
             <p className="font-semibold text-green-800">{confirmResult.message}</p>
             {confirmResult.bulletin_id && (
-              <p className="text-sm text-green-600">Bulletin de solde créé (ID: {confirmResult.bulletin_id.slice(0, 8)}...)</p>
+              <p className="text-sm text-green-600">{t('sarh.depart.bulletin_created', locale).replace('{id}', String(confirmResult.bulletin_id.slice(0, 8)))}</p>
             )}
           </div>
           <Button variant="outline" size="sm" className="ml-auto" onClick={() => setConfirmResult(null)}>
@@ -1184,12 +1183,10 @@ export default function DepartPage() {
           <DialogHeader>
             <DialogTitle className="text-amber-700 flex items-center gap-2">
               <AlertTriangle className="w-5 h-5" />
-              Bulletin déjà comptabilisé
+              {t('sarh.depart.bulletin_already_posted', locale)}
             </DialogTitle>
             <DialogDescription id="depart-409-dialog-desc">
-              Le bulletin existant de cet employé est déjà comptabilisé en grand livre.
-              Pour reprendre le solde de tout compte, il faut d'abord décomptabiliser
-              le bulletin. L'opération sera tracée dans le journal d'audit.
+              {t('sarh.depart.bulletin_409_desc', locale)}
             </DialogDescription>
           </DialogHeader>
 
@@ -1200,20 +1197,20 @@ export default function DepartPage() {
 
             <div>
               <Label htmlFor="raison-decompta" className="text-sm">
-                Raison de la décomptabilisation
+                {t('sarh.depart.unpost_reason', locale)}
                 <span className="text-red-600 ml-1">*</span>
               </Label>
               <Textarea
                 id="raison-decompta"
                 value={raisonDecomptabilisation}
                 onChange={e => setRaisonDecomptabilisation(e.target.value)}
-                placeholder="Ex. : reprise du solde de tout compte suite à départ effectif (au moins 5 caractères)"
+                placeholder={t('sarh.depart.unpost_reason_ph', locale)}
                 rows={3}
                 disabled={decomptabilisationLoading}
               />
               <p className="text-[11px] text-gray-500 mt-1">
-                Minimum 5 caractères. Cette raison sera enregistrée dans le log d'audit
-                (table <code>bulletin_decomptabilisation_log</code>).
+                {t('sarh.depart.unpost_reason_hint', locale)}{' '}
+                (<code>bulletin_decomptabilisation_log</code>).
               </p>
             </div>
           </div>
@@ -1227,7 +1224,7 @@ export default function DepartPage() {
               }}
               disabled={decomptabilisationLoading}
             >
-              Annuler
+              {t('sarh.depart.cancel', locale)}
             </Button>
             <Button
               onClick={decomptabiliserEtRetry}
@@ -1237,7 +1234,7 @@ export default function DepartPage() {
               {decomptabilisationLoading
                 ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
                 : <Unlock className="w-4 h-4 mr-2" />}
-              Décomptabiliser puis reprendre
+              {t('sarh.depart.unpost_and_resume', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>

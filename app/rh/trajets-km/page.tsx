@@ -468,7 +468,7 @@ export default function TrajetsKmPage() {
                     {t('rhdiv.trajets.rate_bike', locale)}
                     <span
                       className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold cursor-help"
-                      title="Remboursement kilométrique pour les employés venant travailler à vélo. Optionnel — généralement 2 à 3 Rs/km. Mettre 0 pour désactiver."
+                      title={t('sarh.trj.bike_tooltip', locale)}
                     >
                       ?
                     </span>
@@ -485,7 +485,7 @@ export default function TrajetsKmPage() {
               <Input
                 type="number"
                 step="100"
-                placeholder="Ex: 5000"
+                placeholder={t('sarh.trj.ph_plafond', locale)}
                 value={plafondMensuel}
                 onChange={e => setPlafondMensuel(e.target.value)}
               />

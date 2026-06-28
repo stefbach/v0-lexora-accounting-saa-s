@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -84,6 +85,7 @@ function csvEscape(v: any): string {
 }
 
 export default function AuditDecomptabilisationPage() {
+  const locale = getLocale()
   const [entries, setEntries] = useState<LogEntry[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -118,7 +120,7 @@ export default function AuditDecomptabilisationPage() {
       setEntries(data.entries || [])
       setTotal(data.total || 0)
     } catch (e: any) {
-      setError(e?.message || "Erreur réseau")
+      setError(e?.message || t('sarh.audit.err_network', locale))
     } finally {
       setLoading(false)
     }
@@ -156,15 +158,15 @@ export default function AuditDecomptabilisationPage() {
 
   const exportCSV = () => {
     const headers = [
-      "Date",
-      "Auteur",
-      "Rôle auteur",
-      "Action",
-      "Employé",
-      "Période bulletin",
-      "Raison",
-      "Type correction",
-      "Écriture avant",
+      t('sarh.audit.csv_date', locale),
+      t('sarh.audit.csv_auteur', locale),
+      t('sarh.audit.csv_role_auteur', locale),
+      t('sarh.audit.csv_action', locale),
+      t('sarh.audit.csv_employe', locale),
+      t('sarh.audit.csv_periode', locale),
+      t('sarh.audit.csv_raison', locale),
+      t('sarh.audit.csv_type_correction', locale),
+      t('sarh.audit.csv_ecriture_avant', locale),
     ]
     const rows = filtered.map((e) => [
       fmtDateTime(e.created_at),
@@ -212,11 +214,10 @@ export default function AuditDecomptabilisationPage() {
               style={{ color: NAVY }}
             >
               <Shield className="w-6 h-6" style={{ color: GOLD }} />
-              Audit des décomptabilisations
+              {t('sarh.audit.title', locale)}
             </h1>
             <p className="text-gray-500 text-sm">
-              Journal WORM des bulletins de paie décomptabilisés (traçabilité
-              comptable et conformité).
+              {t('sarh.audit.subtitle', locale)}
             </p>
           </div>
           <Button
@@ -225,7 +226,7 @@ export default function AuditDecomptabilisationPage() {
             disabled={filtered.length === 0}
           >
             <Download className="w-4 h-4 mr-2" />
-            Export CSV
+            {t('sarh.audit.export_csv', locale)}
           </Button>
         </div>
 
@@ -234,7 +235,7 @@ export default function AuditDecomptabilisationPage() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3 text-sm font-medium text-gray-700">
               <Filter className="w-4 h-4" />
-              Filtres
+              {t('sarh.audit.filtres', locale)}
               {hasFilters && (
                 <Button
                   size="sm"
@@ -243,14 +244,14 @@ export default function AuditDecomptabilisationPage() {
                   onClick={resetFilters}
                 >
                   <X className="w-3 h-3 mr-1" />
-                  Réinitialiser
+                  {t('sarh.audit.reset', locale)}
                 </Button>
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div>
                 <Label htmlFor="filter-date-from" className="text-xs">
-                  Date de début
+                  {t('sarh.audit.date_debut', locale)}
                 </Label>
                 <Input
                   id="filter-date-from"
@@ -264,7 +265,7 @@ export default function AuditDecomptabilisationPage() {
               </div>
               <div>
                 <Label htmlFor="filter-date-to" className="text-xs">
-                  Date de fin
+                  {t('sarh.audit.date_fin', locale)}
                 </Label>
                 <Input
                   id="filter-date-to"
@@ -278,22 +279,22 @@ export default function AuditDecomptabilisationPage() {
               </div>
               <div>
                 <Label htmlFor="filter-employe" className="text-xs">
-                  Employé
+                  {t('sarh.audit.employe', locale)}
                 </Label>
                 <Input
                   id="filter-employe"
-                  placeholder="Nom ou prénom…"
+                  placeholder={t('sarh.audit.ph_employe', locale)}
                   value={employeFilter}
                   onChange={(e) => setEmployeFilter(e.target.value)}
                 />
               </div>
               <div>
                 <Label htmlFor="filter-auteur" className="text-xs">
-                  Auteur
+                  {t('sarh.audit.auteur', locale)}
                 </Label>
                 <Input
                   id="filter-auteur"
-                  placeholder="Nom ou email…"
+                  placeholder={t('sarh.audit.ph_auteur', locale)}
                   value={auteurFilter}
                   onChange={(e) => setAuteurFilter(e.target.value)}
                 />
@@ -317,19 +318,19 @@ export default function AuditDecomptabilisationPage() {
               <div className="py-12 text-center text-gray-400">
                 <Undo2 className="w-10 h-10 mx-auto mb-2 text-gray-300" />
                 <p className="text-sm">
-                  Aucune décomptabilisation enregistrée
-                  {hasFilters ? " pour ces filtres." : "."}
+                  {t('sarh.audit.empty', locale)}
+                  {hasFilters ? t('sarh.audit.empty_filtered_suffix', locale) : t('sarh.audit.empty_suffix', locale)}
                 </p>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-36">Date</TableHead>
-                    <TableHead>Auteur</TableHead>
-                    <TableHead>Bulletin</TableHead>
-                    <TableHead>Raison</TableHead>
-                    <TableHead className="w-28">État après</TableHead>
+                    <TableHead className="w-36">{t('sarh.audit.th_date', locale)}</TableHead>
+                    <TableHead>{t('sarh.audit.th_auteur', locale)}</TableHead>
+                    <TableHead>{t('sarh.audit.th_bulletin', locale)}</TableHead>
+                    <TableHead>{t('sarh.audit.th_raison', locale)}</TableHead>
+                    <TableHead className="w-28">{t('sarh.audit.th_etat_apres', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -363,14 +364,14 @@ export default function AuditDecomptabilisationPage() {
                             <div className="font-medium">
                               {emp
                                 ? `${emp.prenom} ${emp.nom}`
-                                : "(bulletin supprimé)"}
+                                : t('sarh.audit.bulletin_supprime', locale)}
                             </div>
                             <div className="text-gray-500 capitalize">
                               {fmtPeriode(e.bulletin?.periode)}
                             </div>
                             {e.metadata?.type_correction && (
                               <div className="text-[10px] text-gray-400 mt-0.5">
-                                Type : {e.metadata.type_correction}
+                                {t('sarh.audit.type_prefix', locale).replace('{x}', String(e.metadata.type_correction))}
                               </div>
                             )}
                           </div>
@@ -379,7 +380,7 @@ export default function AuditDecomptabilisationPage() {
                           <span className="line-clamp-3 whitespace-pre-wrap">
                             {e.raison || (
                               <span className="text-gray-400 italic">
-                                (aucune)
+                                {t('sarh.audit.aucune', locale)}
                               </span>
                             )}
                           </span>
@@ -387,11 +388,11 @@ export default function AuditDecomptabilisationPage() {
                         <TableCell>
                           {e.metadata?.requires_admin_approval ? (
                             <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-[10px]">
-                              À valider admin
+                              {t('sarh.audit.badge_valider_admin', locale)}
                             </Badge>
                           ) : (
                             <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px]">
-                              Décomptabilisé
+                              {t('sarh.audit.badge_decomptabilise', locale)}
                             </Badge>
                           )}
                         </TableCell>
@@ -408,7 +409,7 @@ export default function AuditDecomptabilisationPage() {
         {!loading && total > 0 && (
           <div className="flex items-center justify-between text-sm text-gray-600">
             <span>
-              {pageStart}–{pageEnd} sur {total}
+              {t('sarh.audit.pagination', locale).replace('{a}', String(pageStart)).replace('{b}', String(pageEnd)).replace('{total}', String(total))}
             </span>
             <div className="flex gap-2">
               <Button
@@ -418,7 +419,7 @@ export default function AuditDecomptabilisationPage() {
                 onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
               >
                 <ChevronLeft className="w-4 h-4" />
-                Précédent
+                {t('sarh.audit.prev', locale)}
               </Button>
               <Button
                 variant="outline"
@@ -426,7 +427,7 @@ export default function AuditDecomptabilisationPage() {
                 disabled={!canNext}
                 onClick={() => setOffset(offset + PAGE_SIZE)}
               >
-                Suivant
+                {t('sarh.audit.next', locale)}
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </div>

@@ -176,12 +176,12 @@ export default function FraisKmPage() {
     // toast en cas d'échec (RLS rejet silencieux), il croyait que le tarif
     // était sauvegardé alors que l'API renvoyait 403.
     if (societe === "all") {
-      notifyError("Tarif km", "Sélectionnez une société avant de modifier le tarif")
+      notifyError(t('sarh.fkm.tarif_km', locale), t('sarh.fkm.select_societe_first', locale))
       return
     }
     const tarifNum = parseFloat(newTarif)
     if (!tarifNum || tarifNum <= 0) {
-      notifyError("Tarif km", "Tarif invalide")
+      notifyError(t('sarh.fkm.tarif_km', locale), t('sarh.fkm.tarif_invalide', locale))
       return
     }
     setSavingTarif(true)
@@ -193,15 +193,15 @@ export default function FraisKmPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        notifyError("Sauvegarde tarif km", data.error || `HTTP ${res.status}`)
+        notifyError(t('sarh.fkm.save_tarif_km', locale), data.error || `HTTP ${res.status}`)
         return
       }
       setTarif(tarifNum)
       setEditingTarif(false)
-      notifySuccess(`✅ Tarif km mis à jour : ${tarifNum} MUR/km`)
+      notifySuccess(t('sarh.fkm.tarif_updated', locale).replace('{n}', String(tarifNum)))
       await load()
     } catch (e: unknown) {
-      notifyError("Erreur réseau", e)
+      notifyError(t('sarh.fkm.network_error', locale), e)
     } finally {
       setSavingTarif(false)
     }
@@ -246,14 +246,14 @@ export default function FraisKmPage() {
         })
         const data = await res.json().catch(() => ({}))
         if (!res.ok) {
-          notifyError("Modifier frais km", data.error || `HTTP ${res.status}`)
+          notifyError(t('sarh.fkm.edit_frais_km', locale), data.error || `HTTP ${res.status}`)
           return
         }
         setDialogOpen(false)
         await load()
-        notifySuccess("✅ Frais kilométriques mis à jour")
+        notifySuccess(t('sarh.fkm.frais_updated', locale))
       } catch (e: unknown) {
-        notifyError("Erreur réseau", e)
+        notifyError(t('sarh.fkm.network_error', locale), e)
       } finally {
         setSaving(false)
       }
@@ -284,19 +284,19 @@ export default function FraisKmPage() {
       if (!res.ok) {
         const code = data.code ? ` [${data.code}]` : ""
         const msg = data.code === "42P01"
-          ? "Table trajets absente — appliquer migration 429"
+          ? t('sarh.fkm.table_absent_429', locale)
           : data.code === "42501"
-          ? "Permissions insuffisantes (RLS)"
+          ? t('sarh.fkm.rls_insufficient', locale)
           : (data.details || data.error || `HTTP ${res.status}`)
-        notifyError(`Ajouter trajet${code}`, msg)
+        notifyError(`${t('sarh.fkm.add_trajet', locale)}${code}`, msg)
         return
       }
       setDialogOpen(false)
       await load()
-      const fallbackHint = data.fallback ? " (mode dégradé)" : ""
-      notifySuccess(`✅ Trajet ajouté${fallbackHint}${data.km_total ? ` — total mois : ${data.km_total} km` : ""}`)
+      const fallbackHint = data.fallback ? t('sarh.fkm.degraded_mode', locale) : ""
+      notifySuccess(`${t('sarh.fkm.trajet_added_prefix', locale)}${fallbackHint}${data.km_total ? t('sarh.fkm.trajet_added_total', locale).replace('{n}', String(data.km_total)) : ""}`)
     } catch (e: unknown) {
-      notifyError("Erreur réseau", e)
+      notifyError(t('sarh.fkm.network_error', locale), e)
     } finally {
       setSaving(false)
     }
@@ -311,13 +311,13 @@ export default function FraisKmPage() {
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        notifyError("Approuver frais km", d.error || `HTTP ${res.status}`)
+        notifyError(t('sarh.fkm.approve_frais_km', locale), d.error || `HTTP ${res.status}`)
         return
       }
       await load()
-      notifySuccess("✅ Frais kilométriques approuvés")
+      notifySuccess(t('sarh.fkm.frais_approved', locale))
     } catch (e: unknown) {
-      notifyError("Erreur réseau", e)
+      notifyError(t('sarh.fkm.network_error', locale), e)
     }
   }
 
@@ -333,13 +333,13 @@ export default function FraisKmPage() {
       const res = await fetch(`/api/rh/frais-km?${params}`)
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        notifyError('Trajets km', data.error || `HTTP ${res.status}`)
+        notifyError(t('sarh.fkm.trajets_km', locale), data.error || `HTTP ${res.status}`)
         setTrajets([])
         return
       }
       setTrajets(data.trajets || [])
     } catch (e: unknown) {
-      notifyError('Erreur réseau', e)
+      notifyError(t('sarh.fkm.network_error', locale), e)
       setTrajets([])
     } finally {
       setLoadingTrajets(false)
@@ -366,7 +366,7 @@ export default function FraisKmPage() {
     if (!trajetsEmploye) return
     const kmNum = parseFloat(newTrajetKm)
     if (!kmNum || kmNum <= 0) {
-      notifyError('Trajet', 'Km invalide')
+      notifyError(t('sarh.fkm.trajet', locale), t('sarh.fkm.km_invalide', locale))
       return
     }
     // Date obligatoire : si l'utilisateur a vidé le champ, on retombe sur la
@@ -375,7 +375,7 @@ export default function FraisKmPage() {
     // mais on garde la garde côté JS pour les navigateurs anciens / paste.
     const effectiveDate = newTrajetDate || getDefaultTrajetDate(periode)
     if (effectiveDate > todayISO()) {
-      notifyError('Trajet', 'La date du trajet ne peut pas être dans le futur')
+      notifyError(t('sarh.fkm.trajet', locale), t('sarh.fkm.date_future', locale))
       return
     }
     setAddingTrajet(true)
@@ -411,13 +411,13 @@ export default function FraisKmPage() {
         const details = (data as { details?: string; error?: string; hint?: string })
         const msg =
           code === '42P01'
-            ? 'Table trajets absente — la migration 426/428 doit être appliquée en prod'
+            ? t('sarh.fkm.table_absent_426', locale)
             : code === '42501'
-            ? 'Permissions insuffisantes pour ajouter un trajet (RLS)'
+            ? t('sarh.fkm.rls_insufficient_add', locale)
             : code === '23505'
-            ? 'Trajet en doublon (contrainte d\'unicité)'
+            ? t('sarh.fkm.trajet_duplicate', locale)
             : (details.details || details.error || details.hint || `HTTP ${res.status}`)
-        notifyError('Ajouter trajet', msg)
+        notifyError(t('sarh.fkm.add_trajet', locale), msg)
         console.error('[addTrajet] error:', data)
         return
       }
@@ -426,10 +426,10 @@ export default function FraisKmPage() {
       // l'utilisateur. Le trajet est sauvé mais l'agrégat est dans
       // frais_km_mois, pas le détail trajet par trajet.
       if ((data as { fallback?: boolean }).fallback) {
-        notifySuccess('Trajet ajouté (mode dégradé — agrégé sur le mois)')
+        notifySuccess(t('sarh.fkm.trajet_added_degraded', locale))
         console.warn('[addTrajet] FALLBACK actif :', (data as { warning?: string }).warning)
       } else {
-        notifySuccess('Trajet ajouté')
+        notifySuccess(t('sarh.fkm.trajet_added', locale))
       }
       // Reset : on remet la date à la valeur par défaut (pas "" qui laisserait
       // le champ vide et obligerait l'utilisateur à le re-cliquer pour le
@@ -443,7 +443,7 @@ export default function FraisKmPage() {
       await loadTrajets(trajetsEmploye.employe_id, periode)
       await load()
     } catch (e: unknown) {
-      notifyError('Erreur réseau', e)
+      notifyError(t('sarh.fkm.network_error', locale), e)
     } finally {
       setAddingTrajet(false)
     }
@@ -458,21 +458,21 @@ export default function FraisKmPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        notifyError('Validation trajet', data.error || `HTTP ${res.status}`)
+        notifyError(t('sarh.fkm.validation_trajet', locale), data.error || `HTTP ${res.status}`)
         return
       }
-      notifySuccess(statut === 'valide' ? 'Trajet validé' : 'Trajet rejeté')
+      notifySuccess(statut === 'valide' ? t('sarh.fkm.trajet_validated', locale) : t('sarh.fkm.trajet_rejected', locale))
       if (trajetsEmploye) {
         await loadTrajets(trajetsEmploye.employe_id, periode)
       }
       await load()
     } catch (e: unknown) {
-      notifyError('Erreur réseau', e)
+      notifyError(t('sarh.fkm.network_error', locale), e)
     }
   }
 
   const deleteTrajet = async (id: string) => {
-    if (!window.confirm('Supprimer ce trajet ?')) return
+    if (!window.confirm(t('sarh.fkm.confirm_delete', locale))) return
     try {
       const res = await fetch('/api/rh/frais-km', {
         method: 'POST',
@@ -481,16 +481,16 @@ export default function FraisKmPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        notifyError('Suppression trajet', data.error || `HTTP ${res.status}`)
+        notifyError(t('sarh.fkm.delete_trajet', locale), data.error || `HTTP ${res.status}`)
         return
       }
-      notifySuccess('Trajet supprimé')
+      notifySuccess(t('sarh.fkm.trajet_deleted', locale))
       if (trajetsEmploye) {
         await loadTrajets(trajetsEmploye.employe_id, periode)
       }
       await load()
     } catch (e: unknown) {
-      notifyError('Erreur réseau', e)
+      notifyError(t('sarh.fkm.network_error', locale), e)
     }
   }
 
@@ -657,9 +657,9 @@ export default function FraisKmPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => openTrajetsDialog(f)}
-                            title="Détail des trajets du mois"
+                            title={t('sarh.fkm.detail_trajets_tooltip', locale)}
                           >
-                            <MapPin className="h-3 w-3 mr-1" /> Détail trajets
+                            <MapPin className="h-3 w-3 mr-1" /> {t('sarh.fkm.detail_trajets_btn', locale)}
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => openEditDialog(f)} disabled={f.statut === "approuve"}>
                             <Edit2 className="h-3 w-3" />
@@ -712,7 +712,7 @@ export default function FraisKmPage() {
             {!editingFrais && (
               <div className="rounded border-2 p-3" style={{ borderColor: GOLD, backgroundColor: "#FFFDF5" }}>
                 <Label htmlFor="form-date-trajet" className="font-semibold" style={{ color: "#B91C1C" }}>
-                  📅 Date du trajet *
+                  {t('sarh.fkm.date_trajet_label', locale)}
                 </Label>
                 <Input
                   id="form-date-trajet"
@@ -724,7 +724,7 @@ export default function FraisKmPage() {
                   className="mt-1"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Date du déplacement (dans la période {periode})
+                  {t('sarh.fkm.date_deplacement_hint', locale).replace('{periode}', periode)}
                 </p>
               </div>
             )}
@@ -736,19 +736,19 @@ export default function FraisKmPage() {
                 min="0"
                 value={formKm}
                 onChange={e => setFormKm(e.target.value)}
-                placeholder="Ex: 150"
+                placeholder={t('sarh.fkm.ph_km_150', locale)}
                 className="mt-1"
               />
             </div>
             {!editingFrais && (
               <div>
-                <Label htmlFor="form-motif">Motif (optionnel)</Label>
+                <Label htmlFor="form-motif">{t('sarh.fkm.motif_optional', locale)}</Label>
                 <Input
                   id="form-motif"
                   type="text"
                   value={formMotif}
                   onChange={e => setFormMotif(e.target.value)}
-                  placeholder="Ex: Visite client, Réunion partenaire"
+                  placeholder={t('sarh.fkm.ph_motif_visite', locale)}
                   className="mt-1"
                 />
               </div>
@@ -780,7 +780,7 @@ export default function FraisKmPage() {
           <DialogHeader>
             <DialogTitle style={{ color: NAVY }}>
               <MapPin className="inline h-4 w-4 mr-1" />
-              Détail des trajets — {trajetsEmploye?.employe_prenom} {trajetsEmploye?.employe_nom} ({periode})
+              {t('sarh.fkm.detail_trajets_title', locale).replace('{prenom}', trajetsEmploye?.employe_prenom ?? '').replace('{nom}', trajetsEmploye?.employe_nom ?? '').replace('{periode}', periode)}
             </DialogTitle>
           </DialogHeader>
 
@@ -802,7 +802,7 @@ export default function FraisKmPage() {
                 style={{ borderColor: GOLD, backgroundColor: '#FFFDF5' }}
               >
                 <Label htmlFor="date_trajet" className="text-sm font-semibold" style={{ color: NAVY }}>
-                  📅 Date du trajet <span className="text-red-600">*</span>
+                  {t('sarh.fkm.date_trajet_label2', locale)} <span className="text-red-600">*</span>
                 </Label>
                 <Input
                   id="date_trajet"
@@ -814,52 +814,52 @@ export default function FraisKmPage() {
                   className="w-full text-base"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Date à laquelle le trajet a été effectué (mois courant : <strong>{periode}</strong>).
+                  {t('sarh.fkm.date_effectue_hint_pre', locale)} <strong>{periode}</strong>{t('sarh.fkm.date_effectue_hint_post', locale)}
                 </p>
                 {newTrajetDate && !newTrajetDate.startsWith(periode) && (
                   <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1">
-                    ⚠️ Cette date n&apos;appartient pas au mois sélectionné ({periode}). Le trajet sera enregistré sur la période <strong>{periode}</strong>.
+                    {t('sarh.fkm.date_warning_pre', locale).replace('{periode}', periode)} <strong>{periode}</strong>{t('sarh.fkm.date_warning_post', locale)}
                   </p>
                 )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">Motif</Label>
+                  <Label className="text-xs">{t('sarh.fkm.motif', locale)}</Label>
                   <Input
                     value={newTrajetMotif}
                     onChange={e => setNewTrajetMotif(e.target.value)}
-                    placeholder="Ex: Client X, formation, partenaire"
+                    placeholder={t('sarh.fkm.ph_motif_client', locale)}
                     className="mt-1"
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Départ (adresse)</Label>
+                  <Label className="text-xs">{t('sarh.fkm.depart_adresse', locale)}</Label>
                   <Input
                     value={newTrajetDepart}
                     onChange={e => setNewTrajetDepart(e.target.value)}
-                    placeholder="Adresse de départ"
+                    placeholder={t('sarh.fkm.ph_depart', locale)}
                     className="mt-1"
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Arrivée (adresse)</Label>
+                  <Label className="text-xs">{t('sarh.fkm.arrivee_adresse', locale)}</Label>
                   <Input
                     value={newTrajetArrivee}
                     onChange={e => setNewTrajetArrivee(e.target.value)}
-                    placeholder="Adresse d'arrivée"
+                    placeholder={t('sarh.fkm.ph_arrivee', locale)}
                     className="mt-1"
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Km</Label>
+                  <Label className="text-xs">{t('sarh.fkm.km', locale)}</Label>
                   <Input
                     type="number"
                     step="0.1"
                     min="0"
                     value={newTrajetKm}
                     onChange={e => setNewTrajetKm(e.target.value)}
-                    placeholder="Ex: 35"
+                    placeholder={t('sarh.fkm.ph_km_35', locale)}
                     className="mt-1"
                   />
                 </div>
@@ -870,7 +870,7 @@ export default function FraisKmPage() {
                       checked={newTrajetAR}
                       onChange={e => setNewTrajetAR(e.target.checked)}
                     />
-                    Aller-retour (× 2)
+                    {t('sarh.fkm.aller_retour', locale)}
                   </label>
                 </div>
               </div>
@@ -891,7 +891,7 @@ export default function FraisKmPage() {
                 className="text-white w-full"
               >
                 {addingTrajet ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-1" />}
-                Ajouter le trajet
+                {t('sarh.fkm.add_trajet_btn', locale)}
               </Button>
             </CardContent>
           </Card>
@@ -902,15 +902,15 @@ export default function FraisKmPage() {
           {debugMode && (
             <div className="mt-4 rounded-md border border-red-300 bg-red-50 p-3 text-xs">
               <p className="font-semibold text-red-800 mb-2">
-                🐞 Panel debug (?debug=1)
+                {t('sarh.fkm.debug_panel', locale)}
               </p>
-              <p className="font-semibold text-red-700">Dernière requête :</p>
+              <p className="font-semibold text-red-700">{t('sarh.fkm.last_request', locale)}</p>
               <pre className="bg-white border rounded p-2 overflow-x-auto whitespace-pre-wrap break-all">
-                {lastRequest ? JSON.stringify(lastRequest, null, 2) : '— aucune —'}
+                {lastRequest ? JSON.stringify(lastRequest, null, 2) : t('sarh.fkm.none', locale)}
               </pre>
-              <p className="font-semibold text-red-700 mt-2">Dernière réponse :</p>
+              <p className="font-semibold text-red-700 mt-2">{t('sarh.fkm.last_response', locale)}</p>
               <pre className="bg-white border rounded p-2 overflow-x-auto whitespace-pre-wrap break-all">
-                {lastResponse ? JSON.stringify(lastResponse, null, 2) : '— aucune —'}
+                {lastResponse ? JSON.stringify(lastResponse, null, 2) : t('sarh.fkm.none', locale)}
               </pre>
               {trajetsEmploye && (
                 <p className="mt-2">
@@ -920,7 +920,7 @@ export default function FraisKmPage() {
                     target="_blank"
                     rel="noreferrer"
                   >
-                    → Appeler /api/rh/frais-km?action=debug_access
+                    {t('sarh.fkm.call_debug_access', locale)}
                   </a>
                 </p>
               )}
@@ -930,7 +930,7 @@ export default function FraisKmPage() {
           {/* Liste des trajets existants */}
           <div className="mt-4">
             <h3 className="font-semibold text-sm mb-2" style={{ color: NAVY }}>
-              Trajets enregistrés ({trajets.length})
+              {t('sarh.fkm.trajets_registered', locale).replace('{n}', String(trajets.length))}
             </h3>
             {loadingTrajets ? (
               <div className="flex justify-center py-6">
@@ -938,19 +938,19 @@ export default function FraisKmPage() {
               </div>
             ) : trajets.length === 0 ? (
               <p className="text-center text-gray-400 py-6 text-sm">
-                Aucun trajet pour ce mois.
+                {t('sarh.fkm.no_trajet_month', locale)}
               </p>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Motif</TableHead>
-                      <TableHead>Trajet</TableHead>
-                      <TableHead className="text-right">Km</TableHead>
-                      <TableHead>Statut</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>{t('sarh.fkm.th_date', locale)}</TableHead>
+                      <TableHead>{t('sarh.fkm.th_motif', locale)}</TableHead>
+                      <TableHead>{t('sarh.fkm.th_trajet', locale)}</TableHead>
+                      <TableHead className="text-right">{t('sarh.fkm.th_km', locale)}</TableHead>
+                      <TableHead>{t('sarh.fkm.th_statut', locale)}</TableHead>
+                      <TableHead className="text-right">{t('sarh.fkm.th_actions', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -981,7 +981,7 @@ export default function FraisKmPage() {
                                   variant="outline"
                                   className="text-green-700 border-green-300 hover:bg-green-50"
                                   onClick={() => validateTrajet(tr.id, 'valide')}
-                                  title="Valider"
+                                  title={t('sarh.fkm.validate', locale)}
                                 >
                                   <CheckCircle className="h-3 w-3" />
                                 </Button>
@@ -990,7 +990,7 @@ export default function FraisKmPage() {
                                   variant="outline"
                                   className="text-red-700 border-red-300 hover:bg-red-50"
                                   onClick={() => validateTrajet(tr.id, 'rejete')}
-                                  title="Rejeter"
+                                  title={t('sarh.fkm.reject', locale)}
                                 >
                                   <XCircle className="h-3 w-3" />
                                 </Button>
@@ -1001,7 +1001,7 @@ export default function FraisKmPage() {
                               variant="ghost"
                               className="text-red-600 hover:bg-red-50"
                               onClick={() => deleteTrajet(tr.id)}
-                              title="Supprimer"
+                              title={t('sarh.fkm.delete', locale)}
                             >
                               <Trash2 className="h-3 w-3" />
                             </Button>
