@@ -72,8 +72,8 @@ export default function SalairesComptaPage() {
 
   async function handleComptabiliser(periodeYM: string, nbACompta: number, key: string) {
     if (!societeId) return
-    if (nbACompta === 0) { alert("Aucun bulletin à comptabiliser pour ce mois (tous déjà comptabilisés ou non validés)."); return }
-    if (!confirm(`Comptabiliser les bulletins validés de ${periodeYM} (paie mensuelle + 13ème mois du mois) ? Les écritures OD-PAIE seront générées au grand livre.`)) return
+    if (nbACompta === 0) { alert(t('hr.salaires_compta.none_to_account', locale)); return }
+    if (!confirm(t('hr.salaires_compta.confirm_account', locale).replace('{periode}', periodeYM))) return
     setBusy(key)
     try {
       const res = await fetch("/api/rh/paie/comptabiliser", {
@@ -83,10 +83,10 @@ export default function SalairesComptaPage() {
       })
       const data = await res.json()
       if (!res.ok) { alert("Erreur : " + (data.error || res.status)); return }
-      alert(`✅ ${data.nb_bulletins} bulletin(s) comptabilisé(s) — ${data.nb_ecritures} écriture(s) générée(s)`)
+      alert(t('hr.salaires_compta.accounted_ok', locale).replace('{nb_bulletins}', String(data.nb_bulletins)).replace('{nb_ecritures}', String(data.nb_ecritures)))
       await load()
     } catch (e: any) {
-      alert("Erreur réseau : " + (e?.message || ''))
+      alert(t('hr.salaires_compta.network_err', locale) + (e?.message || ''))
     } finally {
       setBusy('')
     }
@@ -182,7 +182,7 @@ export default function SalairesComptaPage() {
                       <tr key={p.key} className={`hover:bg-gray-50 ${p.is_eoy ? 'bg-purple-50/40' : ''}`}>
                         <td className="px-3 py-2 font-medium capitalize">
                           {mois}
-                          {p.is_eoy && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-300">🎁 13ème mois</span>}
+                          {p.is_eoy && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-300">{t('hr.salaires_compta.eoy_badge', locale)}</span>}
                         </td>
                         <td className="px-2 py-2 text-center">{p.nb}</td>
                         <td className="px-2 py-2 text-right font-mono text-blue-600">{p.basic > 0 ? fmt(p.basic) : "—"}</td>
@@ -205,12 +205,12 @@ export default function SalairesComptaPage() {
                               disabled={busy === p.key}
                               onClick={() => handleComptabiliser(p.periode, p.nb_valide_a_comptabiliser, p.key)}
                               className="px-2 py-1 text-[11px] rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
-                              title={`${p.nb_valide_a_comptabiliser} bulletin(s) à comptabiliser`}
+                              title={t('hr.salaires_compta.to_account_title', locale).replace('{n}', String(p.nb_valide_a_comptabiliser))}
                             >
                               {busy === p.key ? '…' : `Comptabiliser (${p.nb_valide_a_comptabiliser})`}
                             </button>
                           ) : p.nb_comptabilise === p.nb ? (
-                            <span className="text-[11px] text-emerald-700">✅ comptabilisé</span>
+                            <span className="text-[11px] text-emerald-700">{t('hr.salaires_compta.accounted_badge', locale)}</span>
                           ) : (
                             <span className="text-[11px] text-gray-400">—</span>
                           )}
