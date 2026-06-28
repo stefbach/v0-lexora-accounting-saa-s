@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Upload, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react"
 import * as XLSX from "xlsx"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Props {
   open: boolean
@@ -90,7 +91,7 @@ function parseBoolean(v: any): boolean {
   return true // défaut TVA applicable
 }
 
-function parseRow(row: Record<string, any>, idx: number): ParsedRow {
+function parseRow(row: Record<string, any>, idx: number, locale: ReturnType<typeof getLocale>): ParsedRow {
   const description = String(pickValue(row, COL_ALIASES.description) || '').trim()
   const prixRaw = pickValue(row, COL_ALIASES.prix_unitaire)
   // Tolère "1,500.00", "1 500", "1500.00"
@@ -110,13 +111,13 @@ function parseRow(row: Record<string, any>, idx: number): ParsedRow {
   let error: string | null = null
   let valid = true
   if (!description) {
-    error = 'description manquante'
+    error = t('scp.cat_err_desc_missing', locale)
     valid = false
   } else if (description.length > 500) {
-    error = 'description trop longue (max 500)'
+    error = t('scp.cat_err_desc_too_long', locale)
     valid = false
   } else if (!Number.isFinite(prix_unitaire) || prix_unitaire < 0) {
-    error = 'prix invalide'
+    error = t('scp.cat_err_price_invalid', locale)
     valid = false
   }
 
@@ -137,6 +138,7 @@ export function CatalogueImportDialog({ open, onOpenChange, societeId, onImporte
   const fileRef = useRef<HTMLInputElement>(null)
   const [rows, setRows] = useState<ParsedRow[]>([])
   const [parsing, setParsing] = useState(false)
+  const locale = getLocale()
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<{ inserted: number; skipped: number } | null>(null)
@@ -162,14 +164,14 @@ export function CatalogueImportDialog({ open, onOpenChange, societeId, onImporte
       const buf = await file.arrayBuffer()
       const wb = XLSX.read(buf, { type: 'array' })
       const sheet = wb.Sheets[wb.SheetNames[0]]
-      if (!sheet) throw new Error('Fichier vide')
+      if (!sheet) throw new Error(t('scp.cat_err_file_empty', locale))
       const data = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: null })
-      if (data.length === 0) throw new Error('Aucune ligne trouvée dans le fichier')
-      if (data.length > 500) throw new Error(`Max 500 lignes par import. Reçu : ${data.length}`)
-      const parsed = data.map((row, i) => parseRow(row, i))
+      if (data.length === 0) throw new Error(t('scp.cat_err_no_rows', locale))
+      if (data.length > 500) throw new Error(t('scp.cat_err_max_rows', locale).replace('{n}', String(data.length)))
+      const parsed = data.map((row, i) => parseRow(row, i, locale))
       setRows(parsed)
     } catch (e: any) {
-      setError(e?.message || 'Erreur de parsing du fichier')
+      setError(e?.message || t('scp.cat_err_parsing', locale))
       setRows([])
     } finally {
       setParsing(false)
@@ -180,7 +182,7 @@ export function CatalogueImportDialog({ open, onOpenChange, societeId, onImporte
     if (!societeId) return
     const validRows = rows.filter(r => r._valid)
     if (validRows.length === 0) {
-      setError('Aucune ligne valide à importer')
+      setError(t('scp.cat_err_no_valid', locale))
       return
     }
     setImporting(true)
@@ -201,11 +203,11 @@ export function CatalogueImportDialog({ open, onOpenChange, societeId, onImporte
         body: JSON.stringify({ societe_id: societeId, items }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || 'Erreur import')
+      if (!res.ok) throw new Error(data?.error || t('scp.cat_err_import', locale))
       setResult({ inserted: data.inserted || 0, skipped: rows.length - (data.inserted || 0) })
       onImported?.(data.inserted || 0)
     } catch (e: any) {
-      setError(e?.message || 'Erreur import')
+      setError(e?.message || t('scp.cat_err_import', locale))
     } finally {
       setImporting(false)
     }
@@ -234,11 +236,10 @@ export function CatalogueImportDialog({ open, onOpenChange, societeId, onImporte
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="w-5 h-5 text-indigo-600" />
-            Importer un catalogue
+            {t('scp.cat_title', locale)}
           </DialogTitle>
           <DialogDescription>
-            Importez en masse vos services/produits depuis un fichier CSV ou Excel.
-            Max 500 lignes par import.
+            {t('scp.cat_desc', locale)}
           </DialogDescription>
         </DialogHeader>
 
@@ -250,8 +251,8 @@ export function CatalogueImportDialog({ open, onOpenChange, societeId, onImporte
               onClick={() => fileRef.current?.click()}
             >
               <Upload className="w-10 h-10 mx-auto text-indigo-600 mb-2" />
-              <p className="text-sm font-medium">Cliquez ou déposez votre fichier ici</p>
-              <p className="text-xs text-gray-500 mt-1">Formats acceptés : .csv, .xlsx, .xls</p>
+              <p className="text-sm font-medium">{t('scp.cat_drop_here', locale)}</p>
+              <p className="text-xs text-gray-500 mt-1">{t('scp.cat_formats', locale)}</p>
               <input
                 ref={fileRef}
                 type="file"
@@ -265,14 +266,14 @@ export function CatalogueImportDialog({ open, onOpenChange, societeId, onImporte
             </div>
 
             <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900 space-y-1">
-              <p className="font-semibold">📋 Colonnes attendues (variantes acceptées) :</p>
+              <p className="font-semibold">{t('scp.cat_cols_expected', locale)}</p>
               <ul className="list-disc list-inside space-y-0.5">
-                <li><strong>description</strong> · nom · libellé · service · produit (obligatoire)</li>
-                <li><strong>prix_unitaire</strong> · prix · tarif · montant (obligatoire, ≥ 0)</li>
-                <li><strong>devise</strong> · currency : MUR / EUR / USD / GBP (défaut MUR)</li>
-                <li><strong>tva_applicable</strong> · vat : oui/non/true/false (défaut oui)</li>
-                <li><strong>categorie</strong> · catégorie · family</li>
-                <li><strong>unite</strong> · unit : Heure, Jour, Mois, Forfait, Unité…</li>
+                <li><strong>description</strong> · {t('scp.cat_col_desc_rest', locale)}</li>
+                <li><strong>prix_unitaire</strong> · {t('scp.cat_col_price_rest', locale)}</li>
+                <li><strong>devise</strong> · {t('scp.cat_col_devise_rest', locale)}</li>
+                <li><strong>tva_applicable</strong> · {t('scp.cat_col_tva_rest', locale)}</li>
+                <li><strong>categorie</strong> · {t('scp.cat_col_cat_rest', locale)}</li>
+                <li><strong>unite</strong> · {t('scp.cat_col_unit_rest', locale)}</li>
               </ul>
             </div>
 
@@ -284,11 +285,11 @@ export function CatalogueImportDialog({ open, onOpenChange, societeId, onImporte
               className="w-full"
             >
               <Download className="w-4 h-4 mr-1.5" />
-              Télécharger un fichier modèle .xlsx
+              {t('scp.cat_download_template', locale)}
             </Button>
 
             {parsing && (
-              <p className="text-sm text-center text-gray-500"><Loader2 className="inline w-4 h-4 animate-spin mr-1" />Analyse du fichier…</p>
+              <p className="text-sm text-center text-gray-500"><Loader2 className="inline w-4 h-4 animate-spin mr-1" />{t('scp.cat_analyzing', locale)}</p>
             )}
             {error && (
               <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
@@ -304,28 +305,28 @@ export function CatalogueImportDialog({ open, onOpenChange, societeId, onImporte
             <div className="flex items-center gap-3 mb-2 text-sm">
               <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300">
                 <CheckCircle2 className="w-3 h-3 mr-1" />
-                {stats.valid} valides
+                {stats.valid} {t('scp.cat_valides', locale)}
               </Badge>
               {stats.invalid > 0 && (
                 <Badge className="bg-red-100 text-red-700 border-red-300">
                   <AlertTriangle className="w-3 h-3 mr-1" />
-                  {stats.invalid} erreurs
+                  {stats.invalid} {t('scp.cat_erreurs', locale)}
                 </Badge>
               )}
-              <span className="text-xs text-gray-500">{stats.total} lignes au total</span>
+              <span className="text-xs text-gray-500">{stats.total} {t('scp.cat_lines_total', locale)}</span>
             </div>
 
             <div className="flex-1 overflow-auto border rounded-md">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>
-                    <th className="text-left p-2 w-10">Ligne</th>
-                    <th className="text-left p-2">Description</th>
-                    <th className="text-right p-2 w-24">Prix</th>
-                    <th className="text-left p-2 w-16">Devise</th>
-                    <th className="text-left p-2 w-16">TVA</th>
-                    <th className="text-left p-2">Catégorie</th>
-                    <th className="text-left p-2">Unité</th>
+                    <th className="text-left p-2 w-10">{t('scp.cat_col_line', locale)}</th>
+                    <th className="text-left p-2">{t('scp.cat_col_description', locale)}</th>
+                    <th className="text-right p-2 w-24">{t('scp.cat_col_price', locale)}</th>
+                    <th className="text-left p-2 w-16">{t('scp.cat_col_devise', locale)}</th>
+                    <th className="text-left p-2 w-16">{t('scp.cat_col_tva', locale)}</th>
+                    <th className="text-left p-2">{t('scp.cat_col_categorie', locale)}</th>
+                    <th className="text-left p-2">{t('scp.cat_col_unite', locale)}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -333,7 +334,7 @@ export function CatalogueImportDialog({ open, onOpenChange, societeId, onImporte
                     <tr key={i} className={`border-t ${r._valid ? '' : 'bg-red-50'}`}>
                       <td className="p-2 text-gray-400">L{r._rowIndex}</td>
                       <td className="p-2">
-                        {r.description || <span className="text-red-600 italic">manquant</span>}
+                        {r.description || <span className="text-red-600 italic">{t('scp.cat_missing', locale)}</span>}
                         {r._error && <div className="text-[10px] text-red-600 mt-0.5">⚠ {r._error}</div>}
                       </td>
                       <td className="p-2 text-right font-mono">{r.prix_unitaire.toFixed(2)}</td>
@@ -359,10 +360,10 @@ export function CatalogueImportDialog({ open, onOpenChange, societeId, onImporte
         {result && (
           <div className="text-center py-8">
             <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500 mb-3" />
-            <p className="text-lg font-semibold text-emerald-700">Import terminé</p>
+            <p className="text-lg font-semibold text-emerald-700">{t('scp.cat_import_done', locale)}</p>
             <p className="text-sm text-gray-600 mt-1">
-              <strong>{result.inserted}</strong> article(s) ajouté(s) au catalogue.
-              {result.skipped > 0 && <> {result.skipped} ligne(s) ignorée(s).</>}
+              <strong>{result.inserted}</strong> {t('scp.cat_articles_added', locale)}
+              {result.skipped > 0 && <> {t('scp.cat_lines_skipped', locale).replace('{n}', String(result.skipped))}</>}
             </p>
           </div>
         )}
@@ -370,12 +371,12 @@ export function CatalogueImportDialog({ open, onOpenChange, societeId, onImporte
         <DialogFooter className="flex justify-between sm:justify-between gap-2">
           {rows.length > 0 && !result && (
             <Button variant="ghost" onClick={reset}>
-              Changer de fichier
+              {t('scp.cat_change_file', locale)}
             </Button>
           )}
           <div className="flex gap-2 ml-auto">
             <Button variant="outline" onClick={() => { reset(); onOpenChange(false) }}>
-              {result ? 'Fermer' : 'Annuler'}
+              {result ? t('cui.close', locale) : t('cui.cancel', locale)}
             </Button>
             {rows.length > 0 && !result && (
               <Button
@@ -384,7 +385,7 @@ export function CatalogueImportDialog({ open, onOpenChange, societeId, onImporte
                 className="bg-indigo-600 hover:bg-indigo-700 text-white"
               >
                 {importing && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Importer {stats.valid} article(s)
+                {t('scp.cat_import_n', locale).replace('{n}', String(stats.valid))}
               </Button>
             )}
           </div>
