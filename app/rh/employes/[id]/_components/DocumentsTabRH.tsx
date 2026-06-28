@@ -75,39 +75,39 @@ export function DocumentsTabRH({ employeId, employeNom }: Props) {
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
             <FolderOpen className="w-4 h-4 text-[#4191FF]" />
-            Documents RH
+            {t('sarh.docrh.title', locale)}
             <span className="text-xs font-normal text-gray-500">
-              · {recus} reçu{recus > 1 ? 's' : ''} · {envoyes} envoyé{envoyes > 1 ? 's' : ''}
-              {nonLus > 0 && <span className="ml-2 text-red-600 font-semibold">· {nonLus} non lu{nonLus > 1 ? 's' : ''}</span>}
+              · {recus} {recus > 1 ? t('sarh.docrh.received_pl', locale) : t('sarh.docrh.received_sg', locale)} · {envoyes} {envoyes > 1 ? t('sarh.docrh.sent_pl', locale) : t('sarh.docrh.sent_sg', locale)}
+              {nonLus > 0 && <span className="ml-2 text-red-600 font-semibold">· {nonLus} {nonLus > 1 ? t('sarh.docrh.unread_pl', locale) : t('sarh.docrh.unread_sg', locale)}</span>}
             </span>
           </CardTitle>
           <Button size="sm" className="text-white" style={{ backgroundColor: NAVY }} onClick={() => setUploadOpen(true)}>
-            <Upload className="h-3.5 w-3.5 mr-1.5" /> Transmettre un document
+            <Upload className="h-3.5 w-3.5 mr-1.5" /> {t('sarh.docrh.transmit', locale)}
           </Button>
         </CardHeader>
         <CardContent className="space-y-3">
           {/* Filtres */}
           <div className="flex flex-wrap gap-2 items-center">
             <Select value={filtreCat} onValueChange={setFiltreCat}>
-              <SelectTrigger className="w-48 h-8"><SelectValue placeholder="Catégorie" /></SelectTrigger>
+              <SelectTrigger className="w-48 h-8"><SelectValue placeholder={t('sarh.docrh.categorie', locale)} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Toutes catégories</SelectItem>
+                <SelectItem value="all">{t('sarh.docrh.all_categories', locale)}</SelectItem>
                 {(Object.keys(CATEGORIE_LABELS) as DocumentCategorie[]).map(k => (
                   <SelectItem key={k} value={k}>{CATEGORIE_LABELS[k]}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={filtreDir} onValueChange={setFiltreDir}>
-              <SelectTrigger className="w-48 h-8"><SelectValue placeholder="Direction" /></SelectTrigger>
+              <SelectTrigger className="w-48 h-8"><SelectValue placeholder={t('sarh.docrh.direction', locale)} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Toutes directions</SelectItem>
-                <SelectItem value="employe_vers_rh">Reçu de l&apos;employé</SelectItem>
-                <SelectItem value="rh_vers_employe">Envoyé à l&apos;employé</SelectItem>
+                <SelectItem value="all">{t('sarh.docrh.all_directions', locale)}</SelectItem>
+                <SelectItem value="employe_vers_rh">{t('sarh.docrh.received_from', locale)}</SelectItem>
+                <SelectItem value="rh_vers_employe">{t('sarh.docrh.sent_to', locale)}</SelectItem>
               </SelectContent>
             </Select>
             <div className="flex items-center gap-2 ml-2">
               <Switch checked={showArchive} onCheckedChange={setShowArchive} />
-              <span className="text-xs text-gray-600">Inclure les archivés</span>
+              <span className="text-xs text-gray-600">{t('sarh.docrh.include_archived', locale)}</span>
             </div>
           </div>
 
@@ -121,13 +121,13 @@ export function DocumentsTabRH({ employeId, employeNom }: Props) {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10"></TableHead>
-                    <TableHead>Fichier</TableHead>
-                    <TableHead>Catégorie</TableHead>
-                    <TableHead>Direction</TableHead>
-                    <TableHead>Taille</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t('sarh.docrh.th_fichier', locale)}</TableHead>
+                    <TableHead>{t('sarh.docrh.th_categorie', locale)}</TableHead>
+                    <TableHead>{t('sarh.docrh.th_direction', locale)}</TableHead>
+                    <TableHead>{t('sarh.docrh.th_taille', locale)}</TableHead>
+                    <TableHead>{t('sarh.docrh.th_date', locale)}</TableHead>
+                    <TableHead>{t('sarh.docrh.th_statut', locale)}</TableHead>
+                    <TableHead className="text-right">{t('sarh.docrh.th_actions', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -154,6 +154,7 @@ export function DocumentsTabRH({ employeId, employeNom }: Props) {
 
 // ─── Ligne table ─────────────────────────────────────────────────────
 function DocRhTableRow({ doc, onChange }: { doc: DocumentRH; onChange: () => void }) {
+  const locale = getLocale()
   const [loading, setLoading] = useState(false)
   const isIncoming = doc.direction === 'employe_vers_rh'
   const nonLu = isIncoming && !doc.vu_par_destinataire_le
@@ -163,7 +164,7 @@ function DocRhTableRow({ doc, onChange }: { doc: DocumentRH; onChange: () => voi
     try {
       const res = await fetch(`/api/documents-rh/${doc.id}/url`)
       const d = await res.json()
-      if (!res.ok || !d?.url) { alert(d?.error || 'URL indisponible'); return }
+      if (!res.ok || !d?.url) { alert(d?.error || t('sarh.docrh.url_unavailable', locale)); return }
       window.open(d.url, '_blank')
     } finally { setLoading(false) }
   }
@@ -202,13 +203,13 @@ function DocRhTableRow({ doc, onChange }: { doc: DocumentRH; onChange: () => voi
   }
 
   const supprimer = async () => {
-    if (!confirm(`Supprimer définitivement "${doc.nom_fichier_original}" ?\nCette action est irréversible (Storage + DB).`)) return
+    if (!confirm(t('sarh.docrh.confirm_delete', locale).replace('{name}', doc.nom_fichier_original))) return
     setLoading(true)
     try {
       const res = await fetch(`/api/documents-rh/${doc.id}`, { method: 'DELETE' })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        alert(err?.error || 'Échec suppression')
+        alert(err?.error || t('sarh.docrh.delete_failed', locale))
       }
       onChange()
     } finally { setLoading(false) }
@@ -228,9 +229,9 @@ function DocRhTableRow({ doc, onChange }: { doc: DocumentRH; onChange: () => voi
       </TableCell>
       <TableCell className="text-xs">
         {isIncoming ? (
-          <span className="flex items-center gap-1 text-blue-700"><Inbox className="h-3 w-3" /> Reçu</span>
+          <span className="flex items-center gap-1 text-blue-700"><Inbox className="h-3 w-3" /> {t('sarh.docrh.received_sg', locale)}</span>
         ) : (
-          <span className="flex items-center gap-1 text-emerald-700"><Send className="h-3 w-3" /> Envoyé</span>
+          <span className="flex items-center gap-1 text-emerald-700"><Send className="h-3 w-3" /> {t('sarh.docrh.sent_sg', locale)}</span>
         )}
       </TableCell>
       <TableCell className="text-xs">{formaterTaille(doc.taille_octets)}</TableCell>
@@ -239,33 +240,33 @@ function DocRhTableRow({ doc, onChange }: { doc: DocumentRH; onChange: () => voi
       </TableCell>
       <TableCell className="text-xs">
         <div className="flex flex-wrap gap-1">
-          {doc.archive && <Badge className="bg-gray-100 text-gray-600 text-[10px]">Archivé</Badge>}
-          {doc.confidentiel_rh_only && <Badge className="bg-purple-100 text-purple-700 text-[10px]"><EyeOff className="h-2.5 w-2.5 mr-0.5" /> RH only</Badge>}
-          {nonLu && <Badge className="bg-red-500 text-white text-[10px]">À lire</Badge>}
+          {doc.archive && <Badge className="bg-gray-100 text-gray-600 text-[10px]">{t('sarh.docrh.badge_archived', locale)}</Badge>}
+          {doc.confidentiel_rh_only && <Badge className="bg-purple-100 text-purple-700 text-[10px]"><EyeOff className="h-2.5 w-2.5 mr-0.5" /> {t('sarh.docrh.badge_rh_only', locale)}</Badge>}
+          {nonLu && <Badge className="bg-red-500 text-white text-[10px]">{t('sarh.docrh.badge_to_read', locale)}</Badge>}
           {!nonLu && isIncoming && doc.vu_par_destinataire_le && (
-            <Badge className="bg-emerald-100 text-emerald-700 text-[10px]"><CheckCircle2 className="h-2.5 w-2.5 mr-0.5" /> Lu</Badge>
+            <Badge className="bg-emerald-100 text-emerald-700 text-[10px]"><CheckCircle2 className="h-2.5 w-2.5 mr-0.5" /> {t('sarh.docrh.badge_read', locale)}</Badge>
           )}
         </div>
       </TableCell>
       <TableCell className="text-right">
         <div className="flex gap-1 justify-end">
-          <Button size="sm" variant="ghost" onClick={voir} disabled={loading} title="Voir">
+          <Button size="sm" variant="ghost" onClick={voir} disabled={loading} title={t('sarh.docrh.tip_view', locale)}>
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
           </Button>
           {nonLu && (
-            <Button size="sm" variant="ghost" onClick={markVu} disabled={loading} title="Marquer comme lu">
+            <Button size="sm" variant="ghost" onClick={markVu} disabled={loading} title={t('sarh.docrh.tip_mark_read', locale)}>
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
             </Button>
           )}
           <Button size="sm" variant="ghost" onClick={toggleConfidentiel} disabled={loading}
-            title={doc.confidentiel_rh_only ? 'Rendre visible au salarié' : 'Cacher au salarié (RH only)'}>
+            title={doc.confidentiel_rh_only ? t('sarh.docrh.tip_make_visible', locale) : t('sarh.docrh.tip_hide', locale)}>
             <EyeOff className={`h-3.5 w-3.5 ${doc.confidentiel_rh_only ? 'text-purple-600' : 'text-gray-400'}`} />
           </Button>
           <Button size="sm" variant="ghost" onClick={toggleArchive} disabled={loading}
-            title={doc.archive ? 'Désarchiver' : 'Archiver'}>
+            title={doc.archive ? t('sarh.docrh.tip_unarchive', locale) : t('sarh.docrh.tip_archive', locale)}>
             <Archive className={`h-3.5 w-3.5 ${doc.archive ? 'text-amber-600' : 'text-gray-400'}`} />
           </Button>
-          <Button size="sm" variant="ghost" onClick={supprimer} disabled={loading} title="Supprimer">
+          <Button size="sm" variant="ghost" onClick={supprimer} disabled={loading} title={t('sarh.docrh.tip_delete', locale)}>
             <Trash2 className="h-3.5 w-3.5 text-red-500" />
           </Button>
         </div>
@@ -284,6 +285,7 @@ function UploadModalRH({
   employeNom?: string
   onUploaded: () => void
 }) {
+  const locale = getLocale()
   const [file, setFile] = useState<File | null>(null)
   const [categorie, setCategorie] = useState<DocumentCategorie>('contrat')
   const [description, setDescription] = useState("")
@@ -297,9 +299,9 @@ function UploadModalRH({
 
   const submit = async () => {
     setErreur(null)
-    if (!file) { setErreur('Aucun fichier sélectionné.'); return }
+    if (!file) { setErreur(t('sarh.docrh.err_no_file', locale)); return }
     const v = validerFichier(file)
-    if (!v.valide) { setErreur(v.erreur || 'Fichier invalide'); return }
+    if (!v.valide) { setErreur(v.erreur || t('sarh.docrh.err_invalid_file', locale)); return }
 
     setSubmitting(true)
     try {
@@ -314,14 +316,14 @@ function UploadModalRH({
       const res = await fetch('/api/documents-rh/upload', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) {
-        setErreur(data?.error || `Erreur ${res.status}`)
+        setErreur(data?.error || t('sarh.docrh.err_status', locale).replace('{status}', String(res.status)))
         return
       }
       onUploaded()
       reset()
       onOpenChange(false)
     } catch (e: any) {
-      setErreur(e?.message || 'Erreur réseau')
+      setErreur(e?.message || t('sarh.docrh.err_network', locale))
     } finally {
       setSubmitting(false)
     }
@@ -332,44 +334,44 @@ function UploadModalRH({
       <DialogContent>
         <DialogHeader>
           <DialogTitle style={{ color: NAVY }}>
-            Transmettre un document{employeNom ? ` à ${employeNom}` : ''}
+            {employeNom ? t('sarh.docrh.dlg_title_to', locale).replace('{name}', employeNom) : t('sarh.docrh.dlg_title', locale)}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2">
           <div>
-            <Label className="text-sm">Catégorie</Label>
+            <Label className="text-sm">{t('sarh.docrh.categorie', locale)}</Label>
             <Select value={categorie} onValueChange={v => setCategorie(v as DocumentCategorie)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="contrat">Contrat</SelectItem>
-                <SelectItem value="avenant">Avenant</SelectItem>
-                <SelectItem value="attestation_employeur">Attestation employeur</SelectItem>
-                <SelectItem value="fiche_paie">Fiche de paie</SelectItem>
-                <SelectItem value="note_rh">Note RH</SelectItem>
-                <SelectItem value="autre">Autre</SelectItem>
+                <SelectItem value="contrat">{t('sarh.docrh.cat_contrat', locale)}</SelectItem>
+                <SelectItem value="avenant">{t('sarh.docrh.cat_avenant', locale)}</SelectItem>
+                <SelectItem value="attestation_employeur">{t('sarh.docrh.cat_attestation', locale)}</SelectItem>
+                <SelectItem value="fiche_paie">{t('sarh.docrh.cat_fiche_paie', locale)}</SelectItem>
+                <SelectItem value="note_rh">{t('sarh.docrh.cat_note_rh', locale)}</SelectItem>
+                <SelectItem value="autre">{t('sarh.docrh.cat_autre', locale)}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label className="text-sm">Description (optionnel)</Label>
-            <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Ex: Avenant salaire avril 2026" />
+            <Label className="text-sm">{t('sarh.docrh.lbl_description', locale)}</Label>
+            <Input value={description} onChange={e => setDescription(e.target.value)} placeholder={t('sarh.docrh.ph_description', locale)} />
           </div>
           <div className="flex items-center gap-2 p-2 rounded-md bg-purple-50 border border-purple-200">
             <Switch checked={confidentiel} onCheckedChange={setConfidentiel} />
             <div>
-              <p className="text-sm font-medium text-purple-900">Confidentiel RH only</p>
-              <p className="text-[11px] text-purple-700">Le document ne sera PAS visible par le salarié (note interne).</p>
+              <p className="text-sm font-medium text-purple-900">{t('sarh.docrh.confidentiel', locale)}</p>
+              <p className="text-[11px] text-purple-700">{t('sarh.docrh.confidentiel_hint', locale)}</p>
             </div>
           </div>
           <div>
-            <Label className="text-sm">Fichier</Label>
+            <Label className="text-sm">{t('sarh.docrh.lbl_fichier', locale)}</Label>
             <Input
               type="file"
               accept={EXTENSIONS_LISIBLES.replace(/\s/g, '')}
               onChange={e => setFile(e.target.files?.[0] || null)}
             />
             <p className="text-[11px] text-gray-400 mt-1">
-              Max {formaterTaille(TAILLE_MAX_OCTETS)}. Acceptés : {EXTENSIONS_LISIBLES}.
+              {t('sarh.docrh.max_accepted', locale).replace('{x}', formaterTaille(TAILLE_MAX_OCTETS)).replace('{y}', EXTENSIONS_LISIBLES)}
             </p>
             {file && (
               <p className="text-xs text-gray-600 mt-1">
@@ -385,10 +387,10 @@ function UploadModalRH({
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('sarh.docrh.cancel', locale)}</Button>
           <Button onClick={submit} disabled={submitting || !file} style={{ backgroundColor: GOLD, color: NAVY }}>
             {submitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            Transmettre
+            {t('sarh.docrh.transmit_btn', locale)}
           </Button>
         </DialogFooter>
       </DialogContent>

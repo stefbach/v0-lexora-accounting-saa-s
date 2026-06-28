@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Calendar, Video, MapPin, CheckCircle2, ChevronLeft, Loader2 } from 'lucide-react'
+import { t, getLocale } from '@/lib/i18n'
 
 type PublicSettings = {
   slug: string
@@ -47,20 +48,21 @@ function nextNDays(n: number): string[] {
   return out
 }
 
-const DAY_NAMES = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
-const MONTH_NAMES = ['Janv', 'Févr', 'Mars', 'Avril', 'Mai', 'Juin', 'Juil', 'Août', 'Sept', 'Oct', 'Nov', 'Déc']
+const DAY_KEYS = ['samsc.rdv_day_dim', 'samsc.rdv_day_lun', 'samsc.rdv_day_mar', 'samsc.rdv_day_mer', 'samsc.rdv_day_jeu', 'samsc.rdv_day_ven', 'samsc.rdv_day_sam']
+const MONTH_KEYS = ['samsc.rdv_month_jan', 'samsc.rdv_month_feb', 'samsc.rdv_month_mar', 'samsc.rdv_month_apr', 'samsc.rdv_month_may', 'samsc.rdv_month_jun', 'samsc.rdv_month_jul', 'samsc.rdv_month_aug', 'samsc.rdv_month_sep', 'samsc.rdv_month_oct', 'samsc.rdv_month_nov', 'samsc.rdv_month_dec']
 
-function formatDateBadge(dateStr: string): { day: number; month: string; weekday: string } {
+function formatDateBadge(dateStr: string, locale: ReturnType<typeof getLocale>): { day: number; month: string; weekday: string } {
   const [y, m, d] = dateStr.split('-').map(Number)
   const date = new Date(Date.UTC(y, m - 1, d, 12, 0))
   return {
     day: d,
-    month: MONTH_NAMES[m - 1],
-    weekday: DAY_NAMES[date.getUTCDay()],
+    month: t(MONTH_KEYS[m - 1], locale),
+    weekday: t(DAY_KEYS[date.getUTCDay()], locale),
   }
 }
 
 export default function RdvPage() {
+  const locale = getLocale()
   const [settings, setSettings] = useState<PublicSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -85,8 +87,8 @@ export default function RdvPage() {
         setSettings(j.settings)
         if (j.settings.location_online_enabled) setLocationType('online')
         else if (j.settings.location_in_person_enabled) setLocationType('in_person')
-      } else setError(j?.error || 'Page introuvable')
-    }).catch(() => setError('Erreur de chargement')).finally(() => setLoading(false))
+      } else setError(j?.error || t('samsc.rdv_page_not_found', locale))
+    }).catch(() => setError(t('samsc.rdv_load_error', locale))).finally(() => setLoading(false))
 
     // Récupère le client_id Google pour Sign in with Google (auto-fill)
     fetch('/api/rdv/google-config').then(r => r.json()).then(j => {
@@ -172,11 +174,11 @@ export default function RdvPage() {
         }),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j?.error || 'Erreur')
+      if (!r.ok) throw new Error(j?.error || t('samsc.rdv_generic_error', locale))
       setSuccess({ meet_url: j.meet_url || null })
       setStep(4)
     } catch (e: any) {
-      setError(e?.message || 'Erreur')
+      setError(e?.message || t('samsc.rdv_generic_error', locale))
     } finally {
       setSubmitting(false)
     }
@@ -223,11 +225,11 @@ export default function RdvPage() {
         {step === 1 && (
           <Card className="bg-white/95 backdrop-blur">
             <CardContent className="p-6 md:p-8">
-              <h2 className="text-xl font-semibold mb-1" style={{ color: NAVY }}>Choisis une date</h2>
-              <p className="text-sm text-slate-500 mb-6">Démo de <strong>{settings.duration_minutes} minutes</strong> · fuseau horaire Maurice</p>
+              <h2 className="text-xl font-semibold mb-1" style={{ color: NAVY }}>{t('samsc.rdv_choose_date', locale)}</h2>
+              <p className="text-sm text-slate-500 mb-6">{t('samsc.rdv_demo_duration', locale).split('{min}')[0]}<strong>{settings.duration_minutes}</strong>{t('samsc.rdv_demo_duration', locale).split('{min}')[1]}</p>
               <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 gap-2">
                 {dates.map(d => {
-                  const b = formatDateBadge(d)
+                  const b = formatDateBadge(d, locale)
                   const isSelected = selectedDate === d
                   return (
                     <button
@@ -251,14 +253,14 @@ export default function RdvPage() {
           <Card className="bg-white/95 backdrop-blur">
             <CardContent className="p-6 md:p-8">
               <button onClick={() => setStep(1)} className="text-sm text-slate-500 hover:text-slate-700 mb-4 inline-flex items-center gap-1">
-                <ChevronLeft className="h-4 w-4" /> Changer de date
+                <ChevronLeft className="h-4 w-4" /> {t('samsc.rdv_change_date', locale)}
               </button>
-              <h2 className="text-xl font-semibold mb-1" style={{ color: NAVY }}>Choisis un créneau</h2>
-              <p className="text-sm text-slate-500 mb-6">{formatDateBadge(selectedDate).weekday} {formatDateBadge(selectedDate).day} {formatDateBadge(selectedDate).month}</p>
+              <h2 className="text-xl font-semibold mb-1" style={{ color: NAVY }}>{t('samsc.rdv_choose_slot', locale)}</h2>
+              <p className="text-sm text-slate-500 mb-6">{formatDateBadge(selectedDate, locale).weekday} {formatDateBadge(selectedDate, locale).day} {formatDateBadge(selectedDate, locale).month}</p>
               {slotsLoading ? (
-                <div className="flex items-center justify-center py-8 text-slate-500"><Loader2 className="animate-spin h-5 w-5 mr-2" /> Chargement…</div>
+                <div className="flex items-center justify-center py-8 text-slate-500"><Loader2 className="animate-spin h-5 w-5 mr-2" /> {t('samsc.rdv_loading', locale)}</div>
               ) : slots.length === 0 ? (
-                <p className="text-center py-8 text-slate-500">Aucun créneau disponible ce jour-là. Essaie une autre date.</p>
+                <p className="text-center py-8 text-slate-500">{t('samsc.rdv_no_slot', locale)}</p>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                   {slots.map(s => (
@@ -281,33 +283,33 @@ export default function RdvPage() {
           <Card className="bg-white/95 backdrop-blur">
             <CardContent className="p-6 md:p-8">
               <button onClick={() => setStep(2)} className="text-sm text-slate-500 hover:text-slate-700 mb-4 inline-flex items-center gap-1">
-                <ChevronLeft className="h-4 w-4" /> Changer de créneau
+                <ChevronLeft className="h-4 w-4" /> {t('samsc.rdv_change_slot', locale)}
               </button>
-              <h2 className="text-xl font-semibold mb-1" style={{ color: NAVY }}>Tes coordonnées</h2>
+              <h2 className="text-xl font-semibold mb-1" style={{ color: NAVY }}>{t('samsc.rdv_your_details', locale)}</h2>
               <p className="text-sm text-slate-500 mb-6">
-                {formatDateBadge(selectedDate!).weekday} {formatDateBadge(selectedDate!).day} {formatDateBadge(selectedDate!).month} · {selectedSlot.label}
+                {formatDateBadge(selectedDate!, locale).weekday} {formatDateBadge(selectedDate!, locale).day} {formatDateBadge(selectedDate!, locale).month} · {selectedSlot.label}
               </p>
 
               {/* Choix lieu si les deux sont activés */}
               {settings.location_online_enabled && settings.location_in_person_enabled && (
                 <div className="mb-6">
-                  <label className="text-sm font-medium block mb-2" style={{ color: NAVY }}>Format du RDV</label>
+                  <label className="text-sm font-medium block mb-2" style={{ color: NAVY }}>{t('samsc.rdv_format', locale)}</label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => setLocationType('online')}
                       className={`p-3 rounded-lg border-2 flex items-center justify-center gap-2 ${locationType === 'online' ? 'border-amber-400 bg-amber-50' : 'border-slate-200'}`}
                     >
-                      <Video className="h-4 w-4" /> En ligne (Meet)
+                      <Video className="h-4 w-4" /> {t('samsc.rdv_online_meet', locale)}
                     </button>
                     <button
                       onClick={() => setLocationType('in_person')}
                       className={`p-3 rounded-lg border-2 flex items-center justify-center gap-2 ${locationType === 'in_person' ? 'border-amber-400 bg-amber-50' : 'border-slate-200'}`}
                     >
-                      <MapPin className="h-4 w-4" /> Présentiel
+                      <MapPin className="h-4 w-4" /> {t('samsc.rdv_in_person', locale)}
                     </button>
                   </div>
                   {locationType === 'in_person' && settings.in_person_address && (
-                    <p className="text-xs text-slate-500 mt-2">Lieu : {settings.in_person_address}</p>
+                    <p className="text-xs text-slate-500 mt-2">{t('samsc.rdv_place', locale).replace('{addr}', settings.in_person_address)}</p>
                   )}
                 </div>
               )}
@@ -315,7 +317,7 @@ export default function RdvPage() {
               {/* Sign in with Google — pré-remplit nom + email */}
               {googleClientId && !signedInWithGoogle && (
                 <div className="mb-5 p-4 rounded-lg border border-slate-200 bg-slate-50 flex flex-col items-center">
-                  <p className="text-xs text-slate-500 mb-2">Connecte-toi avec ton compte Google pour aller plus vite</p>
+                  <p className="text-xs text-slate-500 mb-2">{t('samsc.rdv_google_hint', locale)}</p>
                   <div ref={googleBtnRef} />
                 </div>
               )}
@@ -329,16 +331,16 @@ export default function RdvPage() {
                     <div className="text-sm font-medium text-emerald-900 truncate">{signedInWithGoogle.name || signedInWithGoogle.email}</div>
                     <div className="text-xs text-emerald-700 truncate">{signedInWithGoogle.email}</div>
                   </div>
-                  <button onClick={() => { setSignedInWithGoogle(null); setForm(p => ({ ...p, name: '', email: '' })) }} className="text-xs text-slate-500 hover:text-slate-700">Changer</button>
+                  <button onClick={() => { setSignedInWithGoogle(null); setForm(p => ({ ...p, name: '', email: '' })) }} className="text-xs text-slate-500 hover:text-slate-700">{t('samsc.rdv_change', locale)}</button>
                 </div>
               )}
 
               <div className="space-y-3">
-                <Input placeholder="Ton nom *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-                <Input placeholder="Email *" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-                <Input placeholder="Société (optionnel)" value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} />
-                <Input placeholder="Téléphone (optionnel)" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
-                <Textarea placeholder="Un message pour préparer la démo ? (optionnel)" rows={3} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+                <Input placeholder={t('samsc.rdv_ph_name', locale)} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+                <Input placeholder={t('samsc.rdv_ph_email', locale)} type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+                <Input placeholder={t('samsc.rdv_ph_company', locale)} value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} />
+                <Input placeholder={t('samsc.rdv_ph_phone', locale)} value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+                <Textarea placeholder={t('samsc.rdv_ph_notes', locale)} rows={3} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
               </div>
 
               {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
@@ -349,10 +351,10 @@ export default function RdvPage() {
                 className="w-full mt-6 text-white"
                 style={{ backgroundColor: NAVY }}
               >
-                {submitting ? (<><Loader2 className="animate-spin h-4 w-4 mr-2" /> Envoi…</>) : 'Confirmer le rendez-vous'}
+                {submitting ? (<><Loader2 className="animate-spin h-4 w-4 mr-2" /> {t('samsc.rdv_sending', locale)}</>) : t('samsc.rdv_confirm', locale)}
               </Button>
               <p className="text-xs text-slate-400 mt-3 text-center">
-                Tu recevras une invitation Google Calendar par email avec {locationType === 'online' ? 'un lien Google Meet' : 'les détails du lieu'}.
+                {t('samsc.rdv_invite_note', locale).replace('{detail}', locationType === 'online' ? t('samsc.rdv_invite_meet', locale) : t('samsc.rdv_invite_place', locale))}
               </p>
             </CardContent>
           </Card>
@@ -363,19 +365,19 @@ export default function RdvPage() {
           <Card className="bg-white/95 backdrop-blur">
             <CardContent className="p-8 text-center">
               <CheckCircle2 className="h-16 w-16 mx-auto mb-4 text-emerald-500" />
-              <h2 className="text-2xl font-bold mb-2" style={{ color: NAVY }}>Votre rendez-vous est confirmé</h2>
+              <h2 className="text-2xl font-bold mb-2" style={{ color: NAVY }}>{t('samsc.rdv_confirmed', locale)}</h2>
               <p className="text-slate-600 mb-1">
-                {formatDateBadge(selectedDate!).weekday} {formatDateBadge(selectedDate!).day} {formatDateBadge(selectedDate!).month} · <strong>{selectedSlot.label}</strong>
+                {formatDateBadge(selectedDate!, locale).weekday} {formatDateBadge(selectedDate!, locale).day} {formatDateBadge(selectedDate!, locale).month} · <strong>{selectedSlot.label}</strong>
               </p>
               <p className="text-sm text-slate-500 mb-6">
-                Une invitation Google Calendar a été envoyée à <strong>{form.email}</strong>.
+                {t('samsc.rdv_invite_sent', locale).split('{email}')[0]}<strong>{form.email}</strong>{t('samsc.rdv_invite_sent', locale).split('{email}')[1]}
               </p>
               {success?.meet_url && (
                 <a href={success.meet_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-white font-medium" style={{ background: NAVY }}>
-                  <Video className="h-4 w-4" /> Ouvrir le lien Meet
+                  <Video className="h-4 w-4" /> {t('samsc.rdv_open_meet', locale)}
                 </a>
               )}
-              <p className="text-xs text-slate-400 mt-6">À très vite !</p>
+              <p className="text-xs text-slate-400 mt-6">{t('samsc.rdv_see_soon', locale)}</p>
             </CardContent>
           </Card>
         )}

@@ -122,7 +122,7 @@ export function InterSocieteRow({
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="outline" className="font-normal">
               {paire.societe_emettrice?.nom || (
-                <span className="text-muted-foreground italic">source introuvable</span>
+                <span className="text-muted-foreground italic">{t('samsc.inter_source_not_found', locale)}</span>
               )}
             </Badge>
             <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
@@ -149,20 +149,20 @@ export function InterSocieteRow({
         <td className="py-2 px-3 whitespace-nowrap">
           {isValide ? (
             <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
-              Validé
+              {t('samsc.inter_validated', locale)}
             </Badge>
           ) : (
             <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
-              Auto (à contrôler)
+              {t('samsc.inter_auto_to_check', locale)}
             </Badge>
           )}
           {!paire.source && (
             <Badge
               variant="outline"
               className="ml-2 border-rose-300 text-rose-700"
-              title="L'écriture source n'a pas pu être retrouvée — soit la société émettrice n'est pas dans votre périmètre, soit elle a été supprimée."
+              title={t('samsc.inter_source_tooltip', locale)}
             >
-              Source ?
+              {t('samsc.inter_source_badge', locale)}
             </Badge>
           )}
         </td>
@@ -174,20 +174,20 @@ export function InterSocieteRow({
               variant="ghost"
               disabled={busy || isValide}
               onClick={() => onValider(paire)}
-              title="Marquer comme validé / contrôlé"
+              title={t('samsc.inter_validate_tooltip', locale)}
             >
               <Check className="h-4 w-4 mr-1" />
-              <span className="hidden md:inline">Valider</span>
+              <span className="hidden md:inline">{t('samsc.inter_validate', locale)}</span>
             </Button>
             <Button
               size="sm"
               variant="ghost"
               disabled={busy}
               onClick={() => onReclasser(paire)}
-              title="Ouvrir le grand-livre pour reclasser cette écriture"
+              title={t('samsc.inter_reclassify_tooltip', locale)}
             >
               <Pencil className="h-4 w-4 mr-1" />
-              <span className="hidden md:inline">Reclasser</span>
+              <span className="hidden md:inline">{t('samsc.inter_reclassify', locale)}</span>
             </Button>
             <Button
               size="sm"
@@ -195,7 +195,7 @@ export function InterSocieteRow({
               className="text-rose-700 hover:text-rose-800 hover:bg-rose-50"
               disabled={busy}
               onClick={() => setConfirmOpen(true)}
-              title="Supprimer la paire (miroir + source)"
+              title={t('samsc.inter_delete_tooltip', locale)}
             >
               <Trash2 className="h-4 w-4 mr-1" />
               <span className="hidden md:inline">{t('cui.delete', locale)}</span>
@@ -211,20 +211,26 @@ export function InterSocieteRow({
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
                 <p>
-                  Cette action retire les écritures{" "}
-                  <span className="font-mono">{paire.miroir.ref_folio}</span> côté{" "}
-                  <strong>{paire.societe_destinataire.nom}</strong>.
+                  {(() => {
+                    const tpl = t('samsc.inter_dialog_intro', locale)
+                    const [before, restRaw] = tpl.split('{ref}')
+                    const [middle, after] = (restRaw ?? '').split('{societe}')
+                    return (
+                      <>
+                        {before}
+                        <span className="font-mono">{paire.miroir.ref_folio}</span>
+                        {middle}
+                        <strong>{paire.societe_destinataire.nom}</strong>
+                        {after}
+                      </>
+                    )
+                  })()}
                 </p>
                 <p className="text-amber-700">
-                  Attention : seul le miroir auto-généré est concerné. L'écriture
-                  source côté{" "}
-                  {paire.societe_emettrice?.nom || "société émettrice"} reste
-                  intacte — à reclasser manuellement si besoin.
+                  {t('samsc.inter_dialog_warn', locale).replace('{societe}', paire.societe_emettrice?.nom || t('samsc.inter_emettrice_fallback', locale))}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  La suppression réelle est gérée par le module rapprochement
-                  (route dédiée à livrer). V1 : l'action remonte un signal au
-                  parent.
+                  {t('samsc.inter_dialog_note', locale)}
                 </p>
               </div>
             </AlertDialogDescription>
@@ -238,7 +244,7 @@ export function InterSocieteRow({
               }}
               className="bg-rose-600 hover:bg-rose-700"
             >
-              Confirmer la suppression
+              {t('samsc.inter_confirm_delete', locale)}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

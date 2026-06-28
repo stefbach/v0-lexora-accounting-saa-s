@@ -58,7 +58,7 @@ export function PaieValidationPanel({
 
   const runValidation = async () => {
     if (!societe || societe === "all") {
-      setError("Sélectionnez une société dans l'onglet Bulletins avant de lancer le contrôle.")
+      setError(t('sarh.pvp.select_societe', locale))
       return
     }
     setLoading(true)

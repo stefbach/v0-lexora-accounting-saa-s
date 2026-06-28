@@ -205,7 +205,7 @@ function formatDate(d: string) {
   return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })
 }
 
-function statusDot(color: string) {
+function statusDot(color: string, locale: Locale) {
   // Sprint 4 TÂCHE 4 — sémantique des points (WRA 2019) :
   //   🟢 vert   = employé éligible plein droit (>= 12 mois) + solde AL >= 5
   //   🟡 orange = en période d'essai (3-12 mois, droit au prorata)
@@ -217,9 +217,9 @@ function statusDot(color: string) {
     color === "orange" ? "bg-orange-400" :
     "bg-red-500"
   const title =
-    color === "green" ? "Éligible (≥12 mois) avec solde AL suffisant" :
-    color === "orange" ? "Période d'essai (3-12 mois) ou solde AL < 5 j" :
-    "Carence WRA (< 3 mois) ou solde AL épuisé"
+    color === "green" ? t('sarh.cg.dot_green', locale) :
+    color === "orange" ? t('sarh.cg.dot_orange', locale) :
+    t('sarh.cg.dot_red', locale)
   return <span className={`inline-block w-3 h-3 rounded-full ${cls}`} title={title} />
 }
 
@@ -1207,7 +1207,7 @@ export default function CongesPage() {
                 <Calendar className="w-5 h-5 text-[#4191FF]" />
               </div>
               <div>
-                <p className="text-xs text-gray-500" title="Somme des AL pris dans la periode anniversaire courante de chaque employe">{t('rha.a.conges.kpi_al_pris', locale)}</p>
+                <p className="text-xs text-gray-500" title={t('sarh.cg.kpi_al_pris_title', locale)}>{t('rha.a.conges.kpi_al_pris', locale)}</p>
                 <p className="text-xl font-bold text-[#4191FF]">{kpis.total_al_taken}<span className="text-sm font-normal text-gray-400"> {t('rha.a.conges.kpi_jours', locale)}</span></p>
               </div>
             </div>
@@ -1216,7 +1216,7 @@ export default function CongesPage() {
                 <Thermometer className="w-5 h-5 text-orange-500" />
               </div>
               <div>
-                <p className="text-xs text-gray-500" title="Somme des SL pris dans la periode anniversaire courante de chaque employe">{t('rha.a.conges.kpi_sl_pris', locale)}</p>
+                <p className="text-xs text-gray-500" title={t('sarh.cg.kpi_sl_pris_title', locale)}>{t('rha.a.conges.kpi_sl_pris', locale)}</p>
                 <p className="text-xl font-bold text-orange-600">{kpis.total_sl_taken}<span className="text-sm font-normal text-gray-400"> {t('rha.a.conges.kpi_jours', locale)}</span></p>
               </div>
             </div>
@@ -1365,7 +1365,7 @@ export default function CongesPage() {
                         const isEditing = editingBalId === b.employe_id
                         return (
                         <TableRow key={b.employe_id}>
-                          <TableCell>{statusDot(b.status_color)}</TableCell>
+                          <TableCell>{statusDot(b.status_color, locale)}</TableCell>
                           <TableCell className="font-medium">{b.prenom} {b.nom}</TableCell>
                           <TableCell className="text-sm text-gray-500">{b.poste || "---"}</TableCell>
                           <TableCell className="text-xs">
@@ -1981,7 +1981,7 @@ export default function CongesPage() {
                                     size="sm"
                                     variant="ghost"
                                     className="h-7 text-xs text-blue-600 hover:bg-blue-50"
-                                    title="Modifier les dates, la catégorie ou demi/full"
+                                    title={t('sarh.cg.modifier_title2', locale)}
                                     onClick={() => ouvrirEdition(c)}
                                   >
                                     <Pencil className="w-3.5 h-3.5 mr-1" />{t('rhc.btn.modifier', locale)}
@@ -1993,7 +1993,7 @@ export default function CongesPage() {
                                     size="sm"
                                     variant="ghost"
                                     className="h-7 w-7 p-0 text-gray-500 hover:text-red-700 hover:bg-red-50"
-                                    title="Supprimer definitivement (audit trail conserve)"
+                                    title={t('sarh.cg.supprimer_title2', locale)}
                                     onClick={() => { setSupprimerTarget(c); setSupprimerMotif("") }}
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />

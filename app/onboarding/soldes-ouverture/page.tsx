@@ -40,6 +40,7 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Loader2, CheckCircle2, AlertTriangle, Save } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 import {
   SoldeOuvertureCard,
   type SoldeLigne,
@@ -71,6 +72,7 @@ function fmt(n: number): string {
 }
 
 export default function SoldesOuverturePage() {
+  const locale = getLocale()
   // ── État global ────────────────────────────────────────────────────
   const [societes, setSocietes] = useState<Societe[]>([])
   const [societeId, setSocieteId] = useState<string>("")
@@ -130,7 +132,7 @@ export default function SoldesOuverturePage() {
         const ex = exerciceFromDate(s?.date_debut_exercice)
         setExercice(ex)
       })
-      .catch((e) => setError(e?.message ?? "Erreur chargement société"))
+      .catch((e) => setError(e?.message ?? t('samsc.soldes_err_load_societe', locale)))
       .finally(() => setLoading(false))
   }, [societeId])
 
@@ -189,15 +191,15 @@ export default function SoldesOuverturePage() {
     setError(null)
     setResult(null)
     if (!societeId) {
-      setError("Sélectionnez une société.")
+      setError(t('samsc.soldes_err_select_societe', locale))
       return
     }
     if (!exercice) {
-      setError("Exercice requis (vérifiez que la société a une date_debut_exercice).")
+      setError(t('samsc.soldes_err_exercice', locale))
       return
     }
     if (nbLignesValides === 0) {
-      setError("Aucune ligne valide à enregistrer (compte + montant requis).")
+      setError(t('samsc.soldes_err_no_line', locale))
       return
     }
 
@@ -236,18 +238,16 @@ export default function SoldesOuverturePage() {
       const data = await res.json()
       if (!res.ok) {
         if (res.status === 409) {
-          setError(
-            "Soldes d'ouverture déjà saisis pour cet exercice. Voir le détail ci-dessous."
-          )
+          setError(t('samsc.soldes_err_already', locale))
           setResult(data)
         } else {
-          setError(data?.error ?? "Erreur lors de l'enregistrement")
+          setError(data?.error ?? t('samsc.soldes_err_save', locale))
         }
       } else {
         setResult(data)
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Erreur réseau")
+      setError(e instanceof Error ? e.message : t('samsc.soldes_err_network', locale))
     } finally {
       setSubmitting(false)
     }
@@ -255,23 +255,23 @@ export default function SoldesOuverturePage() {
 
   return (
     <ClientPageShell
-      kicker="Onboarding"
-      title="Soldes d'ouverture"
-      subtitle="Saisie initiale des soldes (Banques, Clients, Fournisseurs, Immobilisations). Génère automatiquement les écritures du journal AN à la date du début d'exercice."
+      kicker={t('samsc.soldes_kicker', locale)}
+      title={t('samsc.soldes_title', locale)}
+      subtitle={t('samsc.soldes_subtitle', locale)}
     >
       <div className="space-y-6">
         {/* ── Sélecteurs société + exercice ────────────────────────── */}
         <Card>
           <CardHeader>
-            <CardTitle>Société et exercice</CardTitle>
+            <CardTitle>{t('samsc.soldes_societe_exercice', locale)}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label>Société</Label>
+                <Label>{t('samsc.soldes_societe', locale)}</Label>
                 <Select value={societeId} onValueChange={setSocieteId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner une société" />
+                    <SelectValue placeholder={t('samsc.soldes_select_societe', locale)} />
                   </SelectTrigger>
                   <SelectContent>
                     {societes.map((s) => (
@@ -283,7 +283,7 @@ export default function SoldesOuverturePage() {
                 </Select>
               </div>
               <div>
-                <Label>Exercice (AAAA-AAAA)</Label>
+                <Label>{t('samsc.soldes_exercice_label', locale)}</Label>
                 <Input
                   value={exercice}
                   onChange={(e) => setExercice(e.target.value)}
@@ -291,7 +291,7 @@ export default function SoldesOuverturePage() {
                 />
                 {societe?.date_debut_exercice ? (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Début d'exercice :{" "}
+                    {t('samsc.soldes_debut_exercice', locale)}{" "}
                     {new Date(societe.date_debut_exercice).toLocaleDateString(
                       "fr-FR"
                     )}
@@ -299,20 +299,20 @@ export default function SoldesOuverturePage() {
                 ) : null}
               </div>
               <div>
-                <Label>Compte de contre-partie</Label>
+                <Label>{t('samsc.soldes_contrepartie_label', locale)}</Label>
                 <Input
                   value={compteContrepartie}
                   onChange={(e) => setCompteContrepartie(e.target.value)}
                   placeholder="110"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Par défaut 110 (Report à nouveau)
+                  {t('samsc.soldes_contrepartie_hint', locale)}
                 </p>
               </div>
             </div>
             {loading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground mt-4">
-                <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
+                <Loader2 className="h-4 w-4 animate-spin" /> {t('samsc.soldes_loading', locale)}
               </div>
             ) : null}
           </CardContent>
@@ -322,13 +322,13 @@ export default function SoldesOuverturePage() {
         {dejaSaisi ? (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Soldes d'ouverture déjà saisis</AlertTitle>
+            <AlertTitle>{t('samsc.soldes_already_title', locale)}</AlertTitle>
             <AlertDescription>
-              {dejaSaisi.nb_lignes} écritures déjà enregistrées le{" "}
-              {new Date(dejaSaisi.saisie_at).toLocaleString("fr-FR")} (total
-              débit {fmt(dejaSaisi.total_debit_mur)} MUR / crédit{" "}
-              {fmt(dejaSaisi.total_credit_mur)} MUR). Toute nouvelle
-              soumission sera rejetée pour cet exercice.
+              {t('samsc.soldes_already_desc', locale)
+                .replace('{nb}', String(dejaSaisi.nb_lignes))
+                .replace('{date}', new Date(dejaSaisi.saisie_at).toLocaleString("fr-FR"))
+                .replace('{debit}', fmt(dejaSaisi.total_debit_mur))
+                .replace('{credit}', fmt(dejaSaisi.total_credit_mur))}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -337,8 +337,8 @@ export default function SoldesOuverturePage() {
         {societeId && exercice ? (
           <>
             <SoldeOuvertureCard
-              title="Banques (512x)"
-              description="Soldes des comptes bancaires au début d'exercice"
+              title={t('samsc.soldes_banques_title', locale)}
+              description={t('samsc.soldes_banques_desc', locale)}
               section="banque"
               defaultCompte="5121"
               lignes={banques}
@@ -346,8 +346,8 @@ export default function SoldesOuverturePage() {
               accentClassName="border-l-4 border-l-blue-500"
             />
             <SoldeOuvertureCard
-              title="Clients (411)"
-              description="Créances clients ouvertes au début d'exercice"
+              title={t('samsc.soldes_clients_title', locale)}
+              description={t('samsc.soldes_clients_desc', locale)}
               section="client"
               defaultCompte="411"
               lignes={clients}
@@ -355,8 +355,8 @@ export default function SoldesOuverturePage() {
               accentClassName="border-l-4 border-l-emerald-500"
             />
             <SoldeOuvertureCard
-              title="Fournisseurs (401)"
-              description="Dettes fournisseurs ouvertes au début d'exercice"
+              title={t('samsc.soldes_fournisseurs_title', locale)}
+              description={t('samsc.soldes_fournisseurs_desc', locale)}
               section="fournisseur"
               defaultCompte="401"
               lignes={fournisseurs}
@@ -364,8 +364,8 @@ export default function SoldesOuverturePage() {
               accentClassName="border-l-4 border-l-amber-500"
             />
             <SoldeOuvertureCard
-              title="Immobilisations (2xx)"
-              description="Valeurs nettes comptables au début d'exercice"
+              title={t('samsc.soldes_immo_title', locale)}
+              description={t('samsc.soldes_immo_desc', locale)}
               section="immobilisation"
               defaultCompte="215"
               lignes={immobilisations}
@@ -376,13 +376,13 @@ export default function SoldesOuverturePage() {
             {/* ── Récap totaux ─────────────────────────────────── */}
             <Card>
               <CardHeader>
-                <CardTitle>Récapitulatif</CardTitle>
+                <CardTitle>{t('samsc.soldes_recap', locale)}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                   <div>
                     <span className="text-muted-foreground">
-                      Total ACTIF (débit) :
+                      {t('samsc.soldes_total_actif', locale)}
                     </span>
                     <div className="text-lg font-mono font-semibold">
                       {fmt(totals.actif)} MUR
@@ -390,7 +390,7 @@ export default function SoldesOuverturePage() {
                   </div>
                   <div>
                     <span className="text-muted-foreground">
-                      Total PASSIF (crédit) :
+                      {t('samsc.soldes_total_passif', locale)}
                     </span>
                     <div className="text-lg font-mono font-semibold">
                       {fmt(totals.passif)} MUR
@@ -398,21 +398,18 @@ export default function SoldesOuverturePage() {
                   </div>
                   <div>
                     <span className="text-muted-foreground">
-                      Contre-partie {compteContrepartie} :
+                      {t('samsc.soldes_contrepartie_recap', locale).replace('{compte}', compteContrepartie)}
                     </span>
                     <div className="text-lg font-mono font-semibold">
                       {fmt(totals.actif - totals.passif)} MUR
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      (= actif − passif, sera passé en débit/crédit pour
-                      équilibrer)
+                      {t('samsc.soldes_contrepartie_recap_hint', locale)}
                     </p>
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-4">
-                  Note : chaque ligne est doublée par une contre-partie sur{" "}
-                  {compteContrepartie}, donc le journal AN reste toujours
-                  équilibré.
+                  {t('samsc.soldes_note_equilibre', locale).replace('{compte}', compteContrepartie)}
                 </p>
               </CardContent>
             </Card>
@@ -421,7 +418,7 @@ export default function SoldesOuverturePage() {
             {error ? (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Erreur</AlertTitle>
+                <AlertTitle>{t('samsc.soldes_error', locale)}</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             ) : null}
@@ -430,7 +427,7 @@ export default function SoldesOuverturePage() {
             {result ? (
               <Alert>
                 <CheckCircle2 className="h-4 w-4" />
-                <AlertTitle>Résultat</AlertTitle>
+                <AlertTitle>{t('samsc.soldes_result', locale)}</AlertTitle>
                 <AlertDescription>
                   <pre className="text-xs whitespace-pre-wrap overflow-auto max-h-64">
                     {JSON.stringify(result, null, 2)}
@@ -442,9 +439,10 @@ export default function SoldesOuverturePage() {
             {/* ── Action ─────────────────────────────────────────── */}
             <div className="flex items-center justify-end gap-2">
               <p className="text-sm text-muted-foreground mr-auto">
-                {nbLignesValides} ligne{nbLignesValides > 1 ? "s" : ""} valide
-                {nbLignesValides > 1 ? "s" : ""} prête
-                {nbLignesValides > 1 ? "s" : ""} à enregistrer
+                {(nbLignesValides > 1
+                  ? t('samsc.soldes_lines_ready_many', locale)
+                  : t('samsc.soldes_lines_ready_one', locale)
+                ).replace('{nb}', String(nbLignesValides))}
               </p>
               <Button
                 onClick={handleSubmit}
@@ -455,14 +453,14 @@ export default function SoldesOuverturePage() {
                 ) : (
                   <Save className="h-4 w-4 mr-2" />
                 )}
-                Enregistrer les soldes d'ouverture (journal AN)
+                {t('samsc.soldes_submit', locale)}
               </Button>
             </div>
           </>
         ) : (
           <Alert>
             <AlertDescription>
-              Sélectionnez une société pour commencer la saisie.
+              {t('samsc.soldes_select_to_start', locale)}
             </AlertDescription>
           </Alert>
         )}

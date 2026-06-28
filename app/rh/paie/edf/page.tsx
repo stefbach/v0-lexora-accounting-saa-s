@@ -55,11 +55,13 @@ const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('fr-FR') : '�
 
 const EXERCICES = getAvailableExercicesFY(4, 0)
 
-const STATUT_LABELS: Record<string, string> = {
-  a_faire: 'À faire',
-  en_cours: 'En cours',
-  soumis: 'Soumis',
-  accepte: 'Accepté'
+function getStatutLabels(locale: ReturnType<typeof getLocale>): Record<string, string> {
+  return {
+    a_faire: t('sarh.edf.st_todo', locale),
+    en_cours: t('sarh.edf.st_progress', locale),
+    soumis: t('sarh.edf.st_submitted', locale),
+    accepte: t('sarh.edf.st_accepted', locale),
+  }
 }
 
 const STATUT_COLORS: Record<string, string> = {
@@ -73,6 +75,7 @@ const STATUT_COLORS: Record<string, string> = {
 
 export default function EDFPage() {
   const locale = getLocale()
+  const STATUT_LABELS = getStatutLabels(locale)
   const params = useParams()
   // Fonctionne en mode direct /rh/paie/edf OU via /comptable/clients/[clientId]/[societeId]/edf
   const societeIdParam = params?.societeId as string | undefined
@@ -132,7 +135,7 @@ export default function EDFPage() {
       if (res.ok) {
         await fetchDeclaration()
       } else {
-        alert(`Erreur : ${data.error}`)
+        alert(t('sarh.edf.err_alert', locale).replace('{error}', String(data.error)))
       }
     } finally {
       setGenerating(false)
@@ -213,10 +216,10 @@ export default function EDFPage() {
           <div className="flex flex-wrap gap-4 items-end">
             {!societeIdParam && (
               <div>
-                <Label className="text-xs">Société</Label>
+                <Label className="text-xs">{t('sarh.edf.societe', locale)}</Label>
                 <Select value={selectedSocieteId} onValueChange={setSelectedSocieteId}>
                   <SelectTrigger className="w-56 mt-1">
-                    <SelectValue placeholder="Choisir une société..." />
+                    <SelectValue placeholder={t('sarh.edf.choisir_societe', locale)} />
                   </SelectTrigger>
                   <SelectContent>
                     {societes.map(s => (
@@ -227,7 +230,7 @@ export default function EDFPage() {
               </div>
             )}
             <div>
-              <Label className="text-xs">Exercice fiscal</Label>
+              <Label className="text-xs">{t('sarh.edf.exercice', locale)}</Label>
               <Select value={exercice} onValueChange={setExercice}>
                 <SelectTrigger className="w-48 mt-1">
                   <SelectValue />
@@ -245,9 +248,9 @@ export default function EDFPage() {
               style={{ backgroundColor: '#D4AF37', color: 'white' }}
             >
               {generating ? (
-                <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Génération...</>
+                <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> {t('sarh.edf.generation', locale)}</>
               ) : (
-                <><FileSpreadsheet className="h-4 w-4 mr-2" /> Générer depuis bulletins de paie</>
+                <><FileSpreadsheet className="h-4 w-4 mr-2" /> {t('sarh.edf.generer', locale)}</>
               )}
             </Button>
           </div>
@@ -259,7 +262,7 @@ export default function EDFPage() {
         <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
           <AlertTriangle className="h-5 w-5" />
           <span className="font-medium">
-            Deadline EDF dépassée ! Date limite : {fmtDate(declaration.date_limite)}
+            {t('sarh.edf.deadline_depassee', locale).replace('{date}', fmtDate(declaration.date_limite))}
           </span>
         </div>
       )}
@@ -267,7 +270,7 @@ export default function EDFPage() {
         <div className="flex items-center gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg text-orange-700">
           <Clock className="h-5 w-5" />
           <span className="font-medium">
-            Deadline EDF approche : {fmtDate(declaration.date_limite)}
+            {t('sarh.edf.deadline_approche', locale).replace('{date}', fmtDate(declaration.date_limite))}
           </span>
         </div>
       )}
@@ -286,65 +289,65 @@ export default function EDFPage() {
               <div className="flex items-center gap-2">
                 <FileSpreadsheet className="h-5 w-5" style={{ color: '#D4AF37' }} />
                 <CardTitle className="text-base">
-                  Récapitulatif EDF — {exercice}
+                  {t('sarh.edf.recap', locale).replace('{exercice}', exercice)}
                 </CardTitle>
-                <Badge variant="secondary">{declaration.nb_employes} employé(s)</Badge>
+                <Badge variant="secondary">{t('sarh.edf.nb_employes', locale).replace('{n}', String(declaration.nb_employes))}</Badge>
               </div>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Rubrique</TableHead>
-                    <TableHead className="text-right">Montant (MUR)</TableHead>
-                    <TableHead>Notes</TableHead>
+                    <TableHead>{t('sarh.edf.th_rubrique', locale)}</TableHead>
+                    <TableHead className="text-right">{t('sarh.edf.th_montant', locale)}</TableHead>
+                    <TableHead>{t('sarh.edf.th_notes', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   <TableRow>
-                    <TableCell className="font-medium">Nombre d&apos;employés</TableCell>
+                    <TableCell className="font-medium">{t('sarh.edf.nombre_employes', locale)}</TableCell>
                     <TableCell className="text-right">{declaration.nb_employes}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">Actifs sur la période</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{t('sarh.edf.actifs_periode', locale)}</TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell className="font-medium">Masse salariale brute</TableCell>
+                    <TableCell className="font-medium">{t('sarh.edf.masse_salariale', locale)}</TableCell>
                     <TableCell className="text-right">{fmt(declaration.total_salaires_bruts)}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">Total salaires bruts</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{t('sarh.edf.total_salaires', locale)}</TableCell>
                   </TableRow>
                   <TableRow className="bg-blue-50">
-                    <TableCell className="font-medium">CSG salarié</TableCell>
+                    <TableCell className="font-medium">{t('sarh.edf.csg_salarie', locale)}</TableCell>
                     <TableCell className="text-right">{fmt(declaration.total_csg_salarie)}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">Contribution Social Généralisée — salarié</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{t('sarh.edf.csg_salarie_desc', locale)}</TableCell>
                   </TableRow>
                   <TableRow className="bg-blue-50">
-                    <TableCell className="font-medium">CSG patronal</TableCell>
+                    <TableCell className="font-medium">{t('sarh.edf.csg_patronal', locale)}</TableCell>
                     <TableCell className="text-right">{fmt(declaration.total_csg_patronal)}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">Contribution Social Généralisée — employeur</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{t('sarh.edf.csg_patronal_desc', locale)}</TableCell>
                   </TableRow>
                   <TableRow className="bg-purple-50">
-                    <TableCell className="font-medium">PAYE (Pay As You Earn)</TableCell>
+                    <TableCell className="font-medium">{t('sarh.edf.paye', locale)}</TableCell>
                     <TableCell className="text-right">{fmt(declaration.total_paye)}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">Impôt sur le revenu retenu à la source</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{t('sarh.edf.paye_desc', locale)}</TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell className="font-medium">NSF (National Savings Fund)</TableCell>
+                    <TableCell className="font-medium">{t('sarh.edf.nsf', locale)}</TableCell>
                     <TableCell className="text-right">{fmt(declaration.total_nsf)}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">Salarié + Patronal</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{t('sarh.edf.nsf_desc', locale)}</TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell className="font-medium">Training Levy</TableCell>
+                    <TableCell className="font-medium">{t('sarh.edf.training_levy', locale)}</TableCell>
                     <TableCell className="text-right">{fmt(declaration.total_training_levy)}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">1% masse salariale</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{t('sarh.edf.training_levy_desc', locale)}</TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell className="font-medium">PRGF</TableCell>
+                    <TableCell className="font-medium">{t('sarh.edf.prgf', locale)}</TableCell>
                     <TableCell className="text-right">{fmt(declaration.total_prgf)}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">Portable Retirement Gratuity Fund</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{t('sarh.edf.prgf_desc', locale)}</TableCell>
                   </TableRow>
                   <TableRow className="bg-yellow-50 font-bold">
-                    <TableCell className="font-bold">TOTAL À REMETTRE MRA</TableCell>
+                    <TableCell className="font-bold">{t('sarh.edf.total_mra', locale)}</TableCell>
                     <TableCell className="text-right font-bold text-lg">{fmt(totalARemettreEtat)}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">PAYE + NSF + Training Levy + PRGF</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{t('sarh.edf.total_mra_desc', locale)}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
@@ -356,27 +359,27 @@ export default function EDFPage() {
             <CardHeader>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5" style={{ color: '#D4AF37' }} />
-                <CardTitle className="text-base">Soumission MRA</CardTitle>
+                <CardTitle className="text-base">{t('sarh.edf.soumission_mra', locale)}</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <p className="text-xs text-muted-foreground">Date limite de soumission</p>
+                  <p className="text-xs text-muted-foreground">{t('sarh.edf.date_limite', locale)}</p>
                   <p className={`font-semibold mt-1 ${
                     deadlineStatus === 'depasse' ? 'text-red-600' :
                     deadlineStatus === 'urgent' ? 'text-orange-600' : ''
                   }`}>
                     {fmtDate(declaration.date_limite)}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">31 août {declaration.annee_assessment}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('sarh.edf.date_31_aout', locale).replace('{annee}', String(declaration.annee_assessment ?? ''))}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Date de soumission</p>
+                  <p className="text-xs text-muted-foreground">{t('sarh.edf.date_soumission', locale)}</p>
                   <p className="font-semibold mt-1">{fmtDate(declaration.date_soumission)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Statut</p>
+                  <p className="text-xs text-muted-foreground">{t('sarh.edf.statut', locale)}</p>
                   <Badge className={`mt-1 ${STATUT_COLORS[declaration.statut]}`}>
                     {STATUT_LABELS[declaration.statut]}
                   </Badge>
@@ -385,20 +388,20 @@ export default function EDFPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Référence MRA</Label>
+                  <Label>{t('sarh.edf.reference_mra', locale)}</Label>
                   <Input
                     value={referenceForm}
                     onChange={e => setReferenceForm(e.target.value)}
-                    placeholder="MRA-EDF-XXXX-YYYY"
+                    placeholder={t('sarh.edf.ph_reference', locale)}
                     className="mt-1"
                   />
                 </div>
                 <div>
-                  <Label>Notes</Label>
+                  <Label>{t('sarh.edf.notes', locale)}</Label>
                   <Textarea
                     value={notesForm}
                     onChange={e => setNotesForm(e.target.value)}
-                    placeholder="Observations..."
+                    placeholder={t('sarh.edf.ph_observations', locale)}
                     rows={2}
                     className="mt-1"
                   />
@@ -411,7 +414,7 @@ export default function EDFPage() {
                   disabled={saving}
                   variant="outline"
                 >
-                  Enregistrer notes
+                  {t('sarh.edf.enregistrer_notes', locale)}
                 </Button>
                 {declaration.statut !== 'soumis' && declaration.statut !== 'accepte' && (
                   <Button
@@ -419,14 +422,14 @@ export default function EDFPage() {
                     disabled={saving}
                     style={{ backgroundColor: '#0B0F2E', color: 'white' }}
                   >
-                    {saving ? 'Enregistrement...' : 'Marquer soumis à la MRA'}
+                    {saving ? t('sarh.edf.enregistrement', locale) : t('sarh.edf.marquer_soumis', locale)}
                   </Button>
                 )}
                 {declaration.statut === 'soumis' && (
                   <div className="flex items-center gap-2 text-green-600">
                     <CheckCircle2 className="h-5 w-5" />
                     <span className="text-sm font-medium">
-                      Soumis le {fmtDate(declaration.date_soumission)}
+                      {t('sarh.edf.soumis_le', locale).replace('{date}', fmtDate(declaration.date_soumission))}
                     </span>
                   </div>
                 )}
@@ -440,8 +443,8 @@ export default function EDFPage() {
             <FileSpreadsheet className="h-12 w-12 text-muted-foreground mb-4" />
             <p className="text-muted-foreground">
               {!selectedSocieteId
-                ? 'Sélectionnez une société pour voir les déclarations EDF'
-                : `Aucune déclaration EDF pour ${exercice}. Cliquez sur "Générer depuis bulletins de paie" pour créer.`}
+                ? t('sarh.edf.empty_no_societe', locale)
+                : t('sarh.edf.empty_no_decl', locale).replace('{exercice}', exercice)}
             </p>
           </CardContent>
         </Card>

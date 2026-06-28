@@ -168,7 +168,7 @@ export default function HistoriquePaiePage() {
       <div className="flex items-center justify-end gap-3 -mt-2">
         <Label htmlFor="toggle-archived" className="text-sm text-gray-600 cursor-pointer flex items-center gap-2">
           <Archive className="h-4 w-4 text-gray-500" />
-          Inclure les bulletins archivés (recalculs antérieurs)
+          {t('sarh.histp.include_archived', locale)}
         </Label>
         <Switch
           id="toggle-archived"
@@ -266,7 +266,7 @@ export default function HistoriquePaiePage() {
                               <tr
                                 key={b.id}
                                 className={`hover:bg-gray-50 ${b.is_archived ? 'opacity-60 bg-gray-50/50 italic' : ''}`}
-                                title={b.is_archived ? `Archivé — ${b.archive_reason || 'recalcul'}` : undefined}
+                                title={b.is_archived ? t('sarh.histp.row_archived_title', locale).replace('{reason}', b.archive_reason || t('sarh.histp.recalcul_fallback', locale)) : undefined}
                               >
                                 <td className="px-2 py-1.5 font-medium">
                                   {b.employe?.prenom} {b.employe?.nom}
@@ -276,11 +276,11 @@ export default function HistoriquePaiePage() {
                                       className="ml-1.5 inline-flex items-center px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px] rounded font-medium"
                                       title={
                                         Number(b.retenues_manuelles) > 0
-                                          ? `Solde de Tout Compte — retenues manuelles : ${Number(b.retenues_manuelles).toFixed(2)} MUR`
-                                          : 'Solde de Tout Compte — bulletin de paie de sortie identique au calcul /rh/depart'
+                                          ? t('sarh.histp.stc_title_retenues', locale).replace('{n}', Number(b.retenues_manuelles).toFixed(2))
+                                          : t('sarh.histp.stc_title_identique', locale)
                                       }
                                     >
-                                      Solde de Tout Compte
+                                      {t('sarh.histp.stc_badge', locale)}
                                       {Number(b.retenues_manuelles) > 0 && (
                                         <span className="ml-1 font-mono">
                                           (−{Number(b.retenues_manuelles).toFixed(0)})
@@ -291,10 +291,10 @@ export default function HistoriquePaiePage() {
                                   {b.is_archived && (
                                     <span
                                       className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-gray-200 text-gray-700 text-[10px] rounded font-medium"
-                                      title={b.archive_reason || 'Bulletin remplacé par une version plus récente'}
+                                      title={b.archive_reason || t('sarh.histp.archived_default_title', locale)}
                                     >
                                       <Archive className="h-2.5 w-2.5" />
-                                      Archivé
+                                      {t('sarh.histp.archived_badge', locale)}
                                     </span>
                                   )}
                                   {/* FIX-IMMUTABLE (mig 427) — badge comptabilisé + lien écritures */}
@@ -303,12 +303,12 @@ export default function HistoriquePaiePage() {
                                       className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-green-100 text-green-700 text-[10px] rounded font-medium"
                                       title={
                                         b.ecriture_id
-                                          ? `Bulletin lié à l'écriture ${b.ecriture_id}${b.comptabilise_at ? ` — comptabilisé le ${new Date(b.comptabilise_at).toLocaleDateString('fr-FR')}` : ''}`
-                                          : 'Comptabilisé'
+                                          ? t('sarh.histp.comptabilise_title', locale).replace('{id}', String(b.ecriture_id)) + (b.comptabilise_at ? t('sarh.histp.comptabilise_at_suffix', locale).replace('{date}', new Date(b.comptabilise_at).toLocaleDateString('fr-FR')) : '')
+                                          : t('sarh.histp.comptabilise_title_simple', locale)
                                       }
                                     >
                                       <CheckCircle className="h-2.5 w-2.5" />
-                                      Comptabilisé
+                                      {t('sarh.histp.comptabilise_badge', locale)}
                                     </span>
                                   )}
                                   {b.comptabilise && b.ecriture_id && (
@@ -316,7 +316,7 @@ export default function HistoriquePaiePage() {
                                       type="button"
                                       onClick={() => window.open(`/comptable/grand-livre?ecriture_id=${b.ecriture_id}`, '_blank')}
                                       className="ml-1 inline-flex items-center gap-0.5 px-1 py-0.5 text-[10px] text-emerald-700 hover:bg-emerald-50 rounded"
-                                      title="Ouvrir les écritures comptables liées"
+                                      title={t('sarh.histp.open_ecritures', locale)}
                                     >
                                       <BookOpen className="h-2.5 w-2.5" />
                                     </button>

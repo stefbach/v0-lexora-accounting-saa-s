@@ -22,6 +22,7 @@ import {
   ArrowRight, ArrowLeft, Star, Check, Mail, AlertTriangle,
 } from "lucide-react"
 import { LexoraLogo } from "@/components/LexoraLogo"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Plan {
   id: string
@@ -39,19 +40,20 @@ interface Plan {
 type Etape = 'profil' | 'infos' | 'plan' | 'success'
 type TypeDemandeur = 'dirigeant' | 'comptable'
 
-const MODULES_LABELS: Record<string, string> = {
-  comptabilite: "Comptabilité",
-  facturation: "Facturation",
-  rh: "RH & Paie",
-  fiscal: "Fiscal (TVA, MRA)",
-  etats_financiers: "États financiers",
-  juridique: "Juridique",
-  documents: "Documents & OCR",
-  telegram: "Assistant IA Telegram",
-  employe_portal: "Portail employé",
+const MODULES_LABEL_KEYS: Record<string, string> = {
+  comptabilite: "samsc.insc_mod_compta",
+  facturation: "samsc.insc_mod_facturation",
+  rh: "samsc.insc_mod_rh",
+  fiscal: "samsc.insc_mod_fiscal",
+  etats_financiers: "samsc.insc_mod_etats",
+  juridique: "samsc.insc_mod_juridique",
+  documents: "samsc.insc_mod_documents",
+  telegram: "samsc.insc_mod_telegram",
+  employe_portal: "samsc.insc_mod_portal",
 }
 
 export default function InscriptionPage() {
+  const locale = getLocale()
   const [etape, setEtape] = useState<Etape>('profil')
   const [type, setType] = useState<TypeDemandeur>('dirigeant')
   const [plans, setPlans] = useState<Plan[]>([])
@@ -106,7 +108,7 @@ export default function InscriptionPage() {
 
   async function submit() {
     if (!acceptCgu || !acceptCgv) {
-      setError("Vous devez accepter les CGU et les CGV.")
+      setError(t('samsc.insc_err_cgu', locale))
       return
     }
     setSubmitting(true)
@@ -147,7 +149,7 @@ export default function InscriptionPage() {
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
       setEtape('success')
     } catch (e: any) {
-      setError(e?.message || 'Erreur lors de la soumission.')
+      setError(e?.message || t('samsc.insc_err_submit', locale))
     } finally {
       setSubmitting(false)
     }
@@ -162,11 +164,11 @@ export default function InscriptionPage() {
             <LexoraLogo size="lg" />
           </Link>
           <h1 className="text-3xl md:text-4xl font-bold text-white mt-6">
-            {etape === 'success' ? '✨ Demande reçue !' : 'Créer mon compte Lexora'}
+            {etape === 'success' ? t('samsc.insc_success_title', locale) : t('samsc.insc_create_account', locale)}
           </h1>
           {etape !== 'success' && (
             <p className="text-white/70 mt-2 text-sm">
-              Quelques infos et un admin vous activera sous 24-48h ouvrées.
+              {t('samsc.insc_lead', locale)}
             </p>
           )}
         </div>
@@ -174,11 +176,11 @@ export default function InscriptionPage() {
         {/* Progress bar (sauf success) */}
         {etape !== 'success' && (
           <div className="flex items-center justify-center gap-2 mb-6">
-            <StepDot active={etape === 'profil'} done={etape !== 'profil'} label="Profil" />
+            <StepDot active={etape === 'profil'} done={etape !== 'profil'} label={t('samsc.insc_step_profil', locale)} />
             <div className="w-12 h-px bg-white/30" />
-            <StepDot active={etape === 'infos'} done={etape === 'plan'} label="Infos" />
+            <StepDot active={etape === 'infos'} done={etape === 'plan'} label={t('samsc.insc_step_infos', locale)} />
             <div className="w-12 h-px bg-white/30" />
-            <StepDot active={etape === 'plan'} done={false} label="Plan" />
+            <StepDot active={etape === 'plan'} done={false} label={t('samsc.insc_step_plan', locale)} />
           </div>
         )}
 
@@ -193,21 +195,21 @@ export default function InscriptionPage() {
           {/* ─── ÉTAPE 1 : PROFIL ────────────────────────────────────── */}
           {etape === 'profil' && (
             <div className="space-y-4">
-              <h2 className="text-xl font-bold text-[#0B0F2E]">Quel est votre profil ?</h2>
+              <h2 className="text-xl font-bold text-[#0B0F2E]">{t('samsc.insc_profil_q', locale)}</h2>
               <div className="grid md:grid-cols-2 gap-4">
                 <ProfileCard
                   active={type === 'dirigeant'}
                   onClick={() => setType('dirigeant')}
                   icon={<Building2 className="h-7 w-7" />}
-                  title="Dirigeant d'entreprise"
-                  desc="Je gère une ou plusieurs sociétés et je veux automatiser ma comptabilité, RH, fiscal."
+                  title={t('samsc.insc_dirigeant_title', locale)}
+                  desc={t('samsc.insc_dirigeant_desc', locale)}
                 />
                 <ProfileCard
                   active={type === 'comptable'}
                   onClick={() => setType('comptable')}
                   icon={<Briefcase className="h-7 w-7" />}
-                  title="Cabinet comptable"
-                  desc="Je suis comptable indépendant ou en cabinet et je veux gérer plusieurs clients."
+                  title={t('samsc.insc_cabinet_title', locale)}
+                  desc={t('samsc.insc_cabinet_desc', locale)}
                 />
               </div>
               <div className="flex justify-end pt-4">
@@ -215,7 +217,7 @@ export default function InscriptionPage() {
                   onClick={() => setEtape('infos')}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0B0F2E] text-white rounded-lg font-medium hover:bg-[#1a2659] transition-colors"
                 >
-                  Continuer <ArrowRight className="h-4 w-4" />
+                  {t('samsc.insc_continue', locale)} <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
             </div>
@@ -224,48 +226,48 @@ export default function InscriptionPage() {
           {/* ─── ÉTAPE 2 : INFOS ─────────────────────────────────────── */}
           {etape === 'infos' && (
             <div className="space-y-5">
-              <h2 className="text-xl font-bold text-[#0B0F2E]">Vos informations</h2>
+              <h2 className="text-xl font-bold text-[#0B0F2E]">{t('samsc.insc_your_infos', locale)}</h2>
 
-              <Section title="Votre compte">
+              <Section title={t('samsc.insc_your_account', locale)}>
                 <div className="grid md:grid-cols-2 gap-3">
-                  <Field label="Prénom *" value={prenom} onChange={setPrenom} />
-                  <Field label="Nom *" value={nom} onChange={setNom} />
-                  <Field label="Email *" type="email" value={email} onChange={setEmail} />
-                  <Field label="Téléphone" type="tel" value={telephone} onChange={setTelephone} />
+                  <Field label={t('samsc.insc_f_prenom', locale)} value={prenom} onChange={setPrenom} />
+                  <Field label={t('samsc.insc_f_nom', locale)} value={nom} onChange={setNom} />
+                  <Field label={t('samsc.insc_f_email', locale)} type="email" value={email} onChange={setEmail} />
+                  <Field label={t('samsc.insc_f_telephone', locale)} type="tel" value={telephone} onChange={setTelephone} />
                   {type === 'dirigeant' && (
-                    <Field label="Fonction (CEO, CFO…)" value={poste} onChange={setPoste} />
+                    <Field label={t('samsc.insc_f_fonction', locale)} value={poste} onChange={setPoste} />
                   )}
                 </div>
               </Section>
 
               {type === 'dirigeant' ? (
-                <Section title="Votre société">
+                <Section title={t('samsc.insc_your_societe', locale)}>
                   <div className="grid md:grid-cols-2 gap-3">
-                    <Field label="Nom de la société *" value={societeNom} onChange={setSocieteNom} />
-                    <Field label="BRN" value={societeBrn} onChange={setSocieteBrn} />
-                    <Field label="VAT Reg No." value={societeVat} onChange={setSocieteVat} />
-                    <Field label="Secteur d'activité" value={societeSecteur} onChange={setSocieteSecteur} />
-                    <Field label="Adresse" value={societeAdresse} onChange={setSocieteAdresse} />
-                    <Field label="Ville" value={societeVille} onChange={setSocieteVille} />
+                    <Field label={t('samsc.insc_f_societe_nom', locale)} value={societeNom} onChange={setSocieteNom} />
+                    <Field label={t('samsc.insc_f_brn', locale)} value={societeBrn} onChange={setSocieteBrn} />
+                    <Field label={t('samsc.insc_f_vat', locale)} value={societeVat} onChange={setSocieteVat} />
+                    <Field label={t('samsc.insc_f_secteur', locale)} value={societeSecteur} onChange={setSocieteSecteur} />
+                    <Field label={t('samsc.insc_f_adresse', locale)} value={societeAdresse} onChange={setSocieteAdresse} />
+                    <Field label={t('samsc.insc_f_ville', locale)} value={societeVille} onChange={setSocieteVille} />
                   </div>
                 </Section>
               ) : (
-                <Section title="Votre cabinet">
+                <Section title={t('samsc.insc_your_cabinet', locale)}>
                   <div className="grid md:grid-cols-2 gap-3">
-                    <Field label="Nom du cabinet *" value={cabinetNom} onChange={setCabinetNom} />
-                    <Field label="BRN" value={cabinetBrn} onChange={setCabinetBrn} />
-                    <Field label="Nombre de clients envisagé" type="number" value={cabinetClients} onChange={setCabinetClients} />
+                    <Field label={t('samsc.insc_f_cabinet_nom', locale)} value={cabinetNom} onChange={setCabinetNom} />
+                    <Field label={t('samsc.insc_f_brn', locale)} value={cabinetBrn} onChange={setCabinetBrn} />
+                    <Field label={t('samsc.insc_f_cabinet_clients', locale)} type="number" value={cabinetClients} onChange={setCabinetClients} />
                   </div>
                 </Section>
               )}
 
-              <Section title="Un message ? (optionnel)">
+              <Section title={t('samsc.insc_message_opt', locale)}>
                 <textarea
                   value={message}
                   onChange={e => setMessage(e.target.value)}
                   rows={3}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B0F2E]"
-                  placeholder="Besoins spécifiques, contexte…"
+                  placeholder={t('samsc.insc_ph_message', locale)}
                 />
               </Section>
 
@@ -274,14 +276,14 @@ export default function InscriptionPage() {
                   onClick={() => setEtape('profil')}
                   className="inline-flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-[#0B0F2E]"
                 >
-                  <ArrowLeft className="h-4 w-4" /> Retour
+                  <ArrowLeft className="h-4 w-4" /> {t('samsc.insc_back', locale)}
                 </button>
                 <button
                   onClick={() => setEtape('plan')}
                   disabled={!validInfos()}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0B0F2E] text-white rounded-lg font-medium hover:bg-[#1a2659] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Continuer <ArrowRight className="h-4 w-4" />
+                  {t('samsc.insc_continue', locale)} <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
             </div>
@@ -290,7 +292,7 @@ export default function InscriptionPage() {
           {/* ─── ÉTAPE 3 : PLAN ──────────────────────────────────────── */}
           {etape === 'plan' && (
             <div className="space-y-5">
-              <h2 className="text-xl font-bold text-[#0B0F2E]">Choisissez votre plan</h2>
+              <h2 className="text-xl font-bold text-[#0B0F2E]">{t('samsc.insc_choose_plan', locale)}</h2>
 
               {/* Toggle mensuel / annuel */}
               <div className="flex items-center justify-center gap-1 bg-gray-100 p-1 rounded-lg w-fit mx-auto text-sm">
@@ -298,13 +300,13 @@ export default function InscriptionPage() {
                   onClick={() => setPeriodicite('mensuelle')}
                   className={`px-4 py-1.5 rounded ${periodicite === 'mensuelle' ? 'bg-white shadow font-semibold' : 'text-gray-600'}`}
                 >
-                  Mensuel
+                  {t('samsc.insc_monthly', locale)}
                 </button>
                 <button
                   onClick={() => setPeriodicite('annuelle')}
                   className={`px-4 py-1.5 rounded ${periodicite === 'annuelle' ? 'bg-white shadow font-semibold' : 'text-gray-600'}`}
                 >
-                  Annuel <span className="text-[10px] text-emerald-600 font-bold ml-1">-10%</span>
+                  {t('samsc.insc_yearly', locale)} <span className="text-[10px] text-emerald-600 font-bold ml-1">-10%</span>
                 </button>
               </div>
 
@@ -314,7 +316,7 @@ export default function InscriptionPage() {
                 </div>
               ) : plans.length === 0 ? (
                 <p className="py-6 text-center text-sm text-gray-500">
-                  Aucun plan disponible. L'admin vous proposera une offre adaptée après validation de votre demande.
+                  {t('samsc.insc_no_plan', locale)}
                 </p>
               ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -324,6 +326,7 @@ export default function InscriptionPage() {
                       plan={p}
                       periodicite={periodicite}
                       active={planId === p.id}
+                      locale={locale}
                       onClick={() => setPlanId(p.id === planId ? "" : p.id)}
                     />
                   ))}
@@ -335,18 +338,18 @@ export default function InscriptionPage() {
                 <label className="flex items-start gap-2 cursor-pointer text-sm">
                   <input type="checkbox" checked={acceptCgu} onChange={e => setAcceptCgu(e.target.checked)} className="mt-0.5" />
                   <span>
-                    J'accepte les <Link href="/cgu" target="_blank" className="text-[#0B0F2E] underline">Conditions Générales d'Utilisation</Link> *
+                    {t('samsc.insc_accept_cgu', locale)} <Link href="/cgu" target="_blank" className="text-[#0B0F2E] underline">{t('samsc.insc_cgu_link', locale)}</Link> *
                   </span>
                 </label>
                 <label className="flex items-start gap-2 cursor-pointer text-sm">
                   <input type="checkbox" checked={acceptCgv} onChange={e => setAcceptCgv(e.target.checked)} className="mt-0.5" />
                   <span>
-                    J'accepte les <Link href="/cgv" target="_blank" className="text-[#0B0F2E] underline">Conditions Générales de Vente</Link> *
+                    {t('samsc.insc_accept_cgv', locale)} <Link href="/cgv" target="_blank" className="text-[#0B0F2E] underline">{t('samsc.insc_cgv_link', locale)}</Link> *
                   </span>
                 </label>
                 <label className="flex items-start gap-2 cursor-pointer text-sm text-gray-600">
                   <input type="checkbox" checked={acceptMarketing} onChange={e => setAcceptMarketing(e.target.checked)} className="mt-0.5" />
-                  <span>J'accepte de recevoir des actualités Lexora par email (optionnel)</span>
+                  <span>{t('samsc.insc_accept_marketing', locale)}</span>
                 </label>
               </div>
 
@@ -355,7 +358,7 @@ export default function InscriptionPage() {
                   onClick={() => setEtape('infos')}
                   className="inline-flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-[#0B0F2E]"
                 >
-                  <ArrowLeft className="h-4 w-4" /> Retour
+                  <ArrowLeft className="h-4 w-4" /> {t('samsc.insc_back', locale)}
                 </button>
                 <button
                   onClick={submit}
@@ -363,7 +366,7 @@ export default function InscriptionPage() {
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#0B0F2E] to-[#1a2659] text-white rounded-lg font-medium hover:opacity-95 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  Envoyer ma demande
+                  {t('samsc.insc_send_request', locale)}
                 </button>
               </div>
             </div>
@@ -376,26 +379,26 @@ export default function InscriptionPage() {
                 <CheckCircle2 className="h-8 w-8 text-emerald-600" />
               </div>
               <h2 className="text-2xl font-bold text-[#0B0F2E]">
-                Demande envoyée avec succès
+                {t('samsc.insc_success_sent', locale)}
               </h2>
               <p className="text-gray-600 max-w-md mx-auto">
-                Vous recevrez un email de confirmation dans quelques instants à <strong>{email}</strong>.
+                {t('samsc.insc_success_email', locale).split('{email}')[0]}<strong>{email}</strong>{t('samsc.insc_success_email', locale).split('{email}')[1]}
               </p>
               <p className="text-sm text-gray-500 max-w-md mx-auto">
-                Notre équipe va examiner votre dossier et vous recontacter sous <strong>24 à 48 heures ouvrées</strong> avec vos identifiants de connexion.
+                {t('samsc.insc_success_team', locale)}
               </p>
               <div className="pt-4 flex gap-3 justify-center">
                 <Link
                   href="/"
                   className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
                 >
-                  Retour à l'accueil
+                  {t('samsc.insc_back_home', locale)}
                 </Link>
                 <a
                   href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'sbach@digital-data-solutions.net'}`}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-[#0B0F2E] text-white rounded-lg text-sm hover:bg-[#1a2659]"
                 >
-                  <Mail className="h-3.5 w-3.5" /> Nous contacter
+                  <Mail className="h-3.5 w-3.5" /> {t('samsc.insc_contact_us', locale)}
                 </a>
               </div>
             </div>
@@ -403,7 +406,7 @@ export default function InscriptionPage() {
         </div>
 
         <p className="text-center text-white/50 text-xs mt-6">
-          Vos données sont protégées et ne seront jamais partagées. Voir notre <Link href="/protection-donnees" className="underline hover:text-white/80">politique de confidentialité</Link>.
+          {t('samsc.insc_privacy_note', locale)} <Link href="/protection-donnees" className="underline hover:text-white/80">{t('samsc.insc_privacy_link', locale)}</Link>.
         </p>
       </div>
     </div>
@@ -468,8 +471,8 @@ function Field({ label, value, onChange, type = 'text' }: {
   )
 }
 
-function PlanCard({ plan, periodicite, active, onClick }: {
-  plan: Plan; periodicite: 'mensuelle' | 'annuelle'; active: boolean; onClick: () => void
+function PlanCard({ plan, periodicite, active, locale, onClick }: {
+  plan: Plan; periodicite: 'mensuelle' | 'annuelle'; active: boolean; locale: ReturnType<typeof getLocale>; onClick: () => void
 }) {
   const prix = periodicite === 'annuelle' ? plan.prix_annuel_mur : plan.prix_mensuel_mur
   const suffix = periodicite === 'annuelle' ? '/an' : '/mois'
@@ -491,7 +494,7 @@ function PlanCard({ plan, periodicite, active, onClick }: {
     >
       {plan.populaire && (
         <span className="absolute -top-2 left-4 inline-flex items-center gap-1 bg-[#D4AF37] text-[#0B0F2E] text-[10px] font-bold px-2 py-0.5 rounded">
-          <Star className="h-2.5 w-2.5" /> Recommandé
+          <Star className="h-2.5 w-2.5" /> {t('samsc.insc_recommended', locale)}
         </span>
       )}
       <h3 className="font-bold text-[#0B0F2E]">{plan.nom}</h3>
@@ -499,14 +502,14 @@ function PlanCard({ plan, periodicite, active, onClick }: {
         <p className="text-[11px] text-gray-500 mt-0.5">{plan.description}</p>
       )}
       <p className="mt-3">
-        <span className="text-2xl font-black text-[#0B0F2E]">{prix?.toLocaleString('fr-FR') || '—'}</span>
+        <span className="text-2xl font-black text-[#0B0F2E]">{prix?.toLocaleString('fr-FR') || t('samsc.insc_price_none', locale)}</span>
         <span className="text-xs text-gray-500 ml-1">MUR{suffix}</span>
       </p>
       <ul className="mt-3 space-y-1 text-[11px]">
         {modulesActifs.map(([key]) => (
           <li key={key} className="flex items-center gap-1.5">
             <Check className="h-3 w-3 text-emerald-600 flex-shrink-0" />
-            <span>{MODULES_LABELS[key] || key}</span>
+            <span>{MODULES_LABEL_KEYS[key] ? t(MODULES_LABEL_KEYS[key], locale) : key}</span>
           </li>
         ))}
       </ul>
