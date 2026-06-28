@@ -262,7 +262,7 @@ export default function ParametresRHPage() {
     } catch (e) { handleErr(e) } finally { setBusy(false) }
   }
   const deleteDept = async (id: string) => {
-    if (!confirm('Supprimer ce département ?')) return
+    if (!confirm(t('hr.params.del_dept_confirm', locale))) return
     setBusy(true)
     try {
       await apiPost('/api/rh/departements', { action: 'supprimer', id })
@@ -341,7 +341,7 @@ export default function ParametresRHPage() {
       alert('Règle globale Maurice (WRA 2019). Modifiez-la pour créer un override société.')
       return
     }
-    if (!confirm('Supprimer ce type de congé pour cette société ?')) return
+    if (!confirm(t('hr.params.del_leave_type_confirm', locale))) return
     setBusy(true)
     try {
       await apiPost('/api/rh/types-conges', { action: 'supprimer', id })
@@ -365,7 +365,7 @@ export default function ParametresRHPage() {
     } catch (e) { handleErr(e) } finally { setBusy(false) }
   }
   const deleteHoliday = async (id: string) => {
-    if (!confirm('Supprimer ce jour férié ?')) return
+    if (!confirm(t('hr.params.del_holiday_confirm', locale))) return
     setBusy(true)
     try {
       await apiPost('/api/rh/jours-feries', { action: 'supprimer', id })
@@ -597,7 +597,7 @@ export default function ParametresRHPage() {
                 {editOffId === '__new__' && (
                   <tr className="bg-amber-50">
                     <td className="px-4 py-2"><Input value={draftOff.code || ""} onChange={e => setDraftOff(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" placeholder="HQ" /></td>
-                    <td className="px-4 py-2"><Input value={draftOff.nom || ""} onChange={e => setDraftOff(p => ({ ...p, nom: e.target.value }))} className="h-8" placeholder="Siège" /></td>
+                    <td className="px-4 py-2"><Input value={draftOff.nom || ""} onChange={e => setDraftOff(p => ({ ...p, nom: e.target.value }))} className="h-8" placeholder={t('hr.params.hq_ph', locale)} /></td>
                     <td className="px-4 py-2"><Input value={draftOff.adresse || ""} onChange={e => setDraftOff(p => ({ ...p, adresse: e.target.value }))} className="h-8" placeholder="Port Louis" /></td>
                     <td className="px-4 py-2 text-right">
                       <InlineActions editing busy={busy}
@@ -687,7 +687,7 @@ export default function ParametresRHPage() {
                     <td className="px-4 py-2 text-center"><Input aria-label={t('hr.params.days_per_year', locale)} type="number" value={draftLt.daysPerYear ?? 0} onChange={e => setDraftLt(p => ({ ...p, daysPerYear: Number(e.target.value) }))} className="h-8 w-20 mx-auto" /></td>
                     <td className="px-4 py-2 text-center"><Switch aria-label={t('hr.params.certificate', locale)} checked={draftLt.requiresCertificate ?? false} onCheckedChange={v => setDraftLt(p => ({ ...p, requiresCertificate: v }))} /></td>
                     <td className="px-4 py-2 text-center"><Switch aria-label={t('hr.params.paid', locale)} checked={draftLt.paid ?? true} onCheckedChange={v => setDraftLt(p => ({ ...p, paid: v }))} /></td>
-                    <td className="px-4 py-2 text-center"><span className="text-xs text-amber-600">société</span></td>
+                    <td className="px-4 py-2 text-center"><span className="text-xs text-amber-600">{t('hr.params.societe_badge', locale)}</span></td>
                     <td className="px-4 py-2 text-right">
                       <InlineActions editing busy={busy}
                         onEdit={() => {}}
@@ -728,7 +728,7 @@ export default function ParametresRHPage() {
                       <td className="px-4 py-2 text-center">
                         {lt.is_global
                           ? <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">global MU</span>
-                          : <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">société</span>}
+                          : <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">{t('hr.params.societe_badge', locale)}</span>}
                       </td>
                       <td className="px-4 py-2 text-right">
                         <InlineActions editing={editing} busy={busy}
