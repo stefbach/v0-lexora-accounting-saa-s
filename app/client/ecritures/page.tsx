@@ -55,13 +55,19 @@ interface Ecriture {
   facture_id: string | null
 }
 
-const JOURNAL_LABELS: Record<string, { label: string; color: string }> = {
-  VTE: { label: "Ventes", color: "bg-green-100 text-green-700 border-green-300" },
-  ACH: { label: "Achats", color: "bg-rose-100 text-rose-700 border-rose-300" },
-  BNQ: { label: "Banque", color: "bg-blue-100 text-blue-700 border-blue-300" },
-  SAL: { label: "Salaires", color: "bg-purple-100 text-purple-700 border-purple-300" },
-  OD: { label: "Diverses", color: "bg-amber-100 text-amber-700 border-amber-300" },
-  CLS: { label: "Clôture", color: "bg-slate-100 text-slate-700 border-slate-300" },
+const JOURNAL_COLORS: Record<string, string> = {
+  VTE: "bg-green-100 text-green-700 border-green-300",
+  ACH: "bg-rose-100 text-rose-700 border-rose-300",
+  BNQ: "bg-blue-100 text-blue-700 border-blue-300",
+  SAL: "bg-purple-100 text-purple-700 border-purple-300",
+  OD: "bg-amber-100 text-amber-700 border-amber-300",
+  CLS: "bg-slate-100 text-slate-700 border-slate-300",
+}
+// Libellé localisé d'un journal (clé acc.ecr.journal_<code>) ; fallback = code.
+function journalLabel(code: string, locale: Locale): string {
+  const key = `acc.ecr.journal_${code.toLowerCase()}`
+  const v = t(key, locale)
+  return v === key ? code : v
 }
 
 function fmt(n: number): string {
@@ -150,7 +156,7 @@ function ClientEcrituresContent() {
   }
 
   const deleteOne = async (e: Ecriture) => {
-    if (!confirm(`Supprimer cette écriture ?\n${e.numero_compte} · ${e.libelle || ''}\nCette suppression est DÉFINITIVE en base de données.`)) return
+    if (!confirm(t('acc.ecr.del_entry_confirm', locale).replace('{compte}', e.numero_compte).replace('{libelle}', e.libelle || ''))) return
     setBusyId(e.id)
     try {
       const res = await fetch(`/api/client/ecritures?id=${e.id}`, { method: 'DELETE' })
@@ -168,7 +174,7 @@ function ClientEcrituresContent() {
   }
 
   const deleteBatch = async (folio: string) => {
-    if (!confirm(`Supprimer TOUT le lot d'écritures ${folio} ?\nToutes les lignes partageant ce folio seront effacées en base.`)) return
+    if (!confirm(t('acc.ecr.del_lot_confirm', locale).replace('{folio}', folio))) return
     setBusyId(folio)
     try {
       const res = await fetch(`/api/client/ecritures?folio=${encodeURIComponent(folio)}`, { method: 'DELETE' })
@@ -327,7 +333,7 @@ function ClientEcrituresContent() {
                         <SelectItem value="all">{t('acc.ecr.all_journals', locale)}</SelectItem>
                         {journaux.map((j) => (
                           <SelectItem key={j} value={j}>
-                            {JOURNAL_LABELS[j]?.label || j}
+                            {journalLabel(j, locale)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -343,9 +349,9 @@ function ClientEcrituresContent() {
                 ) : (
                   <div className="rounded border bg-card divide-y">
                     {filtered.map((e) => {
-                      const jLabel = JOURNAL_LABELS[e.journal] || {
-                        label: e.journal,
-                        color: "bg-slate-100 text-slate-700 border-slate-300",
+                      const jLabel = {
+                        label: journalLabel(e.journal, locale),
+                        color: JOURNAL_COLORS[e.journal] || "bg-slate-100 text-slate-700 border-slate-300",
                       }
                       const isBnqLex = e.journal === "BNQ" && e.ref_folio?.startsWith("BANK-")
                       return (
@@ -475,7 +481,7 @@ function ClientEcrituresContent() {
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-700">Numéro de compte</label>
+                <label className="text-xs font-medium text-gray-700">{t('acc.ecr.account_number', locale)}</label>
                 <Input
                   value={editFields.numero_compte}
                   onChange={(e) => setEditFields({ ...editFields, numero_compte: e.target.value })}
@@ -484,7 +490,7 @@ function ClientEcrituresContent() {
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-700">Libellé</label>
+                <label className="text-xs font-medium text-gray-700">{t('acc.ecr.label_field', locale)}</label>
                 <Input
                   value={editFields.libelle}
                   onChange={(e) => setEditFields({ ...editFields, libelle: e.target.value })}
@@ -493,7 +499,7 @@ function ClientEcrituresContent() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-green-700">Débit MUR</label>
+                  <label className="text-xs font-medium text-green-700">{t('acc.ecr.debit_mur', locale)}</label>
                   <Input
                     type="number"
                     step="0.01"
@@ -503,7 +509,7 @@ function ClientEcrituresContent() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-rose-700">Crédit MUR</label>
+                  <label className="text-xs font-medium text-rose-700">{t('acc.ecr.credit_mur', locale)}</label>
                   <Input
                     type="number"
                     step="0.01"
