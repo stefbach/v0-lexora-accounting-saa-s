@@ -206,7 +206,7 @@ export default function EmailAccountsPage() {
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-600">{t('acct.email.from_name_field', locale)}</label>
-                <input type="text" value={fromName} onChange={e => setFromName(e.target.value)} placeholder="ACME Comptabilité" className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5" />
+                <input type="text" value={fromName} onChange={e => setFromName(e.target.value)} placeholder={t('acct.email.from_name_ph', locale)} className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5" />
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-600">{t('acct.email.reply_to_field', locale)}</label>

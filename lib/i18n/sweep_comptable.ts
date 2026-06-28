@@ -3,6 +3,8 @@ export const sweepComptableChunk = {
     // agent-comptable
     'scp.agent_title': 'Agent comptable',
     'scp.agent_subtitle': 'Demandez en langage naturel — je consulte, propose et exécute après votre validation',
+    'scp.agent_input_ph': "Ex: affecte l'avance de 50 000 du client Dupont à sa facture…",
+    'scp.import_steps': 'Étapes',
     'scp.action_to_confirm': 'Action à confirmer',
     // bank-credentials
     'scp.add_bank_account': 'Ajouter un compte bancaire',
@@ -378,6 +380,8 @@ export const sweepComptableChunk = {
   en: {
     'scp.agent_title': 'Accounting Agent',
     'scp.agent_subtitle': 'Ask in plain language — I look things up, propose, and execute after your approval',
+    'scp.agent_input_ph': "e.g. allocate the 50,000 advance from client Dupont to its invoice…",
+    'scp.import_steps': 'Steps',
     'scp.action_to_confirm': 'Action to confirm',
     'scp.add_bank_account': 'Add a bank account',
     'scp.create_account': 'Create account',

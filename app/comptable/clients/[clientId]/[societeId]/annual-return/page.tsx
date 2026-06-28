@@ -360,7 +360,7 @@ export default function AnnualReturnPage() {
               <p className="font-medium">{fmtDate(societe?.date_incorporation)}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Nature d&apos;activité</p>
+              <p className="text-xs text-muted-foreground">{t('cabclt.ar.activity_nature', locale)}</p>
               <p className="font-medium">{societe?.nature_activite || '—'}</p>
             </div>
             <div>
