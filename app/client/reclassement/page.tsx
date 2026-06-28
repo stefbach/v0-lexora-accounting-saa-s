@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label"
 import { Loader2, ArrowRightLeft, Lock, Unlock } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale } from "@/lib/i18n"
 
 function fmt(n: number): string {
   return (n || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -27,6 +28,7 @@ function fmt(n: number): string {
 
 export default function ReclassementPage() {
   const { societeId } = useSocieteActive()
+  const locale = getLocale()
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type }); setTimeout(() => setToast(null), 4000)
@@ -42,8 +44,8 @@ export default function ReclassementPage() {
         <div className="flex items-center gap-3">
           <div className="rounded-xl bg-[#0B0F2E] p-3 text-white"><ArrowRightLeft className="h-6 w-6" /></div>
           <div>
-            <h1 className="text-2xl font-bold text-[#0B0F2E]">Reclassement & Clôture</h1>
-            <p className="text-sm text-gray-500">Reclasser des écritures entre comptes, clôturer les périodes</p>
+            <h1 className="text-2xl font-bold text-[#0B0F2E]">{t("scp.reclass_title", locale)}</h1>
+            <p className="text-sm text-gray-500">{t("scp.reclass_subtitle", locale)}</p>
           </div>
         </div>
 
@@ -55,6 +57,7 @@ export default function ReclassementPage() {
 }
 
 function ReclassCard({ societeId, onToast }: { societeId: string; onToast: (m: string, ok?: boolean) => void }) {
+  const locale = getLocale()
   const [fromCompte, setFromCompte] = useState("")
   const [toCompte, setToCompte] = useState("")
   const [libelleContains, setLibelleContains] = useState("")
@@ -65,7 +68,7 @@ function ReclassCard({ societeId, onToast }: { societeId: string; onToast: (m: s
   const [busy, setBusy] = useState(false)
 
   const run = async (dryRun: boolean) => {
-    if (!fromCompte || !toCompte || !reason) return onToast("Compte source, cible et raison requis", false)
+    if (!fromCompte || !toCompte || !reason) return onToast(t("scp.reclass_required", locale), false)
     setBusy(true)
     try {
       const filter: any = {}
@@ -77,31 +80,31 @@ function ReclassCard({ societeId, onToast }: { societeId: string; onToast: (m: s
         body: JSON.stringify({ from_compte: fromCompte, to_compte: toCompte, filter: Object.keys(filter).length ? filter : undefined, dry_run: dryRun, reason }),
       })
       const d = await res.json()
-      if (!res.ok) return onToast(d?.error || "Échec", false)
+      if (!res.ok) return onToast(d?.error || t("scp.reclass_failed", locale), false)
       if (dryRun) setPreview(d)
-      else { onToast(`${d.executed} écriture(s) reclassée(s) ${fromCompte} → ${toCompte}`, true); setPreview(null) }
+      else { onToast(`${d.executed} ${t("scp.reclass_entries_done", locale)} ${fromCompte} → ${toCompte}`, true); setPreview(null) }
     } finally { setBusy(false) }
   }
 
   return (
     <Card>
-      <CardHeader><CardTitle className="text-base flex items-center gap-2"><ArrowRightLeft className="w-4 h-4" /> Reclassement assisté</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="text-base flex items-center gap-2"><ArrowRightLeft className="w-4 h-4" /> {t("scp.reclass_assisted", locale)}</CardTitle></CardHeader>
       <CardContent className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1"><Label>Compte source</Label><Input value={fromCompte} onChange={e => setFromCompte(e.target.value)} placeholder="471" /></div>
-          <div className="space-y-1"><Label>Compte cible</Label><Input value={toCompte} onChange={e => setToCompte(e.target.value)} placeholder="4511.OCC" /></div>
+          <div className="space-y-1"><Label>{t("scp.reclass_from_account", locale)}</Label><Input value={fromCompte} onChange={e => setFromCompte(e.target.value)} placeholder="471" /></div>
+          <div className="space-y-1"><Label>{t("scp.reclass_to_account", locale)}</Label><Input value={toCompte} onChange={e => setToCompte(e.target.value)} placeholder="4511.OCC" /></div>
         </div>
         <div className="grid grid-cols-3 gap-3">
-          <div className="space-y-1"><Label className="text-xs">Libellé contient</Label><Input value={libelleContains} onChange={e => setLibelleContains(e.target.value)} placeholder="OCC" /></div>
-          <div className="space-y-1"><Label className="text-xs">Du</Label><Input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} /></div>
-          <div className="space-y-1"><Label className="text-xs">Au</Label><Input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} /></div>
+          <div className="space-y-1"><Label className="text-xs">{t("scp.reclass_label_contains", locale)}</Label><Input value={libelleContains} onChange={e => setLibelleContains(e.target.value)} placeholder="OCC" /></div>
+          <div className="space-y-1"><Label className="text-xs">{t("scp.reclass_from_date", locale)}</Label><Input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} /></div>
+          <div className="space-y-1"><Label className="text-xs">{t("scp.reclass_to_date", locale)}</Label><Input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} /></div>
         </div>
-        <div className="space-y-1"><Label>Raison</Label><Input value={reason} onChange={e => setReason(e.target.value)} placeholder="reclassement interco OCC" /></div>
+        <div className="space-y-1"><Label>{t("scp.reclass_reason", locale)}</Label><Input value={reason} onChange={e => setReason(e.target.value)} placeholder="reclassement interco OCC" /></div>
 
         {preview && (
           <div className="rounded-lg border bg-amber-50 p-3 text-sm">
-            <div className="font-medium">Aperçu (dry-run) — {preview.nb_ecritures} écriture(s)</div>
-            <div className="text-gray-600">Débit {fmt(preview.total_debit)} / Crédit {fmt(preview.total_credit)}</div>
+            <div className="font-medium">{t("scp.reclass_preview", locale)} — {preview.nb_ecritures} {t("scp.reclass_entries", locale)}</div>
+            <div className="text-gray-600">{t("scp.reclass_debit", locale)} {fmt(preview.total_debit)} / {t("scp.reclass_credit", locale)} {fmt(preview.total_credit)}</div>
             {preview.sample?.length > 0 && (
               <ul className="mt-2 text-xs text-gray-600 max-h-40 overflow-y-auto space-y-0.5">
                 {preview.sample.map((s: any) => (
@@ -117,8 +120,8 @@ function ReclassCard({ societeId, onToast }: { societeId: string; onToast: (m: s
         )}
 
         <div className="flex gap-2 justify-end">
-          <Button variant="outline" onClick={() => run(true)} disabled={busy}>{busy && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Prévisualiser</Button>
-          <Button onClick={() => run(false)} disabled={busy || !preview} className="bg-[#0B0F2E] text-white">Exécuter le reclassement</Button>
+          <Button variant="outline" onClick={() => run(true)} disabled={busy}>{busy && <Loader2 className="w-4 h-4 animate-spin mr-2" />}{t("scp.reclass_preview_btn", locale)}</Button>
+          <Button onClick={() => run(false)} disabled={busy || !preview} className="bg-[#0B0F2E] text-white">{t("scp.reclass_execute_btn", locale)}</Button>
         </div>
       </CardContent>
     </Card>
@@ -126,6 +129,7 @@ function ReclassCard({ societeId, onToast }: { societeId: string; onToast: (m: s
 }
 
 function ClotureCard({ societeId, onToast }: { societeId: string; onToast: (m: string, ok?: boolean) => void }) {
+  const locale = getLocale()
   const [periodes, setPeriodes] = useState<any[]>([])
   const [periode, setPeriode] = useState("")
   const [busy, setBusy] = useState(false)
@@ -140,9 +144,9 @@ function ClotureCard({ societeId, onToast }: { societeId: string; onToast: (m: s
   useEffect(() => { load(); setPeriode(new Date().toISOString().slice(0, 7)) }, [load])
 
   const action = async (act: "cloturer" | "decloturer") => {
-    if (!periode) return onToast("Période requise", false)
+    if (!periode) return onToast(t("scp.cloture_period_required", locale), false)
     let motif: string | undefined
-    if (act === "decloturer") { motif = prompt("Motif de déclôture ?") || undefined; if (!motif) return }
+    if (act === "decloturer") { motif = prompt(t("scp.cloture_motif_prompt", locale)) || undefined; if (!motif) return }
     setBusy(true)
     try {
       const res = await fetch(`/api/societes/${societeId}/cloture`, {
@@ -150,24 +154,24 @@ function ClotureCard({ societeId, onToast }: { societeId: string; onToast: (m: s
         body: JSON.stringify({ periode, action: act, motif }),
       })
       const d = await res.json()
-      if (!res.ok) onToast(d?.error || "Échec", false)
-      else { onToast(`Période ${periode} ${act === "cloturer" ? "clôturée" : "déclôturée"}`, true); load() }
+      if (!res.ok) onToast(d?.error || t("scp.reclass_failed", locale), false)
+      else { onToast(`${t("scp.cloture_period_word", locale)} ${periode} ${act === "cloturer" ? t("scp.cloture_closed", locale) : t("scp.cloture_reopened", locale)}`, true); load() }
     } finally { setBusy(false) }
   }
 
   return (
     <Card>
-      <CardHeader><CardTitle className="text-base flex items-center gap-2"><Lock className="w-4 h-4" /> Clôture mensuelle</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="text-base flex items-center gap-2"><Lock className="w-4 h-4" /> {t("scp.cloture_monthly", locale)}</CardTitle></CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-sm text-gray-500">Une période clôturée bloque toute modification d'écriture. La déclôture nécessite un motif (tracé).</p>
+        <p className="text-sm text-gray-500">{t("scp.cloture_help", locale)}</p>
         <div className="flex items-end gap-2">
-          <div className="space-y-1 flex-1"><Label>Période</Label><Input type="month" value={periode} onChange={e => setPeriode(e.target.value)} /></div>
-          <Button onClick={() => action("cloturer")} disabled={busy} className="bg-[#0B0F2E] text-white"><Lock className="w-4 h-4 mr-2" />Clôturer</Button>
-          <Button variant="outline" onClick={() => action("decloturer")} disabled={busy}><Unlock className="w-4 h-4 mr-2" />Déclôturer</Button>
+          <div className="space-y-1 flex-1"><Label>{t("scp.cloture_period_word", locale)}</Label><Input type="month" value={periode} onChange={e => setPeriode(e.target.value)} /></div>
+          <Button onClick={() => action("cloturer")} disabled={busy} className="bg-[#0B0F2E] text-white"><Lock className="w-4 h-4 mr-2" />{t("scp.cloture_close_btn", locale)}</Button>
+          <Button variant="outline" onClick={() => action("decloturer")} disabled={busy}><Unlock className="w-4 h-4 mr-2" />{t("scp.cloture_reopen_btn", locale)}</Button>
         </div>
         {periodes.length > 0 && (
           <div className="rounded-lg border bg-gray-50 p-3 max-h-48 overflow-y-auto">
-            <div className="text-xs font-medium text-gray-600 mb-2">Historique des clôtures</div>
+            <div className="text-xs font-medium text-gray-600 mb-2">{t("scp.cloture_history", locale)}</div>
             <ul className="space-y-1 text-sm">
               {periodes.map((p: any) => (
                 <li key={p.periode} className="flex justify-between items-center">
