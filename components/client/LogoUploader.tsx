@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Loader2, Upload, Trash2, Image as ImageIcon, AlertTriangle } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 const MAX_BYTES = 2 * 1024 * 1024
 const ALLOWED = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"]
@@ -27,6 +28,7 @@ export function LogoUploader({ societeId, initialLogoUrl, onChange, className }:
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const locale = getLocale()
 
   useEffect(() => {
     setLogoUrl(initialLogoUrl ?? null)
@@ -46,15 +48,15 @@ export function LogoUploader({ societeId, initialLogoUrl, onChange, className }:
   async function handleFile(file: File) {
     setError(null)
     if (!societeId) {
-      setError("Société non disponible")
+      setError(t('sccl.societe_unavailable', locale))
       return
     }
     if (!ALLOWED.includes(file.type)) {
-      setError("Format non supporté (PNG, JPEG, WebP ou SVG)")
+      setError(t('sccl.unsupported_format', locale))
       return
     }
     if (file.size > MAX_BYTES) {
-      setError(`Fichier trop volumineux (max ${MAX_BYTES / 1024 / 1024} Mo)`)
+      setError(t('sccl.file_too_large', locale).replace('{max}', String(MAX_BYTES / 1024 / 1024)))
       return
     }
     setBusy(true)
@@ -66,13 +68,13 @@ export function LogoUploader({ societeId, initialLogoUrl, onChange, className }:
         body: form,
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || "Erreur upload")
+      if (!res.ok) throw new Error(data?.error || t('sccl.upload_error', locale))
       // Cache-busting : ajoute un timestamp pour forcer le navigateur à recharger
       const url = `${data.logo_url}?t=${Date.now()}`
       setLogoUrl(url)
       onChange?.(url)
     } catch (e: any) {
-      setError(e?.message || "Erreur upload")
+      setError(e?.message || t('sccl.upload_error', locale))
     } finally {
       setBusy(false)
       if (fileRef.current) fileRef.current.value = ""
@@ -81,17 +83,17 @@ export function LogoUploader({ societeId, initialLogoUrl, onChange, className }:
 
   async function handleDelete() {
     if (!societeId) return
-    if (!confirm("Supprimer le logo de la société ?")) return
+    if (!confirm(t('sccl.confirm_delete_logo', locale))) return
     setBusy(true)
     setError(null)
     try {
       const res = await fetch(`/api/client/societes/${societeId}/logo`, { method: "DELETE" })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error || "Erreur")
+      if (!res.ok) throw new Error(data?.error || t('sccl.generic_error', locale))
       setLogoUrl(null)
       onChange?.(null)
     } catch (e: any) {
-      setError(e?.message || "Erreur")
+      setError(e?.message || t('sccl.generic_error', locale))
     } finally {
       setBusy(false)
     }
@@ -104,7 +106,7 @@ export function LogoUploader({ societeId, initialLogoUrl, onChange, className }:
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={logoUrl}
-            alt="Logo société"
+            alt={t('sccl.logo_alt', locale)}
             className="max-w-full max-h-full object-contain"
           />
         ) : (
@@ -124,7 +126,7 @@ export function LogoUploader({ societeId, initialLogoUrl, onChange, className }:
             ) : (
               <Upload className="w-4 h-4 mr-1.5" />
             )}
-            {logoUrl ? "Changer le logo" : "Téléverser un logo"}
+            {logoUrl ? t('sccl.change_logo', locale) : t('sccl.upload_logo', locale)}
           </Button>
           {logoUrl && (
             <Button
@@ -135,7 +137,7 @@ export function LogoUploader({ societeId, initialLogoUrl, onChange, className }:
               className="text-red-600 hover:text-red-700"
             >
               <Trash2 className="w-4 h-4 mr-1.5" />
-              Supprimer
+              {t('sccl.delete', locale)}
             </Button>
           )}
           <input
@@ -150,8 +152,7 @@ export function LogoUploader({ societeId, initialLogoUrl, onChange, className }:
           />
         </div>
         <p className="text-xs text-muted-foreground">
-          PNG, JPEG, WebP ou SVG · max 2 Mo · sera affiché en haut des
-          factures (PDF + email).
+          {t('sccl.logo_hint', locale)}
         </p>
         {error && (
           <p className="text-xs text-red-600 flex items-center gap-1">

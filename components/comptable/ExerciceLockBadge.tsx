@@ -8,6 +8,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { t, getLocale } from "@/lib/i18n"
 
 export interface ExerciceLockBadgeProps {
   statut: "ouvert" | "cloture"
@@ -65,15 +66,16 @@ export function ExerciceLockBadge({
   snapshotDate,
   className,
 }: ExerciceLockBadgeProps) {
+  const locale = getLocale()
   const isLocked = statut === "cloture"
   const dateClotureFmt = fmtDate(dateCloture)
   const snapshotFmt = fmtDateTime(snapshotDate)
 
   const ariaLabel = isLocked
-    ? `Exercice clôturé${dateClotureFmt ? ` le ${dateClotureFmt}` : ""}${
-        snapshotFmt ? `, bilan figé le ${snapshotFmt}` : ""
+    ? `${t('sccl.exercice_closed_aria', locale)}${dateClotureFmt ? t('sccl.exercice_closed_on', locale).replace('{date}', dateClotureFmt) : ""}${
+        snapshotFmt ? t('sccl.exercice_balance_frozen', locale).replace('{datetime}', snapshotFmt) : ""
       }`
-    : "Exercice ouvert, modifications autorisées"
+    : t('sccl.exercice_open_aria', locale)
 
   const badge = isLocked ? (
     <Badge
@@ -84,7 +86,7 @@ export function ExerciceLockBadge({
     >
       <Lock className="h-3 w-3" aria-hidden="true" />
       <span>
-        Clôturé{dateClotureFmt ? ` le ${dateClotureFmt}` : ""}
+        {t('sccl.closed', locale)}{dateClotureFmt ? t('sccl.exercice_closed_on', locale).replace('{date}', dateClotureFmt) : ""}
       </span>
     </Badge>
   ) : (
@@ -95,7 +97,7 @@ export function ExerciceLockBadge({
       variant="outline"
     >
       <Unlock className="h-3 w-3" aria-hidden="true" />
-      <span>Ouvert</span>
+      <span>{t('sccl.open', locale)}</span>
     </Badge>
   )
 
@@ -111,7 +113,7 @@ export function ExerciceLockBadge({
             </span>
           </TooltipTrigger>
           <TooltipContent side="top">
-            <p className="text-xs">Bilan figé le {snapshotFmt}</p>
+            <p className="text-xs">{t('sccl.balance_frozen_on', locale).replace('{datetime}', snapshotFmt)}</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

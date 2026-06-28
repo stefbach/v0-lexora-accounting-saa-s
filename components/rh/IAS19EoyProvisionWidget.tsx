@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Gift, ArrowRight, AlertTriangle, CheckCircle2 } from "lucide-react"
 import { formaterMUREoy, type IAS19EoySnapshot } from "@/lib/rh/ias19-eoy-provisions"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -18,6 +19,7 @@ const GOLD = "#D4AF37"
  * EOY Bonus IAS 19.
  */
 export function IAS19EoyProvisionWidget() {
+  const locale = getLocale()
   const [snapshot, setSnapshot] = useState<IAS19EoySnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [societe, setSociete] = useState<{ id: string; nom: string } | null>(null)
@@ -54,12 +56,9 @@ export function IAS19EoyProvisionWidget() {
 
   if (!visible || loading) return null
 
-  const MOIS = [
-    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
-  ]
+  const moisLabel = t(`scrh.month_${String(moisCourant).padStart(2, '0')}`, locale)
   const comptabilise = snapshot?.statut === 'comptabilise'
-  const periode = `${MOIS[moisCourant - 1]} ${anneeCourante}`
+  const periode = `${moisLabel} ${anneeCourante}`
   const accentColor = comptabilise ? '#16a34a' : GOLD
 
   return (
@@ -75,8 +74,8 @@ export function IAS19EoyProvisionWidget() {
             <div className="flex items-center gap-2 flex-wrap">
               <p className="font-semibold text-sm" style={{ color: NAVY }}>
                 {comptabilise
-                  ? `✅ Provision EOY comptabilisée — ${periode}`
-                  : `⚠ Provision EOY Bonus à passer pour ${periode}`}
+                  ? t('scrh.eoyp_done', locale).replace('{p}', periode)
+                  : t('scrh.eoyp_todo', locale).replace('{p}', periode)}
               </p>
               <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-300">
                 IAS 19 · §19-24
@@ -85,28 +84,28 @@ export function IAS19EoyProvisionWidget() {
 
             {comptabilise && snapshot ? (
               <div className="mt-1.5 text-[12px] text-gray-600">
-                Cumul : <strong className="font-mono" style={{ color: NAVY }}>
+                {t('scrh.eoyp_cumul', locale)} <strong className="font-mono" style={{ color: NAVY }}>
                   {formaterMUREoy(snapshot.provision_cumulee_total)}
                 </strong>
                 <span className="ml-2">
-                  ({snapshot.nb_employes_eligibles} éligibles · Compte 64176/4288)
+                  {t('scrh.eoyp_eligibles_account', locale).replace('{n}', String(snapshot.nb_employes_eligibles))}
                 </span>
               </div>
             ) : (
               <p className="text-[12px] text-gray-600 mt-1 flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3 text-amber-600" />
-                Étalez la charge du 13e mois (1/12 × earnings). Comptabilisez avant fin de mois.
+                {t('scrh.eoyp_explain', locale)}
               </p>
             )}
             {societe && (
               <p className="text-[11px] text-gray-400 mt-0.5 italic">
-                Société : {societe.nom}
+                {t('scrh.eoyp_company', locale).replace('{nom}', societe.nom)}
               </p>
             )}
           </div>
           <Link href="/rh/provisions/eoy">
             <Button size="sm" variant="outline" className="shrink-0 text-xs">
-              Voir <ArrowRight className="h-3 w-3 ml-1" />
+              {t('scrh.eoyp_see', locale)} <ArrowRight className="h-3 w-3 ml-1" />
             </Button>
           </Link>
         </div>

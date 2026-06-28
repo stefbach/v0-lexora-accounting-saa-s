@@ -1,5 +1,6 @@
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { t, getLocale } from '@/lib/i18n'
 
 /**
  * Composants Skeleton standardisés pour les états de chargement Lexora.
@@ -19,6 +20,7 @@ interface SkeletonProps {
 }
 
 export function SkeletonCard({ className }: SkeletonProps) {
+  const locale = getLocale()
   return (
     <div
       className={cn(
@@ -27,12 +29,12 @@ export function SkeletonCard({ className }: SkeletonProps) {
       )}
       role="status"
       aria-busy="true"
-      aria-label="Chargement en cours"
+      aria-label={t('scmsc.skel.loading', locale)}
     >
       <Skeleton className="h-4 w-2/5" />
       <Skeleton className="h-8 w-3/5" />
       <Skeleton className="h-3 w-1/4" />
-      <span className="sr-only">Chargement de la carte…</span>
+      <span className="sr-only">{t('scmsc.skel.loading_card', locale)}</span>
     </div>
   )
 }
@@ -41,12 +43,13 @@ export function SkeletonList({
   rows = 6,
   className,
 }: SkeletonProps & { rows?: number }) {
+  const locale = getLocale()
   return (
     <div
       className={cn('space-y-3', className)}
       role="status"
       aria-busy="true"
-      aria-label="Chargement de la liste"
+      aria-label={t('scmsc.skel.loading_list_aria', locale)}
     >
       {Array.from({ length: rows }).map((_, i) => (
         <div
@@ -61,7 +64,7 @@ export function SkeletonList({
           <Skeleton className="h-8 w-20 shrink-0 hidden sm:block" />
         </div>
       ))}
-      <span className="sr-only">Chargement de la liste…</span>
+      <span className="sr-only">{t('scmsc.skel.loading_list', locale)}</span>
     </div>
   )
 }
@@ -71,12 +74,13 @@ export function SkeletonTable({
   cols = 5,
   className,
 }: SkeletonProps & { rows?: number; cols?: number }) {
+  const locale = getLocale()
   return (
     <div
       className={cn('rounded-lg border bg-card overflow-hidden', className)}
       role="status"
       aria-busy="true"
-      aria-label="Chargement du tableau"
+      aria-label={t('scmsc.skel.loading_table_aria', locale)}
     >
       {/* Header */}
       <div
@@ -101,7 +105,7 @@ export function SkeletonTable({
           </div>
         ))}
       </div>
-      <span className="sr-only">Chargement du tableau…</span>
+      <span className="sr-only">{t('scmsc.skel.loading_table', locale)}</span>
     </div>
   )
 }
@@ -110,6 +114,7 @@ export function SkeletonForm({
   fields = 5,
   className,
 }: SkeletonProps & { fields?: number }) {
+  const locale = getLocale()
   return (
     <div
       className={cn(
@@ -118,7 +123,7 @@ export function SkeletonForm({
       )}
       role="status"
       aria-busy="true"
-      aria-label="Chargement du formulaire"
+      aria-label={t('scmsc.skel.loading_form_aria', locale)}
     >
       <Skeleton className="h-6 w-1/3" />
       {Array.from({ length: fields }).map((_, i) => (
@@ -131,7 +136,7 @@ export function SkeletonForm({
         <Skeleton className="h-10 w-28" />
         <Skeleton className="h-10 w-24" />
       </div>
-      <span className="sr-only">Chargement du formulaire…</span>
+      <span className="sr-only">{t('scmsc.skel.loading_form', locale)}</span>
     </div>
   )
 }
@@ -154,12 +159,13 @@ export function SkeletonPage({
   variant = 'table',
   showHeader = true,
 }: SkeletonPageProps) {
+  const locale = getLocale()
   return (
     <div
       className={cn('p-4 sm:p-6 space-y-6', className)}
       role="status"
       aria-busy="true"
-      aria-label="Chargement de la page"
+      aria-label={t('scmsc.skel.loading_page_aria', locale)}
     >
       {showHeader && (
         <div className="space-y-2">
@@ -199,7 +205,7 @@ export function SkeletonPage({
         </div>
       )}
 
-      <span className="sr-only">Chargement de la page…</span>
+      <span className="sr-only">{t('scmsc.skel.loading_page', locale)}</span>
     </div>
   )
 }

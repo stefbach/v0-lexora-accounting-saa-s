@@ -1,5 +1,6 @@
 import { Receipt, CreditCard, Calculator, AlertTriangle } from "lucide-react"
 import { KPICard } from "@/components/dashboard/KPICard"
+import { t, getLocale } from "@/lib/i18n"
 import type { TVAMensuelle } from "@/lib/types"
 
 interface TVAMonthlySummaryProps {
@@ -15,6 +16,7 @@ function formatMUR(amount: number): string {
 }
 
 export function TVAMonthlySummary({ data }: TVAMonthlySummaryProps) {
+  const locale = getLocale()
   const totalCollectee = data.reduce((sum, row) => sum + row.tva_collectee, 0)
   const totalDeductible = data.reduce((sum, row) => sum + row.tva_deductible, 0)
   const totalNette = data.reduce((sum, row) => sum + row.tva_nette, 0)
@@ -25,28 +27,33 @@ export function TVAMonthlySummary({ data }: TVAMonthlySummaryProps) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <KPICard
-        title="Total TVA Collectée"
+        title={t('scmsc.tva.total_collectee', locale)}
         value={formatMUR(totalCollectee)}
         icon={Receipt}
       />
       <KPICard
-        title="Total TVA Déductible"
+        title={t('scmsc.tva.total_deductible', locale)}
         value={formatMUR(totalDeductible)}
         icon={CreditCard}
       />
       <KPICard
-        title="TVA Nette totale"
+        title={t('scmsc.tva.nette_totale', locale)}
         value={formatMUR(totalNette)}
         icon={Calculator}
       />
       <KPICard
-        title="Déclarations en retard"
+        title={t('scmsc.tva.declarations_retard', locale)}
         value={enRetardCount}
         icon={AlertTriangle}
         description={
           enRetardCount > 0
-            ? `${enRetardCount} déclaration${enRetardCount > 1 ? "s" : ""} en retard`
-            : "Toutes les déclarations sont à jour"
+            ? t(
+                enRetardCount > 1
+                  ? 'scmsc.tva.nb_declarations_retard_plural'
+                  : 'scmsc.tva.nb_declarations_retard',
+                locale
+              ).replace('{n}', String(enRetardCount))
+            : t('scmsc.tva.toutes_a_jour', locale)
         }
       />
     </div>

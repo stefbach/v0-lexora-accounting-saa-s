@@ -13,19 +13,16 @@
  */
 
 import { Calendar, AlertTriangle } from "lucide-react"
-
-const MOIS_FR = [
-  "janvier", "février", "mars", "avril", "mai", "juin",
-  "juillet", "août", "septembre", "octobre", "novembre", "décembre",
-]
+import { t, getLocale } from "@/lib/i18n"
 
 export function MraDeadlineAlert() {
+  const locale = getLocale()
   const now = new Date()
   const jour = now.getDate()
   if (jour > 20) return null
 
   const joursRestants = 20 - jour
-  const moisLabel = MOIS_FR[now.getMonth()]
+  const moisLabel = t(`scrh.mda_month_${String(now.getMonth() + 1).padStart(2, '0')}`, locale)
   const annee = now.getFullYear()
 
   let borderColor: string, bgColor: string, textColor: string, iconColor: string
@@ -43,10 +40,11 @@ export function MraDeadlineAlert() {
         ? <AlertTriangle className={`w-5 h-5 ${iconColor} shrink-0`} />
         : <Calendar className={`w-5 h-5 ${iconColor} shrink-0`} />}
       <div className={`text-sm ${textColor}`}>
-        <span className="font-semibold">Deadline MRA :</span> déclarations CSG/NSF/PAYE dues avant le 20 {moisLabel} {annee}.
+        <span className="font-semibold">{t('scrh.mda_deadline_label', locale)}</span>{" "}
+        {t('scrh.mda_message', locale).replace('{mois}', moisLabel).replace('{annee}', String(annee))}
         {joursRestants === 0
-          ? <span className="font-bold"> Dernier jour !</span>
-          : <span> {joursRestants} jour{joursRestants > 1 ? "s" : ""} restant{joursRestants > 1 ? "s" : ""}.</span>}
+          ? <span className="font-bold"> {t('scrh.mda_last_day', locale)}</span>
+          : <span> {(joursRestants > 1 ? t('scrh.mda_days_left', locale) : t('scrh.mda_day_left', locale)).replace('{n}', String(joursRestants))}</span>}
       </div>
     </div>
   )

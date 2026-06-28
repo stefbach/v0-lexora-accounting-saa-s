@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { useProfile } from "@/hooks/use-profile"
 import { Loader2 } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 /** Roles allowed on pages that previously blocked only `client_user`. */
 export const NON_CLIENT_USER_ROLES = [
@@ -41,6 +42,7 @@ export function RequireRole({
   children: React.ReactNode
 }) {
   const { profile, loading } = useProfile()
+  const locale = getLocale()
 
   if (loading) {
     return (
@@ -56,14 +58,14 @@ export function RequireRole({
         <Card>
           <CardContent className="py-12 text-center space-y-4">
             <p className="text-muted-foreground">
-              Vous n&apos;avez pas accès à cette section.
+              {t('scmsc.role.acces_refuse', locale)}
             </p>
             <Link
               href="/client/tableau-de-bord"
               className="text-sm underline mt-4 inline-block"
               style={{ color: "#D4AF37" }}
             >
-              Retour au tableau de bord
+              {t('scmsc.role.retour_dashboard', locale)}
             </Link>
           </CardContent>
         </Card>

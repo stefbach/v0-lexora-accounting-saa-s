@@ -6,6 +6,7 @@
  */
 import React, { useEffect, useState } from "react"
 import { Database, BookOpen, Gavel, Sparkles, Loader2 } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -13,10 +14,13 @@ const GOLD = "#D4AF37"
 interface SourceStat { source: string; domaine: string; n: number; emb: number }
 interface Stats { total: number; embedded: number; sources: SourceStat[]; jurisprudence: number; nb_sources: number }
 
-const DOMAINE_LABEL: Record<string, string> = {
-  travail: "Travail", societes: "Sociétés", commercial: "Commercial", civil: "Civil",
-  procedure: "Procédure", penal: "Pénal", donnees: "Données", financier: "Financier",
-  immobilier: "Immobilier", arbitrage: "Arbitrage", insolvabilite: "Insolvabilité", fiscal: "Fiscal",
+const DOMAINE_KEY: Record<string, string> = {
+  travail: "scjur.ragstats.dom_travail", societes: "scjur.ragstats.dom_societes",
+  commercial: "scjur.ragstats.dom_commercial", civil: "scjur.ragstats.dom_civil",
+  procedure: "scjur.ragstats.dom_procedure", penal: "scjur.ragstats.dom_penal",
+  donnees: "scjur.ragstats.dom_donnees", financier: "scjur.ragstats.dom_financier",
+  immobilier: "scjur.ragstats.dom_immobilier", arbitrage: "scjur.ragstats.dom_arbitrage",
+  insolvabilite: "scjur.ragstats.dom_insolvabilite", fiscal: "scjur.ragstats.dom_fiscal",
 }
 
 function Stat({ value, label, icon }: { value: React.ReactNode; label: string; icon?: React.ReactNode }) {
@@ -29,6 +33,7 @@ function Stat({ value, label, icon }: { value: React.ReactNode; label: string; i
 }
 
 export function RagStats() {
+  const locale = getLocale()
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -40,12 +45,12 @@ export function RagStats() {
   }, [])
 
   if (loading) {
-    return <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm flex items-center gap-2 text-sm text-gray-500"><Loader2 className="w-4 h-4 animate-spin" /> Chargement de la base de connaissances…</div>
+    return <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm flex items-center gap-2 text-sm text-gray-500"><Loader2 className="w-4 h-4 animate-spin" /> {t('scjur.ragstats.loading_kb', locale)}</div>
   }
   if (!stats || stats.total === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-5 text-sm text-gray-500">
-        Base de connaissances vide. Lance l'ingestion via <span className="font-semibold" style={{ color: NAVY }}>Administration RAG</span> ci-dessous.
+        {t('scjur.ragstats.empty_kb_pre', locale)}<span className="font-semibold" style={{ color: NAVY }}>{t('scjur.ragstats.empty_kb_admin', locale)}</span>{t('scjur.ragstats.empty_kb_post', locale)}
       </div>
     )
   }
@@ -56,32 +61,32 @@ export function RagStats() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Stat icon={<Database className="w-4 h-4" style={{ color: GOLD }} />} value={stats.total.toLocaleString("fr-FR")} label="Passages indexés" />
-        <Stat icon={<Sparkles className="w-4 h-4" style={{ color: GOLD }} />} value={`${pct}%`} label="Vectorisés (sémantique)" />
-        <Stat icon={<BookOpen className="w-4 h-4" style={{ color: GOLD }} />} value={lois.length} label="Lois & codes" />
-        <Stat icon={<Gavel className="w-4 h-4" style={{ color: GOLD }} />} value={stats.jurisprudence.toLocaleString("fr-FR")} label="Jurisprudence" />
+        <Stat icon={<Database className="w-4 h-4" style={{ color: GOLD }} />} value={stats.total.toLocaleString("fr-FR")} label={t('scjur.ragstats.passages_indexed', locale)} />
+        <Stat icon={<Sparkles className="w-4 h-4" style={{ color: GOLD }} />} value={`${pct}%`} label={t('scjur.ragstats.vectorized_semantic', locale)} />
+        <Stat icon={<BookOpen className="w-4 h-4" style={{ color: GOLD }} />} value={lois.length} label={t('scjur.ragstats.laws_codes', locale)} />
+        <Stat icon={<Gavel className="w-4 h-4" style={{ color: GOLD }} />} value={stats.jurisprudence.toLocaleString("fr-FR")} label={t('scjur.ragstats.case_law', locale)} />
       </div>
 
       <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-          <p className="font-bold text-sm" style={{ color: NAVY }}>Base de connaissances ({stats.nb_sources} sources)</p>
-          <span className="text-[11px] text-gray-400">{stats.embedded.toLocaleString("fr-FR")} / {stats.total.toLocaleString("fr-FR")} vectorisés</span>
+          <p className="font-bold text-sm" style={{ color: NAVY }}>{t('scjur.ragstats.kb_sources', locale).replace('{n}', String(stats.nb_sources))}</p>
+          <span className="text-[11px] text-gray-400">{t('scjur.ragstats.vectorized_ratio', locale).replace('{a}', stats.embedded.toLocaleString("fr-FR")).replace('{b}', stats.total.toLocaleString("fr-FR"))}</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
-                <th className="px-5 py-2 font-semibold">Source</th>
-                <th className="px-3 py-2 font-semibold">Domaine</th>
-                <th className="px-3 py-2 font-semibold text-right">Passages</th>
-                <th className="px-3 py-2 font-semibold text-right">Vectorisés</th>
+                <th className="px-5 py-2 font-semibold">{t('scjur.ragstats.col_source', locale)}</th>
+                <th className="px-3 py-2 font-semibold">{t('scjur.ragstats.col_domain', locale)}</th>
+                <th className="px-3 py-2 font-semibold text-right">{t('scjur.ragstats.col_passages', locale)}</th>
+                <th className="px-3 py-2 font-semibold text-right">{t('scjur.ragstats.col_vectorized', locale)}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {stats.sources.map((s) => (
                 <tr key={s.source} className="hover:bg-gray-50">
                   <td className="px-5 py-2 font-medium text-gray-800">{s.source}</td>
-                  <td className="px-3 py-2 text-gray-500">{DOMAINE_LABEL[s.domaine] || s.domaine}</td>
+                  <td className="px-3 py-2 text-gray-500">{DOMAINE_KEY[s.domaine] ? t(DOMAINE_KEY[s.domaine], locale) : s.domaine}</td>
                   <td className="px-3 py-2 text-right text-gray-700">{s.n.toLocaleString("fr-FR")}</td>
                   <td className="px-3 py-2 text-right">
                     {s.emb === s.n

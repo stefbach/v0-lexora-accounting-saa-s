@@ -6,6 +6,7 @@
 // ============================================================
 
 import { useState, useRef, useEffect } from 'react';
+import { t, getLocale } from '@/lib/i18n';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -31,12 +32,14 @@ export default function CerveauTIBOK({
   societeId,
   employeId,
   mode = 'floating',
-  titre = 'Assistant LEXORA'
+  titre
 }: CerveauTIBOKProps) {
+  const locale = getLocale();
+  const titreResolved = titre ?? t('sccl.assistant_lexora', locale);
   const [ouvert, setOuvert] = useState(mode !== 'floating');
   const [messages, setMessages] = useState<Message[]>([{
     role: 'assistant',
-    content: `👋 Bonjour ! Je suis l'**Assistant IA LEXORA** — votre expert en droit du travail mauricien, paie, RH et pilotage.\n\nJe peux répondre à toute question sur :\n- 📋 **Contrats** (CDI, CDD, clauses WRA)\n- 💰 **Paie** (calculs CSG, PAYE, OT, 13ème mois)\n- 🏖️ **Congés** (droits, calculs, maternité/paternité)\n- ⚖️ **Droit social** (licenciement, préavis, indemnités)\n- 📊 **Pilotage** (présences, conformité, alertes)\n\nQue puis-je faire pour vous ?`,
+    content: t('sccl.cerveau_welcome', locale),
     timestamp: new Date()
   }]);
   const [input, setInput] = useState('');
@@ -95,7 +98,7 @@ export default function CerveauTIBOK({
     } catch {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: '❌ Une erreur est survenue. Veuillez réessayer.',
+        content: t('sccl.cerveau_error', locale),
         timestamp: new Date()
       }]);
     } finally {
@@ -124,7 +127,7 @@ export default function CerveauTIBOK({
         className="fixed bottom-6 right-6 z-50 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full p-4 shadow-lg flex items-center gap-2 transition-all"
       >
         <span className="text-2xl">🧠</span>
-        <span className="font-semibold">Assistant LEXORA</span>
+        <span className="font-semibold">{t('sccl.assistant_lexora', locale)}</span>
       </button>
     );
   }
@@ -140,8 +143,8 @@ export default function CerveauTIBOK({
         <div className="flex items-center gap-2">
           <span className="text-2xl">🧠</span>
           <div>
-            <div className="font-bold">{titre}</div>
-            <div className="text-xs text-indigo-200">Expert droit social mauricien • Paie • RH</div>
+            <div className="font-bold">{titreResolved}</div>
+            <div className="text-xs text-indigo-200">{t('sccl.cerveau_subtitle', locale)}</div>
           </div>
         </div>
         {mode === 'floating' && (
@@ -235,7 +238,7 @@ export default function CerveauTIBOK({
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && envoyer()}
-            placeholder="Posez votre question..."
+            placeholder={t('sccl.cerveau_question_placeholder', locale)}
             disabled={chargement}
             className="flex-1 border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
           />
@@ -248,7 +251,7 @@ export default function CerveauTIBOK({
           </button>
         </div>
         <div className="text-xs text-gray-400 mt-1 text-center">
-          Expert droit mauricien WRA 2019 • Finance Act 2024 • MRA 2025
+          {t('sccl.cerveau_footer', locale)}
         </div>
       </div>
     </div>

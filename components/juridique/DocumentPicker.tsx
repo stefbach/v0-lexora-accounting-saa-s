@@ -6,6 +6,7 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { UploadCloud, Loader2, FileText, Check, Paperclip } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -23,6 +24,7 @@ export function DocumentPicker({
   selected: Set<string>
   onChange: (next: Set<string>) => void
 }) {
+  const locale = getLocale()
   const [docs, setDocs] = useState<Doc[]>([])
   const [uploading, setUploading] = useState(false)
   const [open, setOpen] = useState(false)
@@ -49,7 +51,7 @@ export function DocumentPicker({
         const res = await fetch("/api/juridique/documents", { method: "POST", body: fd })
         const data = await res.json().catch(() => ({}))
         if (res.ok && data.path) added.push(data.path)
-        else alert(`Échec « ${file.name} » : ${data.error || res.status}`)
+        else alert(t('scjur.docpicker.upload_fail', locale).replace('{name}', file.name).replace('{err}', String(data.error || res.status)))
       }
       await load()
       const n = new Set(selected); added.forEach((p) => n.add(p)); onChange(n)
@@ -68,14 +70,14 @@ export function DocumentPicker({
       >
         <span className="flex items-center gap-2 font-medium" style={{ color: NAVY }}>
           <Paperclip className="w-4 h-4" style={{ color: GOLD }} />
-          Documents à analyser
+          {t('scjur.docpicker.docs_to_analyze', locale)}
           {selected.size > 0 && (
             <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(212,175,55,0.16)", color: "#8a6d15" }}>
-              {selected.size} sélectionné{selected.size > 1 ? "s" : ""}
+              {selected.size} {selected.size > 1 ? t('scjur.docpicker.selected_many', locale) : t('scjur.docpicker.selected_one', locale)}
             </span>
           )}
         </span>
-        <span className="text-xs text-gray-400">{open ? "Masquer" : "Afficher"}</span>
+        <span className="text-xs text-gray-400">{open ? t('scjur.docpicker.hide', locale) : t('scjur.docpicker.show', locale)}</span>
       </button>
 
       {open && (
@@ -85,11 +87,11 @@ export function DocumentPicker({
             className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-40 mb-2"
             style={{ background: NAVY }}
           >
-            {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />} Importer des pièces
+            {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />} {t('scjur.docpicker.import_pieces', locale)}
           </button>
           <input ref={inputRef} type="file" multiple className="hidden" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={(e) => upload(e.target.files)} />
           {docs.length === 0 ? (
-            <p className="text-xs text-gray-400 py-1">Aucune pièce analysable (PDF/images). Importez la réclamation adverse, le contrat, etc.</p>
+            <p className="text-xs text-gray-400 py-1">{t('scjur.docpicker.empty', locale)}</p>
           ) : (
             <ul className="space-y-1 max-h-44 overflow-y-auto">
               {docs.map((d) => {

@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { LexoraLogo } from "@/components/LexoraLogo"
 import { ArrowLeft, Mail, type LucideIcon } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 const FONT = "'Poppins', sans-serif"
 
@@ -139,7 +140,7 @@ export function LegalShell({
   eyebrow,
   title,
   subtitle,
-  lastUpdated = "Avril 2026",
+  lastUpdated,
   children,
 }: {
   eyebrow: string
@@ -148,6 +149,8 @@ export function LegalShell({
   lastUpdated?: string
   children: React.ReactNode
 }) {
+  const locale = getLocale()
+  const resolvedLastUpdated = lastUpdated ?? t('scjur.legal.last_updated_default', locale)
   return (
     <div style={{ backgroundColor: C.bg, minHeight: "100vh", fontFamily: FONT }}>
       {/* NAV */}
@@ -189,7 +192,7 @@ export function LegalShell({
             }}
           >
             <ArrowLeft size={14} aria-hidden="true" />
-            Retour à l&apos;accueil
+            {t('scjur.legal.back_home', locale)}
           </Link>
         </div>
       </header>
@@ -295,7 +298,7 @@ export function LegalShell({
               }}
             >
               <Mail size={12} aria-hidden="true" />
-              Une question ?
+              {t('scjur.legal.a_question', locale)}
             </div>
             <h2
               style={{
@@ -307,11 +310,10 @@ export function LegalShell({
                 letterSpacing: "-0.01em",
               }}
             >
-              Notre équipe juridique et DPO sont à votre écoute
+              {t('scjur.legal.team_heading', locale)}
             </h2>
             <p style={{ color: "#A8AFC7", fontSize: "14px", margin: "0 0 18px" }}>
-              Pour toute question relative aux conditions, à la facturation, ou
-              à la protection de vos données.
+              {t('scjur.legal.team_desc', locale)}
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
@@ -362,7 +364,7 @@ export function LegalShell({
             margin: "8px 0 0",
           }}
         >
-          Dernière mise à jour : {lastUpdated}
+          {t('scjur.legal.last_updated_label', locale).replace('{date}', resolvedLastUpdated)}
         </p>
       </main>
 
@@ -387,16 +389,15 @@ export function LegalShell({
         >
           <LexoraLogo href="/" size="md" />
           <p style={{ color: "#A8AFC7", fontSize: "13px", margin: 0 }}>
-            &copy; {new Date().getFullYear()} Digital Data Solutions Ltd — Tous
-            droits réservés — Port-Louis, Maurice
+            {t('scjur.legal.rights_reserved', locale).replace('{year}', String(new Date().getFullYear()))}
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "20px", fontSize: "13px" }}>
-            <Link href="/" style={{ color: "#A8AFC7", textDecoration: "none" }}>Accueil</Link>
-            <Link href="/tarifs" style={{ color: "#A8AFC7", textDecoration: "none" }}>Tarifs</Link>
-            <Link href="/mentions-legales" style={{ color: "#A8AFC7", textDecoration: "none" }}>Mentions légales</Link>
-            <Link href="/cgu" style={{ color: "#A8AFC7", textDecoration: "none" }}>CGU</Link>
-            <Link href="/cgv" style={{ color: "#A8AFC7", textDecoration: "none" }}>CGV</Link>
-            <a href="mailto:sbach@digital-data-solutions.net" style={{ color: "#A8AFC7", textDecoration: "none" }}>Contact</a>
+            <Link href="/" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t('scjur.legal.nav_home', locale)}</Link>
+            <Link href="/tarifs" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t('scjur.legal.nav_pricing', locale)}</Link>
+            <Link href="/mentions-legales" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t('scjur.legal.nav_legal_notice', locale)}</Link>
+            <Link href="/cgu" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t('scjur.legal.nav_cgu', locale)}</Link>
+            <Link href="/cgv" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t('scjur.legal.nav_cgv', locale)}</Link>
+            <a href="mailto:sbach@digital-data-solutions.net" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t('scjur.legal.nav_contact', locale)}</a>
           </div>
         </div>
       </footer>

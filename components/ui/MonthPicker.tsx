@@ -3,15 +3,18 @@
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight, X } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
-const MOIS_FR = [
-  "Jan", "Fév", "Mar", "Avr", "Mai", "Juin",
-  "Juil", "Août", "Sep", "Oct", "Nov", "Déc",
+const MOIS_KEYS = [
+  "scmsc.mp.mois_jan", "scmsc.mp.mois_fev", "scmsc.mp.mois_mar", "scmsc.mp.mois_avr",
+  "scmsc.mp.mois_mai", "scmsc.mp.mois_juin", "scmsc.mp.mois_juil", "scmsc.mp.mois_aout",
+  "scmsc.mp.mois_sep", "scmsc.mp.mois_oct", "scmsc.mp.mois_nov", "scmsc.mp.mois_dec",
 ]
 
-const MOIS_LONG_FR = [
-  "janvier", "février", "mars", "avril", "mai", "juin",
-  "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+const MOIS_LONG_KEYS = [
+  "scmsc.mp.long_janvier", "scmsc.mp.long_fevrier", "scmsc.mp.long_mars", "scmsc.mp.long_avril",
+  "scmsc.mp.long_mai", "scmsc.mp.long_juin", "scmsc.mp.long_juillet", "scmsc.mp.long_aout",
+  "scmsc.mp.long_septembre", "scmsc.mp.long_octobre", "scmsc.mp.long_novembre", "scmsc.mp.long_decembre",
 ]
 
 interface MonthPickerProps {
@@ -22,6 +25,7 @@ interface MonthPickerProps {
 }
 
 export function MonthPicker({ value, onChange, showTout = true, className }: MonthPickerProps) {
+  const locale = getLocale()
   const [open, setOpen] = useState(false)
   const [pickerYear, setPickerYear] = useState(() => {
     if (value) return parseInt(value.split("-")[0])
@@ -51,9 +55,9 @@ export function MonthPicker({ value, onChange, showTout = true, className }: Mon
   }
 
   function formatLabel(): string {
-    if (!value) return "Tous les mois"
+    if (!value) return t('scmsc.mp.tous_les_mois', locale)
     const [y, m] = value.split("-").map(Number)
-    return `${MOIS_LONG_FR[m - 1]} ${y}`
+    return `${t(MOIS_LONG_KEYS[m - 1], locale)} ${y}`
   }
 
   const selectedMonth = value ? parseInt(value.split("-")[1]) : null
@@ -83,7 +87,7 @@ export function MonthPicker({ value, onChange, showTout = true, className }: Mon
           className={!value ? "bg-[#0B0F2E] text-white" : ""}
           onClick={() => onChange(null)}
         >
-          Tout
+          {t('scmsc.mp.tout', locale)}
         </Button>
       )}
 
@@ -103,7 +107,8 @@ export function MonthPicker({ value, onChange, showTout = true, className }: Mon
 
           {/* Month grid */}
           <div className="grid grid-cols-4 gap-1.5">
-            {MOIS_FR.map((mois, idx) => {
+            {MOIS_KEYS.map((moisKey, idx) => {
+              const mois = t(moisKey, locale)
               const monthNum = idx + 1
               const isSelected = selectedYear === pickerYear && selectedMonth === monthNum
               const now = new Date()
@@ -136,7 +141,7 @@ export function MonthPicker({ value, onChange, showTout = true, className }: Mon
               onClick={() => { onChange(null); setOpen(false) }}
               className="w-full mt-2 px-2 py-1.5 text-xs rounded-md text-center text-gray-500 hover:bg-gray-100 border-t pt-2"
             >
-              Tous les mois
+              {t('scmsc.mp.tous_les_mois', locale)}
             </button>
           )}
         </div>

@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
+import { t, getLocale } from "@/lib/i18n"
 
 /**
  * SocieteActiveProvider — mono-société Context for the /client space.
@@ -126,12 +127,13 @@ export function SocieteActiveProvider({ children }: { children: ReactNode }) {
   // Prevent clearing the cookie during the first render, before the sociétés
   // list has loaded — otherwise a fresh visit would always drop the cookie.
   const hasLoadedOnce = useRef<boolean>(false)
+  const locale = getLocale()
 
   const loadSocietes = useCallback(async () => {
     try {
       const res = await fetch("/api/client/societes", { cache: "no-store" })
       if (!res.ok) {
-        setError("Impossible de charger la liste des sociétés.")
+        setError(t('sccl.societes_load_failed', locale))
         setSocietes([])
         return
       }
@@ -140,13 +142,13 @@ export function SocieteActiveProvider({ children }: { children: ReactNode }) {
       setSocietes(list)
       setError(null)
     } catch {
-      setError("Erreur réseau lors du chargement des sociétés.")
+      setError(t('sccl.societes_network_error', locale))
       setSocietes([])
     } finally {
       setLoading(false)
       hasLoadedOnce.current = true
     }
-  }, [])
+  }, [locale])
 
   // First mount: read persisted id + fetch sociétés list
   useEffect(() => {
@@ -188,7 +190,7 @@ export function SocieteActiveProvider({ children }: { children: ReactNode }) {
       if (!id) return
       const match = societes.find((s) => s.id === id)
       if (!match) {
-        setError("Société non accessible.")
+        setError(t('sccl.societe_not_accessible', locale))
         return
       }
       writeCookie(ACTIVE_SOCIETE_COOKIE, id, COOKIE_MAX_AGE_SECONDS)
@@ -196,7 +198,7 @@ export function SocieteActiveProvider({ children }: { children: ReactNode }) {
       setSocieteId(id)
       setError(null)
     },
-    [societes],
+    [societes, locale],
   )
 
   const clearSociete = useCallback(() => {

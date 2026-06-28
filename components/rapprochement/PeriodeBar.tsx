@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import { Calendar, CheckCircle2, Lock, AlertCircle, ChevronRight, Loader2 } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 interface MonthStats {
   mois: string // YYYY-MM
@@ -26,19 +27,23 @@ interface MonthStats {
   completion_pct: number
 }
 
-const MOIS_FR = ["Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."]
+const MOIS_KEYS = [
+  "scmsc.per.mois_janv", "scmsc.per.mois_fevr", "scmsc.per.mois_mars", "scmsc.per.mois_avr",
+  "scmsc.per.mois_mai", "scmsc.per.mois_juin", "scmsc.per.mois_juil", "scmsc.per.mois_aout",
+  "scmsc.per.mois_sept", "scmsc.per.mois_oct", "scmsc.per.mois_nov", "scmsc.per.mois_dec",
+]
 
-function formatMoisLong(ym: string) {
+function formatMoisLong(ym: string, locale: ReturnType<typeof getLocale>) {
   const [y, m] = ym.split("-")
-  return `${MOIS_FR[parseInt(m, 10) - 1]} ${y}`
+  return `${t(MOIS_KEYS[parseInt(m, 10) - 1], locale)} ${y}`
 }
 
-function statusBadge(status: string | null) {
-  if (status === "locked") return <Badge className="bg-slate-900 text-white border-0 text-[10px]"><Lock className="w-2.5 h-2.5 mr-1" />Verrouillé</Badge>
-  if (status === "validated") return <Badge className="bg-emerald-100 text-emerald-800 border-0 text-[10px]"><CheckCircle2 className="w-2.5 h-2.5 mr-1" />Validé</Badge>
-  if (status === "submitted") return <Badge className="bg-blue-100 text-blue-800 border-0 text-[10px]">Soumis</Badge>
-  if (status === "draft") return <Badge className="bg-amber-100 text-amber-800 border-0 text-[10px]">Brouillon</Badge>
-  return <Badge variant="outline" className="text-[10px]">Ouvert</Badge>
+function statusBadge(status: string | null, locale: ReturnType<typeof getLocale>) {
+  if (status === "locked") return <Badge className="bg-slate-900 text-white border-0 text-[10px]"><Lock className="w-2.5 h-2.5 mr-1" />{t('scmsc.per.status_verrouille', locale)}</Badge>
+  if (status === "validated") return <Badge className="bg-emerald-100 text-emerald-800 border-0 text-[10px]"><CheckCircle2 className="w-2.5 h-2.5 mr-1" />{t('scmsc.per.status_valide', locale)}</Badge>
+  if (status === "submitted") return <Badge className="bg-blue-100 text-blue-800 border-0 text-[10px]">{t('scmsc.per.status_soumis', locale)}</Badge>
+  if (status === "draft") return <Badge className="bg-amber-100 text-amber-800 border-0 text-[10px]">{t('scmsc.per.status_brouillon', locale)}</Badge>
+  return <Badge variant="outline" className="text-[10px]">{t('scmsc.per.status_ouvert', locale)}</Badge>
 }
 
 export function PeriodeBar({
@@ -52,6 +57,7 @@ export function PeriodeBar({
   onSelectMonth: (month: string | null) => void
   onCloturer?: (month: string) => void
 }) {
+  const locale = getLocale()
   const [months, setMonths] = useState<MonthStats[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -78,7 +84,7 @@ export function PeriodeBar({
     return (
       <Card className="border-2 border-slate-200 bg-slate-50">
         <CardContent className="p-3 text-sm text-slate-500">
-          Sélectionnez une société pour voir les périodes
+          {t('scmsc.per.select_societe', locale)}
         </CardContent>
       </Card>
     )
@@ -92,12 +98,16 @@ export function PeriodeBar({
         <div className="flex items-center gap-2 mb-2 flex-wrap">
           <Calendar className="w-4 h-4 text-[#0B0F2E]" />
           <h3 className="font-semibold text-sm text-[#0B0F2E]">
-            Période active : {activeMonth ? formatMoisLong(activeMonth) : "Toutes périodes"}
+            {t('scmsc.per.periode_active', locale).replace('{label}', activeMonth ? formatMoisLong(activeMonth, locale) : t('scmsc.per.toutes_periodes', locale))}
           </h3>
-          {activeStats && statusBadge(activeStats.reconciliation_status)}
+          {activeStats && statusBadge(activeStats.reconciliation_status, locale)}
           {activeStats && (
             <span className="text-xs text-slate-500">
-              {activeStats.completion_pct}% rapproché · {activeStats.a_verifier} à vérifier · {activeStats.non_identifie} inconnues · {activeStats.ecritures_401_non_lettrees} écritures 401
+              {t('scmsc.per.stats_summary', locale)
+                .replace('{pct}', String(activeStats.completion_pct))
+                .replace('{av}', String(activeStats.a_verifier))
+                .replace('{ni}', String(activeStats.non_identifie))
+                .replace('{ec}', String(activeStats.ecritures_401_non_lettrees))}
             </span>
           )}
           <div className="ml-auto flex items-center gap-2">
@@ -107,7 +117,7 @@ export function PeriodeBar({
               className="h-7 text-xs"
               onClick={() => onSelectMonth(null)}
             >
-              Toutes périodes
+              {t('scmsc.per.toutes_periodes', locale)}
             </Button>
             {activeMonth && activeStats && activeStats.reconciliation_status !== "locked" && onCloturer && (
               <Button
@@ -117,12 +127,12 @@ export function PeriodeBar({
                 disabled={activeStats.a_verifier > 0 || activeStats.non_identifie > 0}
                 title={
                   activeStats.a_verifier > 0 || activeStats.non_identifie > 0
-                    ? `${activeStats.a_verifier + activeStats.non_identifie} tx non classifiées - classez-les avant de clôturer`
-                    : "Crée le tableau officiel + verrouille la période"
+                    ? t('scmsc.per.cloturer_disabled_tip', locale).replace('{n}', String(activeStats.a_verifier + activeStats.non_identifie))
+                    : t('scmsc.per.cloturer_enabled_tip', locale)
                 }
               >
                 <Lock className="w-3 h-3 mr-1" />
-                Clôturer ce mois
+                {t('scmsc.per.cloturer_ce_mois', locale)}
               </Button>
             )}
           </div>
@@ -130,7 +140,7 @@ export function PeriodeBar({
 
         {loading && months.length === 0 ? (
           <div className="flex items-center gap-2 text-sm text-slate-500 py-4">
-            <Loader2 className="h-4 w-4 animate-spin" /> Chargement des périodes…
+            <Loader2 className="h-4 w-4 animate-spin" /> {t('scmsc.per.chargement_periodes', locale)}
           </div>
         ) : error ? (
           <div className="flex items-center gap-2 text-sm text-red-600 py-2">
@@ -138,7 +148,7 @@ export function PeriodeBar({
           </div>
         ) : months.length === 0 ? (
           <div className="text-sm text-slate-500 py-2">
-            Aucune période détectée. Importez un relevé bancaire pour voir les mois apparaître.
+            {t('scmsc.per.aucune_periode', locale)}
           </div>
         ) : (
           <div className="flex gap-2 overflow-x-auto pb-1">
@@ -155,15 +165,15 @@ export function PeriodeBar({
                   }`}
                 >
                   <div className="flex items-center justify-between gap-1 mb-1">
-                    <span className="font-semibold text-xs text-[#0B0F2E]">{formatMoisLong(m.mois)}</span>
-                    {statusBadge(m.reconciliation_status)}
+                    <span className="font-semibold text-xs text-[#0B0F2E]">{formatMoisLong(m.mois, locale)}</span>
+                    {statusBadge(m.reconciliation_status, locale)}
                   </div>
                   <div className="flex items-center gap-1 mb-1">
                     <Progress value={m.completion_pct} className="h-1.5 flex-1" />
                     <span className="text-[10px] font-mono text-slate-600 w-8 text-right">{m.completion_pct}%</span>
                   </div>
                   <div className="flex items-center gap-2 text-[10px] text-slate-600 flex-wrap">
-                    <span>{m.total_tx} tx</span>
+                    <span>{m.total_tx} {t('scmsc.per.tx', locale)}</span>
                     {m.a_verifier > 0 && <span className="text-amber-600">• {m.a_verifier} ⚠</span>}
                     {m.non_identifie > 0 && <span className="text-red-600">• {m.non_identifie} ?</span>}
                     {m.ecritures_401_non_lettrees > 0 && <span className="text-blue-600">• {m.ecritures_401_non_lettrees} 401</span>}
