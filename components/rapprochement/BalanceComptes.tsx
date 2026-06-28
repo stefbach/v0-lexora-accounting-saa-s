@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { BookOpen, ChevronDown, ChevronRight, Loader2, AlertCircle, CheckCircle2, ExternalLink } from "lucide-react"
 import Link from "next/link"
+import { t, getLocale } from "@/lib/i18n"
 
 interface SampleEcriture {
   date: string
@@ -62,6 +63,7 @@ function classeColor(compte: string): string {
 }
 
 export function BalanceComptes({ societeId, mois }: { societeId: string | null; mois: string | null }) {
+  const locale = getLocale()
   const [comptes, setComptes] = useState<CompteRow[]>([])
   const [totals, setTotals] = useState<Totals | null>(null)
   const [loading, setLoading] = useState(false)
@@ -113,13 +115,13 @@ export function BalanceComptes({ societeId, mois }: { societeId: string | null; 
       <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2 pb-3">
         <CardTitle className="text-sm flex items-center gap-2">
           <BookOpen className="w-4 h-4" />
-          Balance par compte
+          {t('scp.bal_title', locale)}
           {mois && <Badge variant="outline" className="text-[10px]">{mois}</Badge>}
           {totals && (
             <span className="text-xs text-slate-500 font-normal ml-2">
-              {totals.nb_comptes} comptes · {totals.nb_ecritures} écritures ·
+              {totals.nb_comptes} {t('scp.bal_accounts', locale)} · {totals.nb_ecritures} {t('scp.bal_entries', locale)} ·
               <span className={Math.abs(totals.difference) < 0.01 ? " text-emerald-600 font-semibold" : " text-red-600 font-semibold"}>
-                {" "}équilibre {fmt(totals.difference)} MUR
+                {" "}{t('scp.bal_balance', locale)} {fmt(totals.difference)} MUR
                 {Math.abs(totals.difference) < 0.01 ? " ✓" : " ⚠"}
               </span>
             </span>
@@ -129,14 +131,14 @@ export function BalanceComptes({ societeId, mois }: { societeId: string | null; 
           type="text"
           value={filter}
           onChange={e => setFilter(e.target.value)}
-          placeholder="🔍 Filtrer par numéro ou libellé..."
+          placeholder={t('scp.bal_filter_ph', locale)}
           className="text-xs border rounded px-2 py-1 w-56"
         />
       </CardHeader>
       <CardContent className="p-0 overflow-x-auto">
         {loading ? (
           <div className="flex items-center gap-2 text-sm text-slate-500 py-8 justify-center">
-            <Loader2 className="h-4 w-4 animate-spin" /> Calcul des soldes par compte…
+            <Loader2 className="h-4 w-4 animate-spin" /> {t('scp.bal_computing', locale)}
           </div>
         ) : error ? (
           <div className="flex items-center gap-2 text-sm text-red-600 p-4">
@@ -145,20 +147,20 @@ export function BalanceComptes({ societeId, mois }: { societeId: string | null; 
         ) : filtered.length === 0 ? (
           <div className="text-sm text-slate-500 p-4">
             {comptes.length === 0
-              ? (mois ? `Aucune écriture pour ${mois}` : "Aucune écriture")
-              : "Aucun compte ne correspond au filtre"}
+              ? (mois ? t('scp.bal_no_entry_month', locale).replace('{mois}', mois) : t('scp.bal_no_entry', locale))
+              : t('scp.bal_no_match', locale)}
           </div>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-8"></TableHead>
-                <TableHead className="w-24">Compte</TableHead>
-                <TableHead>Libellé</TableHead>
-                <TableHead className="text-right">Débit</TableHead>
-                <TableHead className="text-right">Crédit</TableHead>
-                <TableHead className="text-right">Solde</TableHead>
-                <TableHead className="text-right">Écritures</TableHead>
+                <TableHead className="w-24">{t('scp.bal_col_account', locale)}</TableHead>
+                <TableHead>{t('scp.bal_col_label', locale)}</TableHead>
+                <TableHead className="text-right">{t('scp.bal_col_debit', locale)}</TableHead>
+                <TableHead className="text-right">{t('scp.bal_col_credit', locale)}</TableHead>
+                <TableHead className="text-right">{t('scp.bal_col_solde', locale)}</TableHead>
+                <TableHead className="text-right">{t('scp.bal_col_entries', locale)}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -190,7 +192,7 @@ export function BalanceComptes({ societeId, mois }: { societeId: string | null; 
                       <div className="flex items-center justify-end gap-2">
                         <span className="text-slate-600">{c.nb_ecritures}</span>
                         {c.nb_lettrees > 0 && (
-                          <span className="text-emerald-600 text-[10px]" title="Écritures lettrées">
+                          <span className="text-emerald-600 text-[10px]" title={t('scp.bal_lettered_title', locale)}>
                             ({c.nb_lettrees} ✓)
                           </span>
                         )}
@@ -198,7 +200,7 @@ export function BalanceComptes({ societeId, mois }: { societeId: string | null; 
                           href={`/client/ecritures?compte=${c.compte}${mois ? `&mois=${mois}` : ''}`}
                           onClick={e => e.stopPropagation()}
                           className="text-blue-600 hover:text-blue-800"
-                          title="Voir toutes les écritures du compte"
+                          title={t('scp.bal_see_all_title', locale)}
                         >
                           <ExternalLink className="w-3 h-3" />
                         </Link>
@@ -210,17 +212,17 @@ export function BalanceComptes({ societeId, mois }: { societeId: string | null; 
                       <TableCell colSpan={7} className="bg-slate-50 p-0">
                         <div className="p-3">
                           <p className="text-xs font-semibold text-slate-600 mb-2">
-                            Dernières écritures ({c.sample.length} sur {c.nb_ecritures})
+                            {t('scp.bal_last_entries', locale)} ({c.sample.length} {t('scp.bal_of', locale)} {c.nb_ecritures})
                           </p>
                           <table className="w-full text-xs">
                             <thead className="text-slate-500">
                               <tr>
-                                <th className="text-left py-1">Date</th>
-                                <th className="text-left py-1">Journal</th>
-                                <th className="text-left py-1">Libellé</th>
-                                <th className="text-right py-1">Débit</th>
-                                <th className="text-right py-1">Crédit</th>
-                                <th className="text-center py-1">Lettre</th>
+                                <th className="text-left py-1">{t('scp.bal_col_date', locale)}</th>
+                                <th className="text-left py-1">{t('scp.bal_col_journal', locale)}</th>
+                                <th className="text-left py-1">{t('scp.bal_col_label', locale)}</th>
+                                <th className="text-right py-1">{t('scp.bal_col_debit', locale)}</th>
+                                <th className="text-right py-1">{t('scp.bal_col_credit', locale)}</th>
+                                <th className="text-center py-1">{t('scp.bal_col_lettre', locale)}</th>
                               </tr>
                             </thead>
                             <tbody>
