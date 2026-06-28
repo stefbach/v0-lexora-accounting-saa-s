@@ -55,6 +55,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { notifySuccess, notifyError, notifyWarning } from "@/lib/utils/toast"
+import { t, getLocale } from "@/lib/i18n"
 import * as XLSX from 'xlsx'
 
 import {
@@ -94,9 +95,11 @@ interface Props {
 // "-- ignorer --" et on mappe vers '' dans l'état interne.
 const IGNORE_SENTINEL = '__ignore__'
 
-const MOIS_FR = [
-  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+const MOIS_KEYS = [
+  'uirh.importprimes.mois_01', 'uirh.importprimes.mois_02', 'uirh.importprimes.mois_03',
+  'uirh.importprimes.mois_04', 'uirh.importprimes.mois_05', 'uirh.importprimes.mois_06',
+  'uirh.importprimes.mois_07', 'uirh.importprimes.mois_08', 'uirh.importprimes.mois_09',
+  'uirh.importprimes.mois_10', 'uirh.importprimes.mois_11', 'uirh.importprimes.mois_12',
 ]
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -109,11 +112,11 @@ function fmtMUR(n: number): string {
   }).format(n) + ' MUR'
 }
 
-function formaterPeriode(periode: string): string {
+function formaterPeriode(periode: string, locale: ReturnType<typeof getLocale>): string {
   const idx = parseInt(periode.slice(5, 7), 10) - 1
   const annee = periode.slice(0, 4)
-  const mois = MOIS_FR[idx]
-  return mois ? `${mois} ${annee}` : periode
+  const key = MOIS_KEYS[idx]
+  return key ? `${t(key, locale)} ${annee}` : periode
 }
 
 /** Tente de détecter une période 'YYYY-MM' depuis la cellule B1. */
@@ -206,6 +209,7 @@ export function ImportPrimesDialog({
   periode,
   onImportSuccess,
 }: Props) {
+  const locale = getLocale()
   const [open, setOpen] = useState(false)
   const [etape, setEtape] = useState<EtapeImport>('selection')
   const [file, setFile] = useState<File | null>(null)
@@ -267,12 +271,12 @@ export function ImportPrimesDialog({
       const buf = await file.arrayBuffer()
       const parsed = parseExcelBuffer(buf)
       if (!parsed) {
-        setParseError('Fichier vide ou format invalide. Vérifiez que le fichier contient une 1ère feuille avec une colonne nom + une colonne montant.')
+        setParseError(t('uirh.importprimes.err_fichier_invalide', locale))
         setParsing(false)
         return
       }
       if (parsed.lignes.length === 0) {
-        setParseError('Aucune ligne valide détectée dans le fichier (nom + montant > 0 attendus).')
+        setParseError(t('uirh.importprimes.err_aucune_ligne', locale))
         setParsing(false)
         return
       }
@@ -282,7 +286,7 @@ export function ImportPrimesDialog({
         `/api/rh/employes?societe_id=${encodeURIComponent(societeId)}`,
       )
       if (!res.ok) {
-        setParseError('Impossible de charger la liste des employés.')
+        setParseError(t('uirh.importprimes.err_charger_employes', locale))
         setParsing(false)
         return
       }
@@ -318,11 +322,11 @@ export function ImportPrimesDialog({
       setPreviewLignes(local)
       setEtape('preview')
     } catch (e) {
-      setParseError(e instanceof Error ? e.message : 'Erreur lors de la lecture du fichier')
+      setParseError(e instanceof Error ? e.message : t('uirh.importprimes.err_lecture', locale))
     } finally {
       setParsing(false)
     }
-  }, [file, societeId])
+  }, [file, societeId, locale])
 
   // ─── Étape 2 : modifications du Select par ligne ────────────────────────
 
@@ -368,7 +372,7 @@ export function ImportPrimesDialog({
     // (économie audit log + message clair). Le backend court-circuite
     // déjà 200 sur lignes:[] (STEP D.0.1) mais autant ne pas le solliciter.
     if (lignesAEnvoyer.length === 0) {
-      toast.info('Aucune ligne à importer (toutes les lignes sont sur "ignorer").')
+      toast.info(t('uirh.importprimes.toast_aucune_ligne', locale))
       handleOpenChange(false)
       return
     }
@@ -389,14 +393,21 @@ export function ImportPrimesDialog({
         const nbImp = data.nb_importes ?? 0
         if (nbBloques > 0) {
           notifyWarning(
-            `${nbImp} prime(s) importée(s). ${nbBloques} bulletin(s) verrouillé(s) ignoré(s) — déverrouillez avant de réessayer.`,
+            t('uirh.importprimes.notif_importees_bloquees', locale)
+              .replace('{nb}', String(nbImp))
+              .replace('{nbBloques}', String(nbBloques)),
           )
         } else if (Array.isArray(data.warnings) && data.warnings.length > 0) {
           notifySuccess(
-            `${nbImp} prime(s) importée(s). ${data.warnings.length} avertissement(s) non bloquant(s).`,
+            t('uirh.importprimes.notif_importees_warnings', locale)
+              .replace('{nb}', String(nbImp))
+              .replace('{nbWarn}', String(data.warnings.length)),
           )
         } else {
-          notifySuccess(`${nbImp} prime(s) importée(s) avec succès.`)
+          notifySuccess(
+            t('uirh.importprimes.notif_importees_succes', locale)
+              .replace('{nb}', String(nbImp)),
+          )
         }
         onImportSuccess?.()
         handleOpenChange(false)
@@ -406,23 +417,23 @@ export function ImportPrimesDialog({
       if (res.status === 400) {
         if (Array.isArray(data.details) && data.details.length > 0) {
           const first = data.details[0]
-          notifyError('Format invalide', `${first.path} — ${first.error}`)
+          notifyError(t('uirh.importprimes.err_format_invalide', locale), `${first.path} — ${first.error}`)
         } else {
-          notifyError('Importer primes', data.error ?? 'Validation échouée')
+          notifyError(t('uirh.importprimes.notif_title', locale), data.error ?? t('uirh.importprimes.err_validation', locale))
         }
       } else if (res.status === 401) {
-        notifyError('Importer primes', 'Session expirée — reconnectez-vous')
+        notifyError(t('uirh.importprimes.notif_title', locale), t('uirh.importprimes.err_session', locale))
       } else if (res.status === 403) {
-        notifyError('Importer primes', "Accès refusé — rôle requis manquant")
+        notifyError(t('uirh.importprimes.notif_title', locale), t('uirh.importprimes.err_acces', locale))
       } else {
-        notifyError('Importer primes', data.error ?? "Erreur inconnue")
+        notifyError(t('uirh.importprimes.notif_title', locale), data.error ?? t('uirh.importprimes.err_inconnue', locale))
       }
     } catch (e: unknown) {
-      notifyError('Importer primes', e instanceof Error ? e : 'Erreur réseau')
+      notifyError(t('uirh.importprimes.notif_title', locale), e instanceof Error ? e : t('uirh.importprimes.err_reseau', locale))
     } finally {
       setSubmitting(false)
     }
-  }, [societeId, periode, lignesAEnvoyer, onImportSuccess, handleOpenChange])
+  }, [societeId, periode, lignesAEnvoyer, onImportSuccess, handleOpenChange, locale])
 
   // ─── Compteurs récap ─────────────────────────────────────────────────────
 
@@ -451,19 +462,19 @@ export function ImportPrimesDialog({
           variant="outline"
           disabled={buttonDisabled}
           title={buttonDisabled
-            ? 'Sélectionnez une société pour importer des primes'
+            ? t('uirh.importprimes.btn_disabled_title', locale)
             : undefined}
         >
           <Upload className="w-4 h-4 mr-2" />
-          Importer Excel
+          {t('uirh.importprimes.btn_importer', locale)}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            Importer des primes commerciales
-            {etape === 'preview' && ' — Étape 2/3'}
-            {etape === 'confirmation' && ' — Étape 3/3'}
+            {t('uirh.importprimes.dialog_title', locale)}
+            {etape === 'preview' && ` ${t('uirh.importprimes.etape_2', locale)}`}
+            {etape === 'confirmation' && ` ${t('uirh.importprimes.etape_3', locale)}`}
           </DialogTitle>
         </DialogHeader>
 
@@ -483,16 +494,16 @@ export function ImportPrimesDialog({
                     {file.name}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {(file.size / 1024).toFixed(1)} KB · cliquez pour changer
+                    {(file.size / 1024).toFixed(1)} {t('uirh.importprimes.kb_changer', locale)}
                   </p>
                 </div>
               ) : (
                 <div className="space-y-2">
                   <p className="text-sm text-gray-700">
-                    Glissez-déposez votre fichier Excel ici
+                    {t('uirh.importprimes.drop_zone', locale)}
                   </p>
                   <p className="text-xs text-gray-500">
-                    ou cliquez pour parcourir · formats acceptés .xlsx, .xls
+                    {t('uirh.importprimes.drop_hint', locale)}
                   </p>
                 </div>
               )}
@@ -516,7 +527,7 @@ export function ImportPrimesDialog({
                 variant="outline"
                 onClick={() => handleOpenChange(false)}
               >
-                Annuler
+                {t('uirh.importprimes.annuler', locale)}
               </Button>
               <Button
                 type="button"
@@ -526,7 +537,7 @@ export function ImportPrimesDialog({
                 {parsing
                   ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   : null}
-                Lire le fichier
+                {t('uirh.importprimes.lire_fichier', locale)}
               </Button>
             </DialogFooter>
           </div>
@@ -536,28 +547,28 @@ export function ImportPrimesDialog({
           <div className="space-y-3 py-2">
             <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm space-y-1">
               <p className="text-blue-900">
-                Vous allez importer <strong>{lignesAEnvoyer.length}</strong> prime(s) dans le bulletin <strong>{formaterPeriode(periode)}</strong>.
+                {t('uirh.importprimes.preview_intro_avant', locale)} <strong>{lignesAEnvoyer.length}</strong> {t('uirh.importprimes.preview_intro_milieu', locale)} <strong>{formaterPeriode(periode, locale)}</strong>.
               </p>
               {periodeExcel && periodeExcel !== periode.slice(0, 7) && (
                 <p className="text-xs text-blue-700">
-                  Le fichier Excel mentionne <strong>{formaterPeriode(`${periodeExcel}-01`)}</strong>. Vérifiez que c'est cohérent avec le mois de calcul des primes.
+                  {t('uirh.importprimes.preview_excel_avant', locale)} <strong>{formaterPeriode(`${periodeExcel}-01`, locale)}</strong>. {t('uirh.importprimes.preview_excel_apres', locale)}
                 </p>
               )}
             </div>
             <div className="text-xs text-gray-600 flex gap-3">
-              <span><span className="text-green-600 font-semibold">{compteursAffichage.ok}</span> OK</span>
-              <span><span className="text-amber-600 font-semibold">{compteursAffichage.ambigu}</span> ambigu(s)</span>
-              <span><span className="text-gray-500 font-semibold">{compteursAffichage.ignorer}</span> ignoré(s)</span>
-              <span><span className="text-red-600 font-semibold">{compteursAffichage.nonMatche}</span> non matché(s)</span>
+              <span><span className="text-green-600 font-semibold">{compteursAffichage.ok}</span> {t('uirh.importprimes.cnt_ok', locale)}</span>
+              <span><span className="text-amber-600 font-semibold">{compteursAffichage.ambigu}</span> {t('uirh.importprimes.cnt_ambigu', locale)}</span>
+              <span><span className="text-gray-500 font-semibold">{compteursAffichage.ignorer}</span> {t('uirh.importprimes.cnt_ignore', locale)}</span>
+              <span><span className="text-red-600 font-semibold">{compteursAffichage.nonMatche}</span> {t('uirh.importprimes.cnt_non_matche', locale)}</span>
             </div>
             <div className="border rounded-md overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nom Excel</TableHead>
-                    <TableHead className="min-w-[220px]">Employé matché</TableHead>
-                    <TableHead className="text-right w-[120px]">Montant</TableHead>
-                    <TableHead className="w-[120px]">Statut</TableHead>
+                    <TableHead>{t('uirh.importprimes.th_nom_excel', locale)}</TableHead>
+                    <TableHead className="min-w-[220px]">{t('uirh.importprimes.th_employe_matche', locale)}</TableHead>
+                    <TableHead className="text-right w-[120px]">{t('uirh.importprimes.th_montant', locale)}</TableHead>
+                    <TableHead className="w-[120px]">{t('uirh.importprimes.th_statut', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -575,11 +586,11 @@ export function ImportPrimesDialog({
                             onValueChange={v => updateLigneEmploye(idx, v)}
                           >
                             <SelectTrigger className="h-8">
-                              <SelectValue placeholder="-- choisir --" />
+                              <SelectValue placeholder={t('uirh.importprimes.ph_choisir', locale)} />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value={IGNORE_SENTINEL}>
-                                — Ignorer cette ligne —
+                                {t('uirh.importprimes.ignorer_ligne', locale)}
                               </SelectItem>
                               {employes.map(e => (
                                 <SelectItem key={e.id} value={e.id}>
@@ -595,22 +606,22 @@ export function ImportPrimesDialog({
                         <TableCell>
                           {statut === 'ok' && (
                             <span className="inline-flex items-center gap-1 text-xs text-green-700">
-                              <CheckCircle className="w-3.5 h-3.5" /> OK
+                              <CheckCircle className="w-3.5 h-3.5" /> {t('uirh.importprimes.statut_ok', locale)}
                             </span>
                           )}
                           {statut === 'ambigu' && (
                             <span className="inline-flex items-center gap-1 text-xs text-amber-700">
-                              <AlertCircle className="w-3.5 h-3.5" /> Ambigu
+                              <AlertCircle className="w-3.5 h-3.5" /> {t('uirh.importprimes.statut_ambigu', locale)}
                             </span>
                           )}
                           {statut === 'ignorer' && (
                             <span className="inline-flex items-center gap-1 text-xs text-gray-500">
-                              Ignorée
+                              {t('uirh.importprimes.statut_ignoree', locale)}
                             </span>
                           )}
                           {statut === 'non_matche' && (
                             <span className="inline-flex items-center gap-1 text-xs text-red-700">
-                              <XCircle className="w-3.5 h-3.5" /> Non matché
+                              <XCircle className="w-3.5 h-3.5" /> {t('uirh.importprimes.statut_non_matche', locale)}
                             </span>
                           )}
                         </TableCell>
@@ -627,14 +638,14 @@ export function ImportPrimesDialog({
                 onClick={() => setEtape('selection')}
               >
                 <ChevronLeft className="w-4 h-4 mr-1" />
-                Retour
+                {t('uirh.importprimes.retour', locale)}
               </Button>
               <Button
                 type="button"
                 onClick={() => setEtape('confirmation')}
                 disabled={continueDisabled}
               >
-                Continuer
+                {t('uirh.importprimes.continuer', locale)}
               </Button>
             </DialogFooter>
           </div>
@@ -644,20 +655,20 @@ export function ImportPrimesDialog({
           <div className="space-y-4 py-2">
             <div className="rounded-md border border-gray-200 bg-gray-50 p-4 space-y-2">
               <div className="text-sm">
-                <span className="text-gray-600">Période bulletin : </span>
-                <span className="font-semibold">{formaterPeriode(periode)}</span>
+                <span className="text-gray-600">{t('uirh.importprimes.recap_periode', locale)} </span>
+                <span className="font-semibold">{formaterPeriode(periode, locale)}</span>
               </div>
               <div className="text-sm">
-                <span className="text-gray-600">Primes à importer : </span>
+                <span className="text-gray-600">{t('uirh.importprimes.recap_primes', locale)} </span>
                 <span className="font-semibold">{lignesAEnvoyer.length}</span>
               </div>
               <div className="text-sm">
-                <span className="text-gray-600">Total : </span>
+                <span className="text-gray-600">{t('uirh.importprimes.recap_total', locale)} </span>
                 <span className="font-semibold tabular-nums">{fmtMUR(totalMontant)}</span>
               </div>
               {nbIgnorees > 0 && (
                 <div className="text-sm">
-                  <span className="text-gray-600">Lignes ignorées : </span>
+                  <span className="text-gray-600">{t('uirh.importprimes.recap_ignorees', locale)} </span>
                   <span className="font-semibold">{nbIgnorees}</span>
                 </div>
               )}
@@ -665,9 +676,7 @@ export function ImportPrimesDialog({
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-amber-900">
-                Si une prime existe déjà pour un employé sur cette période, son montant sera mis à jour.
-                L'approbation et l'intégration paie existantes seront préservées.
-                Les bulletins verrouillés ou validés seront automatiquement exclus.
+                {t('uirh.importprimes.warn_maj', locale)}
               </p>
             </div>
             <DialogFooter className="gap-2">
@@ -678,7 +687,7 @@ export function ImportPrimesDialog({
                 disabled={submitting}
               >
                 <ChevronLeft className="w-4 h-4 mr-1" />
-                Retour
+                {t('uirh.importprimes.retour', locale)}
               </Button>
               <Button
                 type="button"
@@ -689,8 +698,9 @@ export function ImportPrimesDialog({
                   ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   : null}
                 {lignesAEnvoyer.length === 0
-                  ? 'Aucune ligne à importer'
-                  : `Confirmer l'import (${lignesAEnvoyer.length} ligne${lignesAEnvoyer.length > 1 ? 's' : ''})`}
+                  ? t('uirh.importprimes.btn_aucune_ligne', locale)
+                  : t(lignesAEnvoyer.length > 1 ? 'uirh.importprimes.btn_confirmer_plural' : 'uirh.importprimes.btn_confirmer_singular', locale)
+                      .replace('{n}', String(lignesAEnvoyer.length))}
               </Button>
             </DialogFooter>
           </div>

@@ -63,7 +63,7 @@ interface RouteInfo {
   totalDist: number
 }
 
-function buildOptimizedRoutes(employees: EmployeePosition[], maxPerVehicle: number = 6): RouteInfo[] {
+function buildOptimizedRoutes(employees: EmployeePosition[], locale: ReturnType<typeof getLocale>, maxPerVehicle: number = 6): RouteInfo[] {
   // Calculate distance to office for each employee with GPS
   const empsWithDist = employees.map(e => ({
     ...e,
@@ -135,7 +135,7 @@ function buildOptimizedRoutes(employees: EmployeePosition[], maxPerVehicle: numb
         stops.push(zone)
       }
     }
-    stops.push("Grand Gaube (Bureau)")
+    stops.push(t('uirh.geoloc.office_stop', locale))
 
     const totalDist = route.reduce((max, e) => Math.max(max, e.distToOffice), 0) * 2 // rough round-trip estimate
     routes.push({ employees: route, stops, totalDist })
@@ -144,12 +144,12 @@ function buildOptimizedRoutes(employees: EmployeePosition[], maxPerVehicle: numb
   return routes
 }
 
-function generateAIResponse(query: string, positions: EmployeePosition[], ramassageGroups: { time: string; zone: string; emps: EmployeePosition[] }[]): string {
+function generateAIResponse(query: string, positions: EmployeePosition[], ramassageGroups: { time: string; zone: string; emps: EmployeePosition[] }[], locale: ReturnType<typeof getLocale>): string {
   const q = query.toLowerCase()
   const working = positions.filter(p => p.shift_today === "travail")
   const workingWithAddr = working.filter(p => p.adresse && p.adresse !== "")
   const sansAdresse = positions.filter(p => !p.adresse || p.adresse === "")
-  const today = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+  const today = new Date().toLocaleDateString(locale === "en" ? "en-GB" : "fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
 
   // Group working employees by shift start time
   const byShift = new Map<string, EmployeePosition[]>()
@@ -166,7 +166,7 @@ function generateAIResponse(query: string, positions: EmployeePosition[], ramass
   let totalEmployeesRouted = 0
   let totalDistAll = 0
   for (const [time, emps] of sortedShifts) {
-    const routes = buildOptimizedRoutes(emps)
+    const routes = buildOptimizedRoutes(emps, locale)
     shiftRoutes.set(time, routes)
     totalVehicles += routes.length
     totalEmployeesRouted += emps.length
@@ -175,14 +175,14 @@ function generateAIResponse(query: string, positions: EmployeePosition[], ramass
 
   function formatShiftRoutes(shiftTime: string, routes: RouteInfo[], detailed: boolean = false): string {
     const totalEmps = routes.reduce((s, r) => s + r.employees.length, 0)
-    let out = `Shift ${shiftTime} -- ${totalEmps} employes --> ${routes.length} vehicule(s)\n`
+    let out = t('uirh.geoloc.shift_header', locale).replace('{time}', shiftTime).replace('{emps}', String(totalEmps)).replace('{vehicles}', String(routes.length)) + "\n"
     for (let i = 0; i < routes.length; i++) {
       const r = routes[i]
-      out += `  Route ${i + 1}: ${r.stops.join(" -> ")} (${r.employees.length} pers.)\n`
+      out += t('uirh.geoloc.route_line', locale).replace('{n}', String(i + 1)).replace('{stops}', r.stops.join(" -> ")).replace('{count}', String(r.employees.length)) + "\n"
       if (detailed) {
         for (const emp of r.employees) {
           const dist = emp.distToOffice > 0 ? `, ${emp.distToOffice} km` : ""
-          const addr = emp.adresse ? emp.adresse.split(",")[0].trim() : "adresse inconnue"
+          const addr = emp.adresse ? emp.adresse.split(",")[0].trim() : t('uirh.geoloc.unknown_address', locale)
           out += `    - ${emp.nom} ${emp.prenom} (${addr}${dist})\n`
         }
       } else {
@@ -196,9 +196,9 @@ function generateAIResponse(query: string, positions: EmployeePosition[], ramass
   }
 
   if (q.includes("vehicule") || q.includes("vehicule") || q.includes("combien") || q.includes("optimise") || q.includes("trajet")) {
-    if (workingWithAddr.length === 0) return "Aucun employe en service avec adresse renseignee aujourd'hui."
+    if (workingWithAddr.length === 0) return t('uirh.geoloc.no_working_with_addr', locale)
 
-    let result = `\ud83d\udcca Optimisation transport -- ${today}\n`
+    let result = `\ud83d\udcca ${t('uirh.geoloc.transport_optim_title', locale)} -- ${today}\n`
     result += `${"=".repeat(40)}\n\n`
 
     for (const [time, routes] of Array.from(shiftRoutes.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
@@ -206,19 +206,19 @@ function generateAIResponse(query: string, positions: EmployeePosition[], ramass
     }
 
     result += `${"=".repeat(40)}\n`
-    result += `TOTAL: ${totalVehicles} vehicule(s) pour ${totalEmployeesRouted} employes\n`
-    result += `Economie vs individuel: ${totalEmployeesRouted - totalVehicles} trajets evites\n`
-    result += `Distance totale estimee: ~${Math.round(totalDistAll)} km`
+    result += t('uirh.geoloc.total_vehicles', locale).replace('{vehicles}', String(totalVehicles)).replace('{emps}', String(totalEmployeesRouted)) + "\n"
+    result += t('uirh.geoloc.savings', locale).replace('{n}', String(totalEmployeesRouted - totalVehicles)) + "\n"
+    result += t('uirh.geoloc.total_distance', locale).replace('{km}', String(Math.round(totalDistAll)))
 
     if (sansAdresse.length > 0) {
-      result += `\n\n\u26a0\ufe0f ${sansAdresse.length} employe(s) sans adresse (non inclus dans le calcul)`
+      result += `\n\n\u26a0\ufe0f ` + t('uirh.geoloc.warn_no_addr_excluded', locale).replace('{n}', String(sansAdresse.length))
     }
 
     return result
   }
 
   if (q.includes("ramassage") || q.includes("organise") || q.includes("plan")) {
-    if (workingWithAddr.length === 0) return "Aucun employe en service avec adresse renseignee. Verifiez que les employes ont des adresses et des shifts assignes."
+    if (workingWithAddr.length === 0) return t('uirh.geoloc.no_working_check', locale)
 
     const shiftMatch = q.match(/(\d{2}:\d{2})/)
     const filteredShifts = shiftMatch
@@ -226,10 +226,10 @@ function generateAIResponse(query: string, positions: EmployeePosition[], ramass
       : Array.from(shiftRoutes.entries()).sort((a, b) => a[0].localeCompare(b[0]))
 
     if (filteredShifts.length === 0) {
-      return `Aucun employe trouve pour le shift de ${shiftMatch?.[1]}. Horaires disponibles: ${Array.from(shiftRoutes.keys()).sort().join(", ")}`
+      return t('uirh.geoloc.no_emp_for_shift', locale).replace('{shift}', String(shiftMatch?.[1])).replace('{available}', Array.from(shiftRoutes.keys()).sort().join(", "))
     }
 
-    let result = `\ud83d\ude90 Plan de ramassage${shiftMatch ? ` -- Shift ${shiftMatch[1]}` : ""} -- ${today}\n`
+    let result = `\ud83d\ude90 ${t('uirh.geoloc.pickup_plan_title', locale)}${shiftMatch ? ` -- ${t('uirh.geoloc.shift_label', locale)} ${shiftMatch[1]}` : ""} -- ${today}\n`
     result += `${"=".repeat(40)}\n\n`
 
     let filteredVehicles = 0
@@ -244,12 +244,12 @@ function generateAIResponse(query: string, positions: EmployeePosition[], ramass
     }
 
     result += `${"=".repeat(40)}\n`
-    result += `TOTAL: ${filteredVehicles} vehicule(s) pour ${filteredEmps} employes\n`
-    result += `Economie vs individuel: ${filteredEmps - filteredVehicles} trajets evites\n`
-    result += `Distance totale estimee: ~${Math.round(filteredDist)} km`
+    result += t('uirh.geoloc.total_vehicles', locale).replace('{vehicles}', String(filteredVehicles)).replace('{emps}', String(filteredEmps)) + "\n"
+    result += t('uirh.geoloc.savings', locale).replace('{n}', String(filteredEmps - filteredVehicles)) + "\n"
+    result += t('uirh.geoloc.total_distance', locale).replace('{km}', String(Math.round(filteredDist)))
 
     if (sansAdresse.length > 0) {
-      result += `\n\n\u26a0\ufe0f ${sansAdresse.length} employe(s) sans adresse non inclus`
+      result += `\n\n\u26a0\ufe0f ` + t('uirh.geoloc.warn_no_addr_not_included', locale).replace('{n}', String(sansAdresse.length))
     }
 
     return result
@@ -260,14 +260,14 @@ function generateAIResponse(query: string, positions: EmployeePosition[], ramass
     if (zoneMatch) {
       const searchZone = zoneMatch[1].trim().toLowerCase()
       const found = working.filter(p => p.adresse?.toLowerCase().includes(searchZone))
-      if (found.length === 0) return `Aucun employe en service trouve pres de "${zoneMatch[1].trim()}".`
-      return `${found.length} employe(s) en service pres de "${zoneMatch[1].trim()}":\n\n${found.map(e => `\u2022 ${e.prenom} ${e.nom} - ${e.adresse || "Pas d'adresse"}`).join("\n")}`
+      if (found.length === 0) return t('uirh.geoloc.no_emp_near', locale).replace('{zone}', zoneMatch[1].trim())
+      return t('uirh.geoloc.emp_near', locale).replace('{n}', String(found.length)).replace('{zone}', zoneMatch[1].trim()) + `\n\n${found.map(e => `\u2022 ${e.prenom} ${e.nom} - ${e.adresse || t('uirh.geoloc.no_address', locale)}`).join("\n")}`
     }
   }
 
   if (q.includes("sans adresse") || q.includes("adresse manquante") || q.includes("mettre a jour") || q.includes("mise a jour")) {
-    if (sansAdresse.length === 0) return "Tous les employes ont une adresse renseignee. \u2705"
-    return `\u26a0\ufe0f ${sansAdresse.length} employe(s) sans adresse a mettre a jour:\n\n${sansAdresse.map(e => `\u2022 ${e.prenom} ${e.nom} (${e.poste || "poste non defini"})`).join("\n")}\n\nCes employes ne sont pas inclus dans l'optimisation de transport.`
+    if (sansAdresse.length === 0) return t('uirh.geoloc.all_have_address', locale) + " \u2705"
+    return `\u26a0\ufe0f ` + t('uirh.geoloc.no_addr_to_update', locale).replace('{n}', String(sansAdresse.length)) + `\n\n${sansAdresse.map(e => `\u2022 ${e.prenom} ${e.nom} (${e.poste || t('uirh.geoloc.position_undefined', locale)})`).join("\n")}\n\n` + t('uirh.geoloc.not_included_transport', locale)
   }
 
   // Default: summary with optimized vehicle count
@@ -278,18 +278,18 @@ function generateAIResponse(query: string, positions: EmployeePosition[], ramass
   }
   const topZones = [...zones.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
 
-  let result = `\ud83d\udcca Resume du jour -- ${today}\n`
+  let result = `\ud83d\udcca ${t('uirh.geoloc.day_summary_title', locale)} -- ${today}\n`
   result += `${"=".repeat(40)}\n\n`
-  result += `\u2022 ${positions.length} employes au total\n`
-  result += `\u2022 ${working.length} en service\n`
-  result += `\u2022 ${sansAdresse.length} sans adresse\n\n`
-  result += `\ud83d\ude90 Transport optimise: ${totalVehicles} vehicule(s) pour ${totalEmployeesRouted} employes\n`
+  result += `\u2022 ` + t('uirh.geoloc.summary_total', locale).replace('{n}', String(positions.length)) + `\n`
+  result += `\u2022 ` + t('uirh.geoloc.summary_in_service', locale).replace('{n}', String(working.length)) + `\n`
+  result += `\u2022 ` + t('uirh.geoloc.summary_no_addr', locale).replace('{n}', String(sansAdresse.length)) + `\n\n`
+  result += `\ud83d\ude90 ` + t('uirh.geoloc.summary_transport', locale).replace('{vehicles}', String(totalVehicles)).replace('{emps}', String(totalEmployeesRouted)) + `\n`
   if (totalEmployeesRouted > 0) {
-    result += `   (ratio: 1 vehicule pour ${(totalEmployeesRouted / Math.max(totalVehicles, 1)).toFixed(1)} employes)\n`
+    result += `   ` + t('uirh.geoloc.summary_ratio', locale).replace('{ratio}', (totalEmployeesRouted / Math.max(totalVehicles, 1)).toFixed(1)) + `\n`
   }
-  result += `\nTop zones en service:\n`
-  result += topZones.map(([z, n]) => `\u2022 ${z}: ${n} employe(s)`).join("\n")
-  result += `\n\nShifts actifs: ${sortedShifts.map(([t, e]) => `${t} (${e.length} pers.)`).join(", ") || "aucun"}`
+  result += `\n` + t('uirh.geoloc.summary_top_zones', locale) + `\n`
+  result += topZones.map(([z, n]) => `\u2022 ${z}: ` + t('uirh.geoloc.n_employees', locale).replace('{n}', String(n))).join("\n")
+  result += `\n\n` + t('uirh.geoloc.summary_active_shifts', locale).replace('{shifts}', sortedShifts.map(([t2, e]) => `${t2} (${e.length} ` + t('uirh.geoloc.pers_short', locale) + `)`).join(", ") || t('uirh.geoloc.none', locale))
   return result
 }
 
@@ -968,7 +968,7 @@ export default function GeolocalisationPage() {
           <p className="text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>{t('rha.b.geo.assistant_subtitle', locale)}</p>
         </CardHeader>
         <CardContent className="space-y-3">
-          <form onSubmit={(e) => { e.preventDefault(); if (aiQuery.trim()) { setAiResponse(generateAIResponse(aiQuery, filteredPositions, ramassageGroups)); } }} className="flex gap-2">
+          <form onSubmit={(e) => { e.preventDefault(); if (aiQuery.trim()) { setAiResponse(generateAIResponse(aiQuery, filteredPositions, ramassageGroups, locale)); } }} className="flex gap-2">
             <Input
               value={aiQuery}
               onChange={e => setAiQuery(e.target.value)}
@@ -982,7 +982,7 @@ export default function GeolocalisationPage() {
           </form>
           <div className="flex gap-1 flex-wrap">
             {[t('rhpl.chip_optimize', locale), t('rhpl.chip_pickup_0600', locale), t('rhpl.chip_pickup_1400', locale), t('rhpl.chip_no_addr', locale)].map(q => (
-              <button key={q} onClick={() => { setAiQuery(q); setAiResponse(generateAIResponse(q, filteredPositions, ramassageGroups)) }} className="px-2 py-1 rounded-md text-[10px] font-medium transition-colors" style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}>
+              <button key={q} onClick={() => { setAiQuery(q); setAiResponse(generateAIResponse(q, filteredPositions, ramassageGroups, locale)) }} className="px-2 py-1 rounded-md text-[10px] font-medium transition-colors" style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}>
                 {q}
               </button>
             ))}

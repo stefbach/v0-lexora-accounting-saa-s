@@ -31,16 +31,16 @@ const MENU = [
     section: "Administration", sectionKey: "admin.administration",
     items: [
       { href: "/admin", label: "Dashboard", labelKey: "admin.dashboard", icon: LayoutDashboard, exact: true },
-      { href: "/admin/demandes-inscription", label: "Demandes d'inscription", icon: UserCircle },
+      { href: "/admin/demandes-inscription", label: "Demandes d'inscription", labelKey: "uinav.admin_registration_requests", icon: UserCircle },
       { href: "/admin/users", label: "Utilisateurs", labelKey: "admin.users", icon: Users },
       { href: "/admin/clients", label: "Clients", labelKey: "admin.clients", icon: Briefcase },
       { href: "/admin/comptables", label: "Comptables", labelKey: "admin.accountants", icon: UserCog },
       { href: "/admin/societes", label: "Societes", labelKey: "admin.companies", icon: Building2 },
       { href: "/admin/documents", label: "Documents", labelKey: "admin.documents", icon: FileText },
       { href: "/admin/services", label: "Services & Plans", labelKey: "admin.services", icon: Settings },
-      { href: "/admin/plans", label: "Catalogue tarifaire", icon: Briefcase },
-      { href: "/admin/lexora-billing", label: "Facturation Lexora", icon: Receipt },
-      { href: "/admin/lexora-tooling", label: "Lexora Tooling (IA)", icon: Brain },
+      { href: "/admin/plans", label: "Catalogue tarifaire", labelKey: "uinav.admin_pricing_catalog", icon: Briefcase },
+      { href: "/admin/lexora-billing", label: "Facturation Lexora", labelKey: "uinav.admin_lexora_billing", icon: Receipt },
+      { href: "/admin/lexora-tooling", label: "Lexora Tooling (IA)", labelKey: "uinav.admin_lexora_tooling", icon: Brain },
     ],
   },
   {
@@ -55,7 +55,7 @@ const MENU = [
     items: [
       { href: "/admin/parametres", label: "Configuration", labelKey: "admin.configuration", icon: Settings },
       { href: "/admin/reset-societe", label: "Reset société", labelKey: "admin.reset_societe", icon: ShieldAlert, danger: true },
-      { href: "/admin/purge", label: "Purge cascade", icon: ShieldAlert, danger: true },
+      { href: "/admin/purge", label: "Purge cascade", labelKey: "uinav.admin_cascade_purge", icon: ShieldAlert, danger: true },
     ],
   },
 ]

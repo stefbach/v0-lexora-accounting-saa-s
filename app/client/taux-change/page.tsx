@@ -23,21 +23,16 @@ function formatTaux(taux: number) {
   return taux.toLocaleString("fr-FR", { minimumFractionDigits: 4, maximumFractionDigits: 4 })
 }
 
-const DEVISE_LABELS: Record<string, string> = {
-  EUR: "Euro",
-  GBP: "Livre sterling",
-  USD: "Dollar US",
-  ZAR: "Rand sud-africain",
-  CNY: "Yuan chinois",
-  AED: "Dirham UAE",
-  INR: "Roupie indienne",
-  SGD: "Dollar singapourien",
-  JPY: "Yen japonais",
-  CHF: "Franc suisse",
-  CAD: "Dollar canadien",
-  AUD: "Dollar australien",
-  KES: "Shilling kenyan",
-  MGA: "Ariary malgache",
+// Liste des devises supportées (l'ordre d'affichage suit cet objet).
+const DEVISE_CODES = ["EUR","GBP","USD","ZAR","CNY","AED","INR","SGD","JPY","CHF","CAD","AUD","KES","MGA"] as const
+const DEVISE_LABEL_KEYS: Record<string, string> = {
+  EUR: 'uicl.cur_eur', GBP: 'uicl.cur_gbp', USD: 'uicl.cur_usd', ZAR: 'uicl.cur_zar',
+  CNY: 'uicl.cur_cny', AED: 'uicl.cur_aed', INR: 'uicl.cur_inr', SGD: 'uicl.cur_sgd',
+  JPY: 'uicl.cur_jpy', CHF: 'uicl.cur_chf', CAD: 'uicl.cur_cad', AUD: 'uicl.cur_aud',
+  KES: 'uicl.cur_kes', MGA: 'uicl.cur_mga',
+}
+function deviseLabel(code: string, locale: Locale): string {
+  return DEVISE_LABEL_KEYS[code] ? t(DEVISE_LABEL_KEYS[code], locale) : code
 }
 
 const DEVISE_FLAGS: Record<string, string> = {
@@ -82,11 +77,11 @@ export default function TauxChangePage() {
       setLoading(true)
       setError(null)
       const res = await fetch("/api/comptable/taux-change")
-      if (!res.ok) throw new Error(`Erreur ${res.status}`)
+      if (!res.ok) throw new Error(t("uicl.error_status", locale).replace("{s}", String(res.status)))
       const json = await res.json()
       setData(json)
     } catch (e: any) {
-      setError(e.message || "Erreur de chargement")
+      setError(e.message || t('uicl.load_error', locale))
     } finally {
       setLoading(false)
     }
@@ -112,11 +107,11 @@ export default function TauxChangePage() {
         body: JSON.stringify({ action: "update_from_api" }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error || `Erreur ${res.status}`)
-      setSuccess(json.message || "Taux mis à jour avec succès")
+      if (!res.ok) throw new Error(json.error || t("uicl.error_status", locale).replace("{s}", String(res.status)))
+      setSuccess(json.message || t('uicl.tc_rate_updated', locale))
       await fetchData()
     } catch (e: any) {
-      setError(e.message || "Erreur mise à jour API")
+      setError(e.message || t('uicl.tc_update_error', locale))
     } finally {
       setUpdating(false)
     }
@@ -139,12 +134,12 @@ export default function TauxChangePage() {
         }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error || `Erreur ${res.status}`)
-      setSuccess(json.message || "Taux enregistré")
+      if (!res.ok) throw new Error(json.error || t("uicl.error_status", locale).replace("{s}", String(res.status)))
+      setSuccess(json.message || t('uicl.tc_rate_saved', locale))
       setManualTaux("")
       await fetchData()
     } catch (e: any) {
-      setError(e.message || "Erreur enregistrement")
+      setError(e.message || t('uicl.tc_save_error', locale))
     } finally {
       setSaving(false)
     }
@@ -231,7 +226,7 @@ export default function TauxChangePage() {
                         </span>
                       </TableCell>
                       <TableCell className="text-gray-600 text-sm">
-                        {DEVISE_LABELS[devise] || devise}
+                        {deviseLabel(devise, locale)}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm font-medium text-gray-900">
                         {formatTaux(Number(r?.taux || 0))}
@@ -269,9 +264,9 @@ export default function TauxChangePage() {
                     <SelectValue placeholder={t('acc.tc.choose_currency', locale)} />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(DEVISE_LABELS).map(([code, label]) => (
+                    {DEVISE_CODES.map((code) => (
                       <SelectItem key={code} value={code}>
-                        {DEVISE_FLAGS[code] || "🏳"} {code} — {label}
+                        {DEVISE_FLAGS[code] || "🏳"} {code} — {deviseLabel(code, locale)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -298,7 +293,7 @@ export default function TauxChangePage() {
                   min="0.0001"
                   value={manualTaux}
                   onChange={e => setManualTaux(e.target.value)}
-                  placeholder="ex: 46.5000"
+                  placeholder={t('uicl.rate_ph', locale)}
                   required
                 />
               </div>
@@ -325,7 +320,7 @@ export default function TauxChangePage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(DEVISE_LABELS).map(([code, label]) => (
+                  {DEVISE_CODES.map((code) => (
                     <SelectItem key={code} value={code}>
                       {DEVISE_FLAGS[code] || "🏳"} {code}
                     </SelectItem>

@@ -12,6 +12,16 @@ export const MONTH_NAMES_FR = [
   "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
 ]
 
+export const MONTH_NAMES_EN = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+]
+
+// Sélecteur localisé des libellés de mois (FR par défaut).
+export function getMonthNames(locale: string): string[] {
+  return locale === "en" ? MONTH_NAMES_EN : MONTH_NAMES_FR
+}
+
 export type Tab =
   | "dashboard" | "profil" | "bulletins" | "planning"
   | "primes" | "conges" | "documents" | "trajets"

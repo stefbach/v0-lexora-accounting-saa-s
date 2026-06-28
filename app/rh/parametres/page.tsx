@@ -47,7 +47,7 @@ function buildSections(locale: Locale): Section[] {
       bg: "bg-slate-50",
       border: "border-l-slate-500",
       accent: "text-slate-700",
-      highlights: ["BRN, TAN, NPF", "Adresse + GPS", "Compte bancaire principal", "Contacts multi (CEO, DRH, DAF)"],
+      highlights: [t('uirh.param.hl_societe_1', locale), t('uirh.param.hl_societe_2', locale), t('uirh.param.hl_societe_3', locale), t('uirh.param.hl_societe_4', locale)],
     },
     {
       title: t('rha.a.param.s_paie_title', locale),
@@ -57,7 +57,7 @@ function buildSections(locale: Locale): Section[] {
       bg: "bg-emerald-50",
       border: "border-l-emerald-500",
       accent: "text-emerald-700",
-      highlights: ["CSG seuil + taux", "NSF + Training Levy", "PAYE seuils + tranches", "PRGF par jour"],
+      highlights: [t('uirh.param.hl_paie_1', locale), t('uirh.param.hl_paie_2', locale), t('uirh.param.hl_paie_3', locale), t('uirh.param.hl_paie_4', locale)],
     },
     {
       title: t('rha.a.param.s_conges_title', locale),
@@ -67,7 +67,7 @@ function buildSections(locale: Locale): Section[] {
       bg: "bg-blue-50",
       border: "border-l-blue-500",
       accent: "text-blue-700",
-      highlights: ["22j AL, 15j SL", "98j maternité, 5j paternité", "Toggle demi-journée par type", "Imposable par société"],
+      highlights: [t('uirh.param.hl_conges_1', locale), t('uirh.param.hl_conges_2', locale), t('uirh.param.hl_conges_3', locale), t('uirh.param.hl_conges_4', locale)],
     },
     {
       title: t('rha.a.param.s_planning_title', locale),
@@ -77,7 +77,7 @@ function buildSections(locale: Locale): Section[] {
       bg: "bg-amber-50",
       border: "border-l-amber-500",
       accent: "text-amber-700",
-      highlights: ["45h/semaine max", "9h/jour max (5j) ou 8h (6j)", "1 jour repos minimum", "Taux OT 1.5x / 2x"],
+      highlights: [t('uirh.param.hl_planning_1', locale), t('uirh.param.hl_planning_2', locale), t('uirh.param.hl_planning_3', locale), t('uirh.param.hl_planning_4', locale)],
     },
   ]
 }

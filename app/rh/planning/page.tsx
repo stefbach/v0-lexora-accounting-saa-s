@@ -548,11 +548,11 @@ export default function PlanningPage() {
     let d = 1
     while (d <= daysInMonth) {
       const end = Math.min(d + 6, daysInMonth)
-      weeks.push({ start: d, end, label: `${d}-${end} ${MONTH_NAMES[month].slice(0, 3)}` })
+      weeks.push({ start: d, end, label: `${d}-${end} ${getMonthNames(locale)[month].slice(0, 3)}` })
       d += 7
     }
     return weeks
-  }, [daysInMonth, month])
+  }, [daysInMonth, month, locale])
 
   const weeks = getWeeksOfMonth()
   const currentWeek = weeks[Math.min(weekOffset, weeks.length - 1)] || weeks[0]
@@ -1240,8 +1240,16 @@ export default function PlanningPage() {
 
       {/* Créneaux summary — bandeau enrichi avec lien vers /rh/planning/regles */}
       {(() => {
-        const societeNom = societes.find(s => s.id === societe)?.nom || "société"
-        const joursShort: Record<string, string> = { lun: "Lu", mar: "Ma", mer: "Me", jeu: "Je", ven: "Ve", sam: "Sa", dim: "Di" }
+        const societeNom = societes.find(s => s.id === societe)?.nom || t('uirh.planning.company_fallback', locale)
+        const joursShort: Record<string, string> = {
+          lun: t('uirh.planning.day_short_mon', locale),
+          mar: t('uirh.planning.day_short_tue', locale),
+          mer: t('uirh.planning.day_short_wed', locale),
+          jeu: t('uirh.planning.day_short_thu', locale),
+          ven: t('uirh.planning.day_short_fri', locale),
+          sam: t('uirh.planning.day_short_sat', locale),
+          dim: t('uirh.planning.day_short_sun', locale),
+        }
         return (
           <Card>
             <CardHeader className="pb-2">
@@ -1745,7 +1753,15 @@ export default function PlanningPage() {
                         const valid = day <= daysInMonth
                         return (
                           <th key={i} className="border px-2 py-2 text-center min-w-[120px]" style={{ backgroundColor: valid ? "#f8f9fa" : "#eee" }}>
-                            <div className="text-xs font-bold" style={{ color: "#0B0F2E" }}>{WEEK_DAY_LABELS[i]}</div>
+                            <div className="text-xs font-bold" style={{ color: "#0B0F2E" }}>{[
+                              t('uirh.planning.weekday_mon', locale),
+                              t('uirh.planning.weekday_tue', locale),
+                              t('uirh.planning.weekday_wed', locale),
+                              t('uirh.planning.weekday_thu', locale),
+                              t('uirh.planning.weekday_fri', locale),
+                              t('uirh.planning.weekday_sat', locale),
+                              t('uirh.planning.weekday_sun', locale),
+                            ][i]}</div>
                             {valid && <div className="text-xs text-gray-500">{day}/{month + 1}</div>}
                           </th>
                         )

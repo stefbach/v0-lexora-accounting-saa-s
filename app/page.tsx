@@ -74,82 +74,57 @@ export default function HomePage() {
   const features = [
     {
       icon: FileSearch,
-      title: locale === 'fr' ? 'OCR & Documents IA' : 'AI OCR & Documents',
-      items: locale === 'fr' ? [
-        'Extraction automatique des factures, reçus, relevés bancaires',
-        'Classification intelligente par type de document',
-      ] : [
-        'Automatic extraction of invoices, receipts, bank statements',
-        'Smart classification by document type',
+      title: t('uimkt.home.feat.ocr_title', locale),
+      items: [
+        t('uimkt.home.feat.ocr_1', locale),
+        t('uimkt.home.feat.ocr_2', locale),
       ],
     },
     {
       icon: BookOpen,
-      title: locale === 'fr' ? 'Comptabilité intelligente' : 'Smart Accounting',
-      items: locale === 'fr' ? [
-        'Plan comptable mauricien natif (IFRS/IAS)',
-        'Grand livre, balance, bilan & P&L automatiques',
-        'Rapprochement bancaire intelligent multi-stratégies',
-      ] : [
-        'Native Mauritian chart of accounts (IFRS/IAS)',
-        'Automatic ledger, trial balance, P&L',
-        'Intelligent multi-strategy bank reconciliation',
+      title: t('uimkt.home.feat.accounting_title', locale),
+      items: [
+        t('uimkt.home.feat.accounting_1', locale),
+        t('uimkt.home.feat.accounting_2', locale),
+        t('uimkt.home.feat.accounting_3', locale),
       ],
     },
     {
       icon: FileText,
-      title: locale === 'fr' ? 'Facturation & Templates IA' : 'Invoicing & AI Templates',
-      items: locale === 'fr' ? [
-        'Factures conformes MRA avec QR Code & IRN',
-        "Templates IA : importez une ancienne facture, l'IA crée votre modèle",
-        'Multi-devises (MUR, EUR, USD, GBP) avec taux de change automatiques',
-      ] : [
-        'MRA-compliant invoices with QR Code & IRN',
-        'AI Templates: import an old invoice, AI creates your template',
-        'Multi-currency (MUR, EUR, USD, GBP) with automatic FX rates',
+      title: t('uimkt.home.feat.invoicing_title', locale),
+      items: [
+        t('uimkt.home.feat.invoicing_1', locale),
+        t('uimkt.home.feat.invoicing_2', locale),
+        t('uimkt.home.feat.invoicing_3', locale),
       ],
     },
     {
       icon: Users,
-      title: locale === 'fr' ? 'RH & Paie complète' : 'Full HR & Payroll',
-      items: locale === 'fr' ? [
-        'Bulletins de paie conformes WRA 2019',
-        'Gestion congés, pointage, planning automatisé par IA',
-        'Exports MRA (PAYE, CSG, NSF) en un clic',
-      ] : [
-        'WRA 2019 compliant payslips',
-        'Leave management, attendance, AI-automated scheduling',
-        'One-click MRA exports (PAYE, CSG, NSF)',
+      title: t('uimkt.home.feat.hr_title', locale),
+      items: [
+        t('uimkt.home.feat.hr_1', locale),
+        t('uimkt.home.feat.hr_2', locale),
+        t('uimkt.home.feat.hr_3', locale),
       ],
     },
     {
       icon: Scale,
-      title: locale === 'fr' ? 'Juridique & Contrats IA' : 'Legal & AI Contracts',
-      items: locale === 'fr' ? [
-        'Générateur de contrats de travail (CDI, CDD, temps partiel) conformes WRA 2019',
-        'Contrats commerciaux : prestataire, NDA, SaaS, sous-traitance',
-        "Rédaction guidée par IA avec clauses légales mauriciennes",
-        'Signature électronique et suivi des versions',
-      ] : [
-        'Employment contract generator (CDI, CDD, part-time) WRA 2019 compliant',
-        'Commercial contracts: service, NDA, SaaS, subcontracting',
-        'AI-guided drafting with Mauritian legal clauses',
-        'E-signature and version tracking',
+      title: t('uimkt.home.feat.legal_title', locale),
+      items: [
+        t('uimkt.home.feat.legal_1', locale),
+        t('uimkt.home.feat.legal_2', locale),
+        t('uimkt.home.feat.legal_3', locale),
+        t('uimkt.home.feat.legal_4', locale),
       ],
     },
     {
       icon: Landmark,
-      title: locale === 'fr' ? 'Fiscal MRA' : 'MRA Tax',
-      items: locale === 'fr' ? [
-        'TVA : calcul automatique, déclaration pré-remplie',
-        'IT Form 3 / IS : génération automatique',
-        'Annual Return ROC : pré-remplissage intelligent',
-        'FAR (Fixed Asset Register) avec amortissement automatique',
-      ] : [
-        'VAT: automatic calculation, pre-filled return',
-        'IT Form 3 / IS: automatic generation',
-        'ROC Annual Return: intelligent pre-filling',
-        'FAR with automatic depreciation',
+      title: t('uimkt.home.feat.tax_title', locale),
+      items: [
+        t('uimkt.home.feat.tax_1', locale),
+        t('uimkt.home.feat.tax_2', locale),
+        t('uimkt.home.feat.tax_3', locale),
+        t('uimkt.home.feat.tax_4', locale),
       ],
     },
     {
@@ -157,36 +132,24 @@ export default function HomePage() {
       // section renders it as a dark, gold-bordered "unique worldwide"
       // card instead of the standard blue/gold alternating tile.
       icon: HeartPulse,
-      title: locale === 'fr' ? 'TIBOK · Santé salariés' : 'TIBOK · Employee Health',
-      items: locale === 'fr' ? [
-        'Téléconsultation illimitée pour vos salariés',
-        'Médecins partenaires agréés à Maurice',
-        'Ordonnances digitales et suivi médical',
-        'Intégré dans la paie — aucun coût additionnel par salarié',
-      ] : [
-        'Unlimited telemedicine for your employees',
-        'Licensed partner doctors in Mauritius',
-        'Digital prescriptions and medical follow-up',
-        'Integrated in payroll — no extra cost per employee',
+      title: t('uimkt.home.feat.tibok_title', locale),
+      items: [
+        t('uimkt.home.feat.tibok_1', locale),
+        t('uimkt.home.feat.tibok_2', locale),
+        t('uimkt.home.feat.tibok_3', locale),
+        t('uimkt.home.feat.tibok_4', locale),
       ],
       premium: true as const,
     },
   ]
 
-  const aiCapabilities = locale === 'fr' ? [
-    { icon: Brain, text: "Agent OCR — Analyse vos documents, extrait les données et crée automatiquement les écritures comptables. Factures, relevés bancaires, reçus : tout est digitalisé en secondes." },
-    { icon: GitCompareArrows, text: "Agent Rapprochement — Identifie chaque fournisseur, croise les paiements et les factures, détecte les TDS, et lettre automatiquement les écritures 401. Pense comme un vrai expert-comptable." },
-    { icon: Scale, text: "Agent Juridique — Génère des contrats de travail et commerciaux conformes au droit mauricien (WRA 2019, DPA 2017, Contract Act). CDI, CDD, NDA, prestation de services — en un clic." },
-    { icon: MessageSquare, text: "Agent RH — Calcule les bulletins de paie, gère les congés selon la WRA, optimise le planning et prépare les exports MRA automatiquement." },
-    { icon: Sparkles, text: "Agent Fiscal — Pré-remplit vos déclarations TVA, IT Form 3, Annual Return ROC. Anticipe les échéances et vous alerte avant les pénalités." },
-    { icon: Bot, text: "Agent Facturation — Crée vos factures avec le template extrait par IA de vos anciennes factures. Multi-devises, QR Code MRA, envoi automatique." },
-  ] : [
-    { icon: Brain, text: "OCR Agent — Analyzes your documents, extracts data and automatically creates journal entries. Invoices, bank statements, receipts: everything digitized in seconds." },
-    { icon: GitCompareArrows, text: "Reconciliation Agent — Identifies each supplier, cross-references payments and invoices, detects TDS, and automatically letters 401 entries. Thinks like a real accountant." },
-    { icon: Scale, text: "Legal Agent — Generates employment and commercial contracts compliant with Mauritian law (WRA 2019, DPA 2017, Contract Act). CDI, CDD, NDA, service agreements — in one click." },
-    { icon: MessageSquare, text: "HR Agent — Calculates payslips, manages leave per WRA, optimizes scheduling and prepares MRA exports automatically." },
-    { icon: Sparkles, text: "Tax Agent — Pre-fills your VAT returns, IT Form 3, ROC Annual Return. Anticipates deadlines and alerts you before penalties." },
-    { icon: Bot, text: "Invoicing Agent — Creates invoices with AI-extracted templates from your old invoices. Multi-currency, MRA QR Code, automatic sending." },
+  const aiCapabilities = [
+    { icon: Brain, text: t('uimkt.home.ai.ocr', locale) },
+    { icon: GitCompareArrows, text: t('uimkt.home.ai.reco', locale) },
+    { icon: Scale, text: t('uimkt.home.ai.legal', locale) },
+    { icon: MessageSquare, text: t('uimkt.home.ai.hr', locale) },
+    { icon: Sparkles, text: t('uimkt.home.ai.tax', locale) },
+    { icon: Bot, text: t('uimkt.home.ai.invoicing', locale) },
   ]
 
   const compliance = [
@@ -212,7 +175,7 @@ export default function HomePage() {
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6">
           <LexoraLogo href="/" size="md" showBaseline />
 
-          <nav aria-label={locale === "fr" ? "Navigation principale" : "Main navigation"} className="hidden gap-8 md:flex">
+          <nav aria-label={t("uimkt.home.nav_main", locale)} className="hidden gap-8 md:flex">
             <a href="#features" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.modules', locale)}
             </a>
@@ -223,21 +186,21 @@ export default function HomePage() {
               Telegram
             </a>
             <a href="#engine" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
-              {locale === "fr" ? "Moteur" : "Engine"}
+              {t("uimkt.home.nav_engine", locale)}
             </a>
             <a href="#pcm-claude" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
               PCM × Claude
             </a>
             {SHOW_PRICING && (
             <a href="#offres" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
-              {locale === "fr" ? "Offres" : "Offers"}
+              {t("uimkt.home.nav_offers", locale)}
             </a>
             )}
             <a href="#compliance" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.compliance', locale)}
             </a>
             <Link href="/pilotage-telegram" className="text-sm font-medium transition-colors hover:text-[#E8EAFC] inline-flex items-center gap-1" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
-              {locale === 'fr' ? 'Assistant IA' : 'AI Assistant'}
+              {t('uimkt.home.nav_assistant', locale)}
             </Link>
             {SHOW_PRICING && (
             <Link href="/tarifs" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}>
@@ -269,7 +232,7 @@ export default function HomePage() {
                   size="icon"
                   className="md:hidden h-11 w-11 hover:bg-white/5"
                   style={{ color: "#E8EAFC" }}
-                  aria-label={locale === "fr" ? "Ouvrir le menu" : "Open menu"}
+                  aria-label={t("uimkt.home.open_menu", locale)}
                 >
                   <Menu className="h-5 w-5" />
                 </Button>
@@ -280,14 +243,14 @@ export default function HomePage() {
                 style={{ backgroundColor: "#0E1338", borderLeft: "1px solid #1E2760" }}
               >
                 <SheetTitle className="sr-only">
-                  {locale === "fr" ? "Menu de navigation" : "Navigation menu"}
+                  {t("uimkt.home.nav_menu", locale)}
                 </SheetTitle>
                 <div className="flex h-full flex-col px-6 pb-8 pt-10">
-                  <nav aria-label={locale === "fr" ? "Navigation mobile" : "Mobile navigation"} className="flex flex-col gap-1">
+                  <nav aria-label={t("uimkt.home.nav_mobile", locale)} className="flex flex-col gap-1">
                     {[
                       { href: "#features", label: t('home.modules', locale) },
                       { href: "#ai", label: t('home.ai_intelligence', locale) },
-                      ...(SHOW_PRICING ? [{ href: "#offres", label: locale === "fr" ? "Offres" : "Offers" }] : []),
+                      ...(SHOW_PRICING ? [{ href: "#offres", label: t("uimkt.home.nav_offers", locale) }] : []),
                       { href: "#compliance", label: t('home.compliance', locale) },
                     ].map((link) => (
                       <a
@@ -306,7 +269,7 @@ export default function HomePage() {
                       className="flex min-h-11 items-center rounded-lg px-3 text-base font-medium transition-colors hover:bg-white/5"
                       style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}
                     >
-                      {locale === 'fr' ? 'Assistant IA' : 'AI Assistant'}
+                      {t('uimkt.home.nav_assistant', locale)}
                     </Link>
                     {SHOW_PRICING && (
                     <Link
@@ -401,41 +364,20 @@ export default function HomePage() {
                       className="block text-2xl md:text-4xl lg:text-[40px] lg:leading-[1.15]"
                       style={{ fontWeight: 400 }}
                     >
-                      {locale === "fr" ? (
-                        <>
-                          <span>L&apos;ERP piloté par l&apos;</span>
-                          <span
-                            style={{
-                              backgroundImage:
-                                "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
-                              WebkitBackgroundClip: "text",
-                              backgroundClip: "text",
-                              color: "transparent",
-                              fontWeight: 600,
-                            }}
-                          >
-                            IA
-                          </span>
-                          <span> pour Maurice</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>The </span>
-                          <span
-                            style={{
-                              backgroundImage:
-                                "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
-                              WebkitBackgroundClip: "text",
-                              backgroundClip: "text",
-                              color: "transparent",
-                              fontWeight: 600,
-                            }}
-                          >
-                            AI-powered
-                          </span>
-                          <span> ERP for Mauritius</span>
-                        </>
-                      )}
+                      <span>{t("uimkt.home.hero_l1", locale)}</span>
+                      <span
+                        style={{
+                          backgroundImage:
+                            "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
+                          WebkitBackgroundClip: "text",
+                          backgroundClip: "text",
+                          color: "transparent",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {t("uimkt.home.hero_gradient_word", locale)}
+                      </span>
+                      <span>{t("uimkt.home.hero_for_mauritius", locale)}</span>
                     </span>
                   </h1>
                 </FadeSlide>
@@ -445,9 +387,7 @@ export default function HomePage() {
                     className="mx-auto mb-8 max-w-2xl text-base md:text-lg lg:mx-0"
                     style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}
                   >
-                    {locale === "fr"
-                      ? "Avec Lexora, ce n'est pas un simple logiciel que vous prenez — c'est toute une équipe d'agents IA qui va vous accompagner à chaque étape. Comptabilité, RH, juridique, fiscal : chaque module est piloté par l'intelligence artificielle et greffé aux services experts de Lexora."
-                      : "With Lexora, you're not just getting software — you're getting an entire team of AI agents supporting you at every step. Accounting, HR, legal, tax: every module is AI-powered and connected to Lexora's expert services."}
+                    {t("uimkt.home.hero_sub", locale)}
                   </p>
                 </FadeSlide>
 
@@ -501,7 +441,7 @@ export default function HomePage() {
                         <AnimatedCounter value={6} suffix="" duration={1.2} />
                       </div>
                       <div className="text-xs" style={{ color: "#A8AFC7" }}>
-                        {locale === "fr" ? "Agents IA" : "AI agents"}
+                        {t("uimkt.home.stat_agents", locale)}
                       </div>
                     </li>
                     <li
@@ -518,7 +458,7 @@ export default function HomePage() {
                         24/7
                       </div>
                       <div className="text-xs" style={{ color: "#A8AFC7" }}>
-                        {locale === "fr" ? "Temps réel" : "Real-time"}
+                        {t("uimkt.home.stat_realtime", locale)}
                       </div>
                     </li>
                     <li
@@ -554,7 +494,7 @@ export default function HomePage() {
 
         {/* TRUST STRIP — infinite marquee just below hero */}
         <section
-          aria-label={locale === "fr" ? "Conformités et standards" : "Compliance and standards"}
+          aria-label={t("uimkt.home.trust_aria", locale)}
           className="relative overflow-hidden py-8"
           style={{
             backgroundColor: "#0B0F2E",
@@ -567,9 +507,7 @@ export default function HomePage() {
               className="mb-5 text-center text-xs font-bold uppercase tracking-widest"
               style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}
             >
-              {locale === "fr"
-                ? "Conforme aux standards mauriciens et internationaux"
-                : "Compliant with Mauritian and international standards"}
+              {t("uimkt.home.trust_standards", locale)}
             </div>
             <LogoMarquee durationSec={32} />
           </div>
@@ -608,7 +546,7 @@ export default function HomePage() {
                     className="h-1.5 w-1.5 rounded-full"
                     style={{ backgroundColor: "#4191FF" }}
                   />
-                  {locale === "fr" ? "En temps réel" : "In real time"}
+                  {t("uimkt.home.realtime_eyebrow", locale)}
                 </span>
                 <h2
                   className="mb-5 text-3xl font-bold tracking-tight md:text-5xl"
@@ -619,9 +557,7 @@ export default function HomePage() {
                     letterSpacing: "-0.02em",
                   }}
                 >
-                  {locale === "fr"
-                    ? "Voyez Lexora respirer"
-                    : "See Lexora breathing"}
+                  {t("uimkt.home.breathe_title", locale)}
                 </h2>
                 <p
                   className="mb-6 text-base md:text-lg"
@@ -632,24 +568,13 @@ export default function HomePage() {
                     lineHeight: 1.7,
                   }}
                 >
-                  {locale === "fr"
-                    ? "Vos KPIs se mettent à jour à la seconde. Chaque facture analysée, chaque bulletin émis, chaque écriture lettrée apparaît en direct dans votre tableau de bord — orchestré par les six agents IA."
-                    : "Your KPIs refresh to the second. Every invoice analyzed, every payslip issued, every entry matched shows up live in your dashboard — orchestrated by the six AI agents."}
+                  {t("uimkt.home.breathe_desc", locale)}
                 </p>
                 <ul className="space-y-3">
                   {[
-                    {
-                      fr: "Trésorerie consolidée multi-devises",
-                      en: "Consolidated multi-currency cashflow",
-                    },
-                    {
-                      fr: "Activité des agents IA seconde par seconde",
-                      en: "AI agent activity second by second",
-                    },
-                    {
-                      fr: "Alertes MRA avant échéance",
-                      en: "MRA alerts before deadlines",
-                    },
+                    t("uimkt.home.breathe_1", locale),
+                    t("uimkt.home.breathe_2", locale),
+                    t("uimkt.home.breathe_3", locale),
                   ].map((it, i) => (
                     <li
                       key={i}
@@ -663,7 +588,7 @@ export default function HomePage() {
                           background: "linear-gradient(90deg, #4191FF, #D4AF37)",
                         }}
                       />
-                      <span>{locale === "fr" ? it.fr : it.en}</span>
+                      <span>{it}</span>
                     </li>
                   ))}
                 </ul>
@@ -736,7 +661,7 @@ export default function HomePage() {
                     }}
                   />
                 </span>
-                {locale === "fr" ? "7 modules intégrés · 1 plateforme" : "7 integrated modules · 1 platform"}
+                {t("uimkt.home.modules_eyebrow", locale)}
               </span>
               {/* H2 with gradient clip on the key word */}
               <h2
@@ -749,37 +674,18 @@ export default function HomePage() {
                   lineHeight: 1.05,
                 }}
               >
-                {locale === "fr" ? (
-                  <>
-                    Modules{" "}
-                    <span
-                      style={{
-                        backgroundImage:
-                          "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
-                        WebkitBackgroundClip: "text",
-                        backgroundClip: "text",
-                        color: "transparent",
-                      }}
-                    >
-                      intelligents
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    Smart{" "}
-                    <span
-                      style={{
-                        backgroundImage:
-                          "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
-                        WebkitBackgroundClip: "text",
-                        backgroundClip: "text",
-                        color: "transparent",
-                      }}
-                    >
-                      modules
-                    </span>
-                  </>
-                )}
+                {t("uimkt.home.modules_smart_pre", locale)}{" "}
+                <span
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
+                    WebkitBackgroundClip: "text",
+                    backgroundClip: "text",
+                    color: "transparent",
+                  }}
+                >
+                  {t("uimkt.home.modules_smart_word", locale)}
+                </span>
               </h2>
               <p
                 className="mx-auto max-w-2xl text-base md:text-lg"
@@ -856,7 +762,7 @@ export default function HomePage() {
                             }}
                           >
                             <Sparkles className="h-3 w-3" aria-hidden="true" />
-                            {locale === "fr" ? "Exclusif · Unique à Maurice" : "Exclusive · Unique in Mauritius"}
+                            {t("uimkt.home.tibok_exclusive", locale)}
                           </div>
 
                           <div className="relative grid gap-8 p-7 md:p-10 lg:grid-cols-[auto_1fr_auto] lg:items-center lg:gap-10">
@@ -896,7 +802,7 @@ export default function HomePage() {
                                   className="text-[10px] font-bold uppercase tracking-widest"
                                   style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
                                 >
-                                  {moduleNum} / {totalStr} · {locale === "fr" ? "Module Santé" : "Health Module"}
+                                  {moduleNum} / {totalStr} · {t("uimkt.home.module_health", locale)}
                                 </div>
                                 <h3
                                   className="mt-1 text-xl font-bold leading-tight md:text-2xl"
@@ -919,7 +825,7 @@ export default function HomePage() {
                                   className="text-[10px] font-bold uppercase tracking-widest"
                                   style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
                                 >
-                                  {moduleNum} / {totalStr} · {locale === "fr" ? "Module Santé" : "Health Module"}
+                                  {moduleNum} / {totalStr} · {t("uimkt.home.module_health", locale)}
                                 </div>
                                 <h3
                                   className="mb-3 mt-1 text-2xl font-bold leading-tight md:text-3xl"
@@ -942,9 +848,7 @@ export default function HomePage() {
                                   lineHeight: 1.65,
                                 }}
                               >
-                                {locale === "fr"
-                                  ? "Le seul ERP mauricien qui intègre un dispositif de téléconsultation pour vos salariés. TIBOK Santé est inclus dans toutes les formules, sans coût supplémentaire."
-                                  : "The only Mauritian ERP that bundles a telemedicine platform for your employees. TIBOK Health is included in every plan, at no extra cost."}
+                                {t("uimkt.home.tibok_desc", locale)}
                               </p>
                               <ul className="grid gap-2 sm:grid-cols-2">
                                 {feature.items.map((item, i) => (
@@ -987,7 +891,7 @@ export default function HomePage() {
                                   className="text-[10px] font-bold uppercase tracking-widest"
                                   style={{ color: accent, fontFamily: "'Poppins', sans-serif" }}
                                 >
-                                  {locale === "fr" ? "Téléconsultation" : "Telemedicine"}
+                                  {t("uimkt.home.teleconsult", locale)}
                                 </div>
                                 <div
                                   className="text-2xl font-bold"
@@ -998,14 +902,14 @@ export default function HomePage() {
                                     letterSpacing: "-0.02em",
                                   }}
                                 >
-                                  {locale === "fr" ? "Illimitée" : "Unlimited"}
+                                  {t("uimkt.home.unlimited", locale)}
                                 </div>
                               </div>
                               <div
                                 className="text-right text-[10px] font-medium uppercase tracking-widest"
                                 style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}
                               >
-                                {locale === "fr" ? "Inclus · Aucun coût" : "Included · No cost"}
+                                {t("uimkt.home.included_nocost", locale)}
                               </div>
                             </div>
                           </div>
@@ -1076,7 +980,7 @@ export default function HomePage() {
                             className="text-[9px] font-bold uppercase tracking-[0.18em]"
                             style={{ color: "#94A3B8" }}
                           >
-                            {locale === "fr" ? "Module" : "Module"}
+                            {t("uimkt.home.module", locale)}
                           </span>
                           <span
                             className="text-xl font-bold leading-none"
@@ -1198,7 +1102,7 @@ export default function HomePage() {
                                   fontFamily: "'Poppins', sans-serif",
                                 }}
                               >
-                                {locale === "fr" ? "Inclus dans chaque formule" : "Included in every plan"}
+                                {t("uimkt.home.included_every_plan", locale)}
                               </span>
                             </div>
                             <ArrowRight
@@ -1281,7 +1185,7 @@ export default function HomePage() {
                 }}
               >
                 <Brain className="h-3.5 w-3.5" aria-hidden="true" />
-                {locale === "fr" ? "Équipe d'agents IA" : "AI agent team"}
+                {t("uimkt.home.ai_team", locale)}
               </span>
               <h2
                 className="mb-4 text-3xl font-bold tracking-tight md:text-5xl"
@@ -1292,39 +1196,19 @@ export default function HomePage() {
                   letterSpacing: "-0.02em",
                 }}
               >
-                {locale === "fr" ? (
-                  <>
-                    6 agents{" "}
-                    <span
-                      style={{
-                        backgroundImage:
-                          "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
-                        WebkitBackgroundClip: "text",
-                        backgroundClip: "text",
-                        color: "transparent",
-                      }}
-                    >
-                      IA
-                    </span>{" "}
-                    qui travaillent pour vous
-                  </>
-                ) : (
-                  <>
-                    6{" "}
-                    <span
-                      style={{
-                        backgroundImage:
-                          "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
-                        WebkitBackgroundClip: "text",
-                        backgroundClip: "text",
-                        color: "transparent",
-                      }}
-                    >
-                      AI agents
-                    </span>{" "}
-                    working for you
-                  </>
-                )}
+                {t("uimkt.home.agents6_pre", locale)}{" "}
+                <span
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
+                    WebkitBackgroundClip: "text",
+                    backgroundClip: "text",
+                    color: "transparent",
+                  }}
+                >
+                  {t("uimkt.home.agents6_word", locale)}
+                </span>{" "}
+                {t("uimkt.home.agents6_post", locale)}
               </h2>
               <p
                 className="mx-auto max-w-2xl text-base md:text-lg"
@@ -1335,9 +1219,7 @@ export default function HomePage() {
                   lineHeight: 1.7,
                 }}
               >
-                {locale === "fr"
-                  ? "Chaque module de Lexora est piloté par un agent IA spécialisé. Pas de saisie manuelle, pas de configuration complexe — vos agents comprennent votre entreprise et s'adaptent à vos besoins."
-                  : "Every Lexora module is powered by a specialized AI agent. No manual entry, no complex setup — your agents understand your business and adapt to your needs."}
+                {t("uimkt.home.ai_section_desc", locale)}
               </p>
             </Reveal>
 
@@ -1357,9 +1239,7 @@ export default function HomePage() {
               >
                 <NeuralNetworkScene
                   ariaLabel={
-                    locale === "fr"
-                      ? "Illustration animée : 6 agents IA connectés au cœur Lexora"
-                      : "Animated illustration: 6 AI agents connected to the Lexora core"
+                    t("uimkt.home.neural_aria", locale)
                   }
                 />
               </div>
@@ -1476,7 +1356,7 @@ export default function HomePage() {
                           style={{ borderTop: "1px solid rgba(30,39,96,0.6)" }}
                         >
                           <span style={{ color: accent, fontFamily: "'Poppins', sans-serif" }}>
-                            {locale === "fr" ? "En ligne · 24/7" : "Online · 24/7"}
+                            {t("uimkt.home.agent_online", locale)}
                           </span>
                           <span style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
                             AI · ML
@@ -1521,15 +1401,13 @@ export default function HomePage() {
                   fontFamily: "'Poppins', sans-serif",
                 }}
               >
-                {locale === "fr" ? "Nos offres" : "Our offers"}
+                {t("uimkt.home.our_offers", locale)}
               </Badge>
               <h2
                 className="mb-4 text-3xl font-bold md:text-4xl"
                 style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}
               >
-                {locale === "fr"
-                  ? "Deux façons d'accéder à Lexora"
-                  : "Two ways to access Lexora"}
+                {t("uimkt.home.offers_title", locale)}
               </h2>
               <p
                 className="mx-auto max-w-2xl"
@@ -1540,9 +1418,7 @@ export default function HomePage() {
                   lineHeight: 1.7,
                 }}
               >
-                {locale === "fr"
-                  ? "Un accès direct pour votre entreprise, ou le programme partenaire si vous êtes expert-comptable et gérez plusieurs dossiers."
-                  : "Direct access for your business, or the partner program if you are an accountant managing multiple client files."}
+                {t("uimkt.home.offers_desc", locale)}
               </p>
             </Reveal>
 
@@ -1572,13 +1448,13 @@ export default function HomePage() {
                       className="text-[10px] font-bold uppercase tracking-widest"
                       style={{ color: "#4191FF", fontFamily: "'Poppins', sans-serif" }}
                     >
-                      {locale === "fr" ? "Offre 1 · Entreprise" : "Offer 1 · Business"}
+                      {t("uimkt.home.offer1_label", locale)}
                     </div>
                     <div
                       className="text-xs"
                       style={{ color: "#8B90B8", fontFamily: "'Poppins', sans-serif" }}
                     >
-                      {locale === "fr" ? "Accès direct" : "Direct access"}
+                      {t("uimkt.home.offer1_access", locale)}
                     </div>
                   </div>
                 </div>
@@ -1588,7 +1464,7 @@ export default function HomePage() {
                   className="mb-3 text-2xl md:text-3xl"
                   style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}
                 >
-                  {locale === "fr" ? "Pour votre entreprise" : "For your business"}
+                  {t("uimkt.home.offer1_title", locale)}
                 </h3>
                 <p
                   className="mb-6 text-sm"
@@ -1599,27 +1475,17 @@ export default function HomePage() {
                     lineHeight: 1.7,
                   }}
                 >
-                  {locale === "fr"
-                    ? "Gérez vous-même votre comptabilité, votre paie et votre fiscalité MRA depuis une interface unique. Idéal pour les PME, freelances et dirigeants autonomes."
-                    : "Manage your own accounting, payroll and MRA tax filings from a single interface. Ideal for SMEs, freelancers and autonomous business owners."}
+                  {t("uimkt.home.offer1_desc", locale)}
                 </p>
 
                 {/* Features */}
                 <ul className="mb-6 space-y-3">
-                  {(locale === "fr"
-                    ? [
-                        "Accès direct à tous les modules (Compta, RH, Facturation, Fiscal)",
-                        "Conformité MRA native (IRN, QR Code, e-MRA, IT Form 3)",
-                        "OCR IA illimité, rapprochement bancaire automatique",
-                        "Support inclus, mises à jour réglementaires continues",
-                      ]
-                    : [
-                        "Direct access to all modules (Accounting, HR, Invoicing, Tax)",
-                        "Native MRA compliance (IRN, QR Code, e-MRA, IT Form 3)",
-                        "Unlimited AI OCR, automatic bank reconciliation",
-                        "Support included, continuous regulatory updates",
-                      ]
-                  ).map((item, i) => (
+                  {[
+                    t("uimkt.home.offer1_feat1", locale),
+                    t("uimkt.home.offer1_feat2", locale),
+                    t("uimkt.home.offer1_feat3", locale),
+                    t("uimkt.home.offer1_feat4", locale),
+                  ].map((item, i) => (
                     <li key={i} className="flex items-start gap-3">
                       <CheckCircle2
                         className="mt-0.5 h-5 w-5 shrink-0"
@@ -1647,7 +1513,7 @@ export default function HomePage() {
                     className="text-xs uppercase tracking-wider"
                     style={{ color: "#8B90B8", fontFamily: "'Poppins', sans-serif" }}
                   >
-                    {locale === "fr" ? "À partir de" : "Starting at"}
+                    {t("uimkt.home.starting_at", locale)}
                   </div>
                   <div
                     className="text-3xl font-bold"
@@ -1658,7 +1524,7 @@ export default function HomePage() {
                       className="text-sm font-normal"
                       style={{ color: "#8B90B8" }}
                     >
-                      {locale === "fr" ? " / mois" : " / month"}
+                      {t("uimkt.home.per_month", locale)}
                     </span>
                   </div>
                 </div>
@@ -1678,7 +1544,7 @@ export default function HomePage() {
                           borderRadius: "8px",
                         }}
                       >
-                        {locale === "fr" ? "Voir tous les tarifs" : "View all pricing"}
+                        {t("uimkt.home.view_pricing", locale)}
                         <ArrowRight className="ml-2 h-5 w-5" aria-hidden="true" />
                       </Button>
                     </Link>
@@ -1717,7 +1583,7 @@ export default function HomePage() {
                     fontFamily: "'Poppins', sans-serif",
                   }}
                 >
-                  {locale === "fr" ? "Gratuit pour le cabinet" : "Free for the firm"}
+                  {t("uimkt.home.offer2_free", locale)}
                 </div>
 
                 {/* Top label */}
@@ -1736,13 +1602,13 @@ export default function HomePage() {
                       className="text-[10px] font-bold uppercase tracking-widest"
                       style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
                     >
-                      {locale === "fr" ? "Offre 2 · Expert-Comptable" : "Offer 2 · Accountant"}
+                      {t("uimkt.home.offer2_label", locale)}
                     </div>
                     <div
                       className="text-xs"
                       style={{ color: "#8B90B8", fontFamily: "'Poppins', sans-serif" }}
                     >
-                      {locale === "fr" ? "Programme Partenaire" : "Partner Program"}
+                      {t("uimkt.home.offer2_program", locale)}
                     </div>
                   </div>
                 </div>
@@ -1752,7 +1618,7 @@ export default function HomePage() {
                   className="relative mb-3 text-2xl md:text-3xl"
                   style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", fontWeight: 700 }}
                 >
-                  {locale === "fr" ? "Pour votre cabinet comptable" : "For your accounting firm"}
+                  {t("uimkt.home.offer2_title", locale)}
                 </h3>
                 <p
                   className="relative mb-6 text-sm"
@@ -1763,27 +1629,17 @@ export default function HomePage() {
                     lineHeight: 1.7,
                   }}
                 >
-                  {locale === "fr"
-                    ? "Gérez l'ensemble de votre portefeuille clients depuis un seul tableau de bord. Lexora s'intègre dans votre mission comptable et vous reverse une commission récurrente."
-                    : "Manage your entire client portfolio from a single dashboard. Lexora integrates into your engagement and pays you a recurring commission."}
+                  {t("uimkt.home.offer2_desc", locale)}
                 </p>
 
                 {/* Features */}
                 <ul className="relative mb-6 space-y-3">
-                  {(locale === "fr"
-                    ? [
-                        "Tableau de bord multi-dossiers : tous vos clients en un écran",
-                        "Permissions différenciées cabinet / client par module",
-                        "Alertes fiscales consolidées sur tout votre portefeuille",
-                        "Commission mensuelle récurrente sur chaque client actif",
-                      ]
-                    : [
-                        "Multi-client dashboard: all your clients on one screen",
-                        "Differentiated firm / client permissions by module",
-                        "Consolidated tax alerts across your entire portfolio",
-                        "Recurring monthly commission on each active client",
-                      ]
-                  ).map((item, i) => (
+                  {[
+                    t("uimkt.home.offer2_feat1", locale),
+                    t("uimkt.home.offer2_feat2", locale),
+                    t("uimkt.home.offer2_feat3", locale),
+                    t("uimkt.home.offer2_feat4", locale),
+                  ].map((item, i) => (
                     <li key={i} className="flex items-start gap-3">
                       <CheckCircle2
                         className="mt-0.5 h-5 w-5 shrink-0"
@@ -1811,7 +1667,7 @@ export default function HomePage() {
                     className="text-xs uppercase tracking-wider"
                     style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
                   >
-                    {locale === "fr" ? "Accès cabinet" : "Firm access"}
+                    {t("uimkt.home.firm_access", locale)}
                   </div>
                   <div
                     className="text-3xl font-bold"
@@ -1819,7 +1675,7 @@ export default function HomePage() {
                   >
                     <span style={{ color: "#D4AF37", fontSize: "1.25rem" }}>Rs</span> 0
                     <span className="text-sm font-normal" style={{ color: "#8B90B8" }}>
-                      {locale === "fr" ? " · aucun engagement" : " · no commitment"}
+                      {t("uimkt.home.no_commitment", locale)}
                     </span>
                   </div>
                 </div>
@@ -1842,7 +1698,7 @@ export default function HomePage() {
                           borderRadius: "8px",
                         }}
                       >
-                        {locale === "fr" ? "Demander une démo cabinet" : "Request a firm demo"}
+                        {t("uimkt.home.request_firm_demo", locale)}
                         <ArrowRight className="ml-2 h-5 w-5" aria-hidden="true" />
                       </Button>
                     </Link>
@@ -1951,9 +1807,7 @@ export default function HomePage() {
                 className="mt-4 text-sm"
                 style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}
               >
-                {locale === "fr"
-                  ? "L'ERP mauricien piloté par l'IA — Compta, Paie, Fiscal, Juridique et Santé salariés."
-                  : "The AI-driven Mauritian ERP — Accounting, Payroll, Tax, Legal and Employee Health."}
+                {t("uimkt.home.footer_tagline", locale)}
               </p>
             </div>
 
@@ -1962,18 +1816,18 @@ export default function HomePage() {
                 className="mb-4 text-xs font-bold uppercase tracking-widest"
                 style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
               >
-                {locale === "fr" ? "Plateforme" : "Platform"}
+                {t("uimkt.home.footer_platform", locale)}
               </h3>
               <ul className="space-y-2.5 text-sm" style={{ fontFamily: "'Poppins', sans-serif" }}>
-                <li><a href="#features" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Modules" : "Modules"}</a></li>
-                <li><a href="#ai" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Agents IA" : "AI Agents"}</a></li>
+                <li><a href="#features" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t("uimkt.home.footer_modules", locale)}</a></li>
+                <li><a href="#ai" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t("uimkt.home.footer_ai_agents", locale)}</a></li>
                 {SHOW_PRICING && (
-                <li><a href="#offres" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Offres" : "Offers"}</a></li>
+                <li><a href="#offres" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t("uimkt.home.nav_offers", locale)}</a></li>
                 )}
                 {SHOW_PRICING && (
                 <li><Link href="/tarifs" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>Tarifs</Link></li>
                 )}
-                <li><Link href="/pilotage-telegram" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === 'fr' ? 'Assistant IA' : 'AI Assistant'}</Link></li>
+                <li><Link href="/pilotage-telegram" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t('uimkt.home.nav_assistant', locale)}</Link></li>
               </ul>
             </div>
 
@@ -1982,7 +1836,7 @@ export default function HomePage() {
                 className="mb-4 text-xs font-bold uppercase tracking-widest"
                 style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
               >
-                {locale === "fr" ? "Ressources" : "Resources"}
+                {t("uimkt.home.footer_resources", locale)}
               </h3>
               <ul className="space-y-2.5 text-sm" style={{ fontFamily: "'Poppins', sans-serif" }}>
                 <li>
@@ -2000,7 +1854,7 @@ export default function HomePage() {
                     className="transition-colors hover:text-[#E8EAFC]"
                     style={{ color: "#A8AFC7", textDecoration: "none" }}
                   >
-                    {locale === "fr" ? "Nous contacter" : "Contact us"}
+                    {t("uimkt.home.footer_contact_us", locale)}
                   </Link>
                 </li>
                 <li>
@@ -2018,7 +1872,7 @@ export default function HomePage() {
                     className="transition-colors hover:text-[#FFE8A3]"
                     style={{ color: "#D4AF37", textDecoration: "none", fontWeight: 500 }}
                   >
-                    {locale === "fr" ? "Programme Expert-Comptable" : "Accountant Program"}
+                    {t("uimkt.home.footer_expert_program", locale)}
                   </Link>
                 </li>
               </ul>
@@ -2029,13 +1883,13 @@ export default function HomePage() {
                 className="mb-4 text-xs font-bold uppercase tracking-widest"
                 style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
               >
-                {locale === "fr" ? "Légal" : "Legal"}
+                {t("uimkt.home.footer_legal", locale)}
               </h3>
               <ul className="space-y-2.5 text-sm" style={{ fontFamily: "'Poppins', sans-serif" }}>
-                <li><Link href="/mentions-legales" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Mentions légales" : "Legal Notice"}</Link></li>
+                <li><Link href="/mentions-legales" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t("uimkt.home.footer_legal_notice", locale)}</Link></li>
                 <li><Link href="/cgu" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>CGU</Link></li>
                 <li><Link href="/cgv" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>CGV</Link></li>
-                <li><Link href="/protection-donnees" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Protection des données" : "Data Protection"}</Link></li>
+                <li><Link href="/protection-donnees" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t("uimkt.home.footer_data_protection", locale)}</Link></li>
               </ul>
             </div>
           </div>
@@ -2043,7 +1897,7 @@ export default function HomePage() {
           {/* Bottom row */}
           <div className="mt-12 flex flex-col items-center justify-between gap-4 pt-6 md:flex-row" style={{ borderTop: "1px solid #1E2760" }}>
             <p className="text-xs" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
-              &copy; {new Date().getFullYear()} LE<span style={{ color: "#D4AF37" }}>X</span>ORA — Digital Data Solutions Ltd. {locale === 'fr' ? 'Tous droits réservés.' : 'All rights reserved.'}
+              &copy; {new Date().getFullYear()} LE<span style={{ color: "#D4AF37" }}>X</span>ORA — Digital Data Solutions Ltd. {t('uimkt.home.footer_rights', locale)}
             </p>
             <p className="text-xs" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
               Bourdet Road, Grand Baie, Maurice · +230 5259 1043

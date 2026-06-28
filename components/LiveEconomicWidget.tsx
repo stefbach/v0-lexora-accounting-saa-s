@@ -15,6 +15,7 @@
 
 import * as React from "react"
 import { motion, useReducedMotion } from "framer-motion"
+import { t } from "@/lib/i18n"
 import {
   Globe,
   TrendingUp,
@@ -101,9 +102,7 @@ export function LiveEconomicWidget({
     return (
       <div style={{ padding: "20px", color: textMuted, textAlign: "center", fontSize: "13px" }}>
         <AlertCircle size={14} style={{ verticalAlign: "middle", marginRight: "6px" }} />
-        {locale === "fr"
-          ? "Indicateurs économiques indisponibles."
-          : "Economic indicators unavailable."}
+        {t("uimkt.eco.unavailable", locale)}
       </div>
     )
   }
@@ -180,12 +179,10 @@ export function LiveEconomicWidget({
                 color: ACCENTS.blue,
               }}
             >
-              {locale === "fr" ? "Indicateurs temps réel" : "Live indicators"}
+              {t("uimkt.eco.live_indicators", locale)}
             </div>
             <div style={{ fontSize: "15px", fontWeight: 700, color: textStrong }}>
-              {locale === "fr"
-                ? "Contexte économique et RH · Maurice"
-                : "Economic & HR context · Mauritius"}
+              {t("uimkt.eco.context", locale)}
             </div>
           </div>
         </div>
@@ -209,7 +206,7 @@ export function LiveEconomicWidget({
               boxShadow: `0 0 8px ${ACCENTS.green}`,
             }}
           />
-          {locale === "fr" ? "Mis à jour" : "Updated"}{" "}
+          {t("uimkt.eco.updated", locale)}{" "}
           {formatDate(data.generatedAt)}
         </span>
       </div>
@@ -347,7 +344,7 @@ export function LiveEconomicWidget({
               color: textStrong,
             }}
           >
-            {locale === "fr" ? "Prochaines échéances MRA / ROC" : "Next MRA / ROC deadlines"}
+            {t("uimkt.eco.next_deadlines", locale)}
           </span>
         </div>
         <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: "8px" }}>
@@ -394,7 +391,7 @@ export function LiveEconomicWidget({
 
       {/* HR ticker — marquee or static */}
       <div
-        aria-label={locale === "fr" ? "Repères RH et paie" : "HR and payroll benchmarks"}
+        aria-label={t("uimkt.eco.hr_aria", locale)}
         style={{
           overflow: "hidden",
           maskImage:

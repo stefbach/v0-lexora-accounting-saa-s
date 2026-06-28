@@ -44,6 +44,11 @@ import { sweepCompMiscChunk } from './i18n/sweep_comp_misc'
 import { sweepAppRhChunk } from './i18n/sweep_app_rh'
 import { sweepAppMiscChunk } from './i18n/sweep_app_misc'
 import { sweepPcmChunk } from './i18n/sweep_pcm'
+import { sweepUiNavChunk } from './i18n/sweep_ui_nav'
+import { sweepUiMktChunk } from './i18n/sweep_ui_mkt'
+import { sweepUiRhChunk } from './i18n/sweep_ui_rh'
+import { sweepUiClChunk } from './i18n/sweep_ui_cl'
+import { sweepUiJurChunk } from './i18n/sweep_ui_jur'
 
 export type Locale = 'fr' | 'en'
 
@@ -699,6 +704,11 @@ const translations: Record<Locale, Record<string, string>> = {
     ...sweepAppRhChunk.fr,
     ...sweepAppMiscChunk.fr,
     ...sweepPcmChunk.fr,
+    ...sweepUiNavChunk.fr,
+    ...sweepUiMktChunk.fr,
+    ...sweepUiRhChunk.fr,
+    ...sweepUiClChunk.fr,
+    ...sweepUiJurChunk.fr,
   },
   en: {
     ...baseTranslations.en,
@@ -748,6 +758,11 @@ const translations: Record<Locale, Record<string, string>> = {
     ...sweepAppRhChunk.en,
     ...sweepAppMiscChunk.en,
     ...sweepPcmChunk.en,
+    ...sweepUiNavChunk.en,
+    ...sweepUiMktChunk.en,
+    ...sweepUiRhChunk.en,
+    ...sweepUiClChunk.en,
+    ...sweepUiJurChunk.en,
   },
 }
 

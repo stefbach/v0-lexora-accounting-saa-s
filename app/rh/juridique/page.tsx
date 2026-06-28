@@ -19,14 +19,16 @@ import { t, getLocale, type Locale } from "@/lib/i18n"
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const TYPES_CONTRAT = ["CDI", "CDD", "Temps_partiel", "Stage", "Consultant", "Freelance"]
-const SECTEURS = [
-  { value: "general",    label: "Général" },
-  { value: "informatique", label: "Informatique" },
-  { value: "sante",      label: "Médical / Santé" },
-  { value: "bpo",        label: "BPO" },
-  { value: "retail",     label: "Commerce / Retail" },
-  { value: "finance",    label: "Finance / Comptabilité" },
-]
+function getSecteurs(locale: Locale) {
+  return [
+    { value: "general",    label: t('uirh.juridique.sector_general', locale) },
+    { value: "informatique", label: t('uirh.juridique.sector_it', locale) },
+    { value: "sante",      label: t('uirh.juridique.sector_health', locale) },
+    { value: "bpo",        label: t('uirh.juridique.sector_bpo', locale) },
+    { value: "retail",     label: t('uirh.juridique.sector_retail', locale) },
+    { value: "finance",    label: t('uirh.juridique.sector_finance', locale) },
+  ]
+}
 
 const STATUT_COLORS: Record<string, string> = {
   brouillon:     "bg-gray-100 text-gray-700",
@@ -160,8 +162,8 @@ export default function JuridiquePage() {
   // ── Générer contrat (Sprint 6 FIX 4 — champs enrichis) ──
   const genererContrat = async () => {
     const emp = employes.find(e => e.id === genForm.employe_id)
-    if (!emp || !genForm.date_debut || !genForm.salaire) { alert("Champs requis : Employé, Date début, Salaire"); return }
-    if (!genForm.poste) { alert("Poste requis (pré-rempli depuis la fiche employé — vérifiez le champ)"); return }
+    if (!emp || !genForm.date_debut || !genForm.salaire) { alert(t('uirh.juridique.alert_required_fields', locale)); return }
+    if (!genForm.poste) { alert(t('uirh.juridique.alert_position_required', locale)); return }
     setGenerating(true); setGenResult(null); setSavedId(null)
     try {
       const res = await fetch("/api/juridique", {
@@ -188,11 +190,11 @@ export default function JuridiquePage() {
       const data = await res.json()
       if (!res.ok || data?.error) {
         console.error('[juridique genererContrat]', res.status, data)
-        alert(`Erreur génération : ${data?.error || `HTTP ${res.status}`}`)
+        alert(t('uirh.juridique.alert_gen_error', locale).replace('{x}', String(data?.error || `HTTP ${res.status}`)))
         setGenResult(null)
         return
       }
-      setGenResult(data.html || "Erreur génération")
+      setGenResult(data.html || t('uirh.juridique.gen_error_fallback', locale))
       // Sprint 6 FIX 4 — le contrat est déjà inséré en DB par /api/juridique
       // (avec signature_nom_complet pré-rempli depuis societe.contacts principal).
       // On refresh la liste des contrats pour afficher le nouveau immédiatement.
@@ -202,7 +204,7 @@ export default function JuridiquePage() {
       }
     } catch (e: any) {
       console.error('[juridique genererContrat] exception', e)
-      alert(`Erreur réseau : ${e?.message || ''}`)
+      alert(t('uirh.juridique.alert_network_error', locale).replace('{x}', String(e?.message || '')))
       setGenResult(null)
     }
     finally { setGenerating(false) }
@@ -232,7 +234,7 @@ export default function JuridiquePage() {
         setSavedId(d.contrat.id)
         loadContrats()
       } else {
-        alert("Erreur sauvegarde : " + (d.error || "Inconnue"))
+        alert(t('uirh.juridique.alert_save_error', locale) + (d.error || t('uirh.juridique.unknown', locale)))
       }
     } catch (e) { console.error(e) }
     finally { setSaving(false) }
@@ -271,7 +273,7 @@ export default function JuridiquePage() {
         const lines = text.split("\n").filter((l: string) => l.trim())
         setVerifyResult(lines.map((l: string) => ({ statut: l.startsWith("✅") ? "ok" : l.startsWith("⚠️") ? "warning" : l.startsWith("❌") ? "error" : "info", texte: l })))
       }
-    } catch { setVerifyResult([{ statut: "error", texte: "Erreur lors de l'analyse" }]) }
+    } catch { setVerifyResult([{ statut: "error", texte: t('uirh.juridique.analysis_error', locale) }]) }
     finally { setVerifying(false) }
   }
 
@@ -288,9 +290,9 @@ export default function JuridiquePage() {
       if (data.lien_signature) {
         setLienSignature({ id, lien: data.lien_signature, whatsapp: data.whatsapp_envoye, telephone: data.telephone, employe: data.employe })
       } else {
-        alert("Erreur : " + (data.error || "Impossible de générer le lien"))
+        alert(t('uirh.juridique.error_prefix', locale) + (data.error || t('uirh.juridique.link_gen_failed', locale)))
       }
-    } catch { alert("Erreur réseau") }
+    } catch { alert(t('uirh.juridique.network_error_short', locale)) }
     finally { setGenLienLoading(null) }
   }
 
@@ -319,7 +321,7 @@ export default function JuridiquePage() {
   // ── Contresignature dirigeant ──
   const [contresignant, setContresignant] = useState(false)
   const contresigner = async (id: string) => {
-    if (!confirm("Confirmer votre contresignature ? Cette action est irréversible.")) return
+    if (!confirm(t('uirh.juridique.confirm_countersign', locale))) return
     setContresignant(true)
     try {
       const res = await fetch(`/api/rh/contrats/${id}`, {
@@ -328,7 +330,7 @@ export default function JuridiquePage() {
         body: JSON.stringify({ action: "contresigner" })
       })
       const data = await res.json()
-      if (data.error) { alert("Erreur : " + data.error); return }
+      if (data.error) { alert(t('uirh.juridique.error_prefix', locale) + data.error); return }
       if (viewContrat?.id === id) setViewContrat((c: any) => ({ ...c, statut: "signe" }))
       loadContrats()
     } catch (e) { console.error(e) }
@@ -490,7 +492,7 @@ export default function JuridiquePage() {
                   <Label>{t('rha.b.jur.lbl_sector', locale)}</Label>
                   <Select value={genForm.secteur} onValueChange={v => setGenForm(f => ({ ...f, secteur: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{SECTEURS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+                    <SelectContent>{getSecteurs(locale).map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 {/* Sprint 6 FIX 4 — Poste éditable (pré-rempli depuis fiche employé) */}
@@ -689,7 +691,7 @@ export default function JuridiquePage() {
             </div>
             {lienSignature?.whatsapp ? (
               <div className="text-sm p-3 bg-green-50 text-green-800 rounded-lg border border-green-200">
-                ✅ WhatsApp envoyé à <strong>{lienSignature.employe}</strong> ({lienSignature.telephone})
+                ✅ {t('uirh.juridique.whatsapp_sent_to', locale)} <strong>{lienSignature.employe}</strong> ({lienSignature.telephone})
               </div>
             ) : (
               <div className="text-sm p-3 bg-amber-50 text-amber-800 rounded-lg border border-amber-200">
@@ -801,12 +803,12 @@ export default function JuridiquePage() {
                           }),
                         })
                         const d = await res.json()
-                        if (!res.ok) { alert(d.error || "Erreur de sauvegarde"); return }
+                        if (!res.ok) { alert(d.error || t('uirh.juridique.save_error_generic', locale)); return }
                         setViewContrat({ ...viewContrat, ...d.contrat })
                         setEditMode(false)
                         loadContrats()
                       } catch (e: any) {
-                        alert("Erreur réseau : " + (e?.message || ""))
+                        alert(t('uirh.juridique.alert_network_error', locale).replace('{x}', String(e?.message || "")))
                       } finally {
                         setSavingEdit(false)
                       }
@@ -865,7 +867,7 @@ export default function JuridiquePage() {
                       <Input
                         value={sigNom}
                         onChange={e => setSigNom(e.target.value)}
-                        placeholder="Stephane BACH, CEO"
+                        placeholder={t('uirh.juridique.signer_name_ph', locale)}
                         className="h-9"
                       />
                     </div>
@@ -879,7 +881,7 @@ export default function JuridiquePage() {
                           const f = e.target.files?.[0]
                           if (!f) return
                           if (f.size > 500_000) {
-                            alert("Image trop lourde (> 500 Ko). Compressez avant upload.")
+                            alert(t('uirh.juridique.image_too_heavy', locale))
                             return
                           }
                           const reader = new FileReader()
@@ -927,7 +929,7 @@ export default function JuridiquePage() {
             ) : (
               <div className="p-6 text-center text-gray-500">
                 <p>{t('rha.b.jur.no_html', locale)}</p>
-                <p className="text-xs mt-1 text-gray-400">Type : {viewContrat?.type_contrat} | Secteur : {viewContrat?.secteur}</p>
+                <p className="text-xs mt-1 text-gray-400">{t('uirh.juridique.type_label', locale)} {viewContrat?.type_contrat} | {t('uirh.juridique.sector_label', locale)} {viewContrat?.secteur}</p>
               </div>
             )}
           </ScrollArea>

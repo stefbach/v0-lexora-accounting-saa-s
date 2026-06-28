@@ -143,11 +143,10 @@ export function CatalogueSelectorDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="w-5 h-5 text-indigo-600" />
-            Catalogue services & produits
+            {t('uijur.catsel.title', locale)}
           </DialogTitle>
           <DialogDescription>
-            Sélectionnez un ou plusieurs articles à ajouter à la facture.
-            Vous pouvez gérer le catalogue dans <strong>Catalogue services</strong> du menu.
+            {t('uijur.catsel.desc_prefix', locale)} <strong>{t('uijur.catsel.desc_menu', locale)}</strong> {t('uijur.catsel.desc_suffix', locale)}
           </DialogDescription>
         </DialogHeader>
 
@@ -158,7 +157,7 @@ export function CatalogueSelectorDialog({
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Rechercher un article..."
+              placeholder={t('uijur.catsel.search_ph', locale)}
               className="pl-8 h-9"
               autoFocus
             />
@@ -169,14 +168,14 @@ export function CatalogueSelectorDialog({
               onChange={(e) => setCategorie(e.target.value)}
               className="h-9 px-3 rounded-md border border-input bg-background text-sm"
             >
-              <option value="__all__">Toutes catégories</option>
+              <option value="__all__">{t('uijur.catsel.all_categories', locale)}</option>
               {categories.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
           )}
           <div className="flex items-center gap-1.5">
-            <label className="text-xs text-muted-foreground">Qté</label>
+            <label className="text-xs text-muted-foreground">{t('uijur.catsel.qty', locale)}</label>
             <Input
               type="number"
               min={1}
@@ -193,13 +192,13 @@ export function CatalogueSelectorDialog({
           {loading ? (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              Chargement...
+              {t('uijur.catsel.loading', locale)}
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground text-sm">
               {items.length === 0
-                ? "Catalogue vide. Crée tes services/produits dans /client/catalogue."
-                : "Aucun article ne correspond à ce filtre."}
+                ? t('uijur.catsel.empty', locale)
+                : t('uijur.catsel.no_match', locale)}
             </div>
           ) : (
             <div className="divide-y">
@@ -223,9 +222,9 @@ export function CatalogueSelectorDialog({
                         )}
                         <span className="text-xs text-muted-foreground">{it.unite}</span>
                         {it.tva_applicable ? (
-                          <Badge className="text-[10px] bg-orange-100 text-orange-700 border-orange-300">TVA 15%</Badge>
+                          <Badge className="text-[10px] bg-orange-100 text-orange-700 border-orange-300">{t('uijur.catsel.vat_15', locale)}</Badge>
                         ) : (
-                          <Badge variant="outline" className="text-[10px]">Zero-rated</Badge>
+                          <Badge variant="outline" className="text-[10px]">{t('uijur.catsel.zero_rated', locale)}</Badge>
                         )}
                       </div>
                     </div>
@@ -244,7 +243,7 @@ export function CatalogueSelectorDialog({
         <DialogFooter className="flex items-center sm:justify-between">
           <div className="text-xs text-muted-foreground">
             {selected.size > 0 && (
-              <>{selected.size} article(s) sélectionné(s) · qté {quantite} chacun</>
+              <>{t('uijur.catsel.selected_summary', locale).replace('{n}', String(selected.size)).replace('{q}', String(quantite))}</>
             )}
           </div>
           <div className="flex gap-2">
@@ -254,7 +253,7 @@ export function CatalogueSelectorDialog({
               disabled={selected.size === 0}
               className="bg-indigo-600 hover:bg-indigo-700 text-white"
             >
-              Ajouter ({selected.size}) à la facture
+              {t('uijur.catsel.add_btn', locale).replace('{n}', String(selected.size))}
             </Button>
           </div>
         </DialogFooter>

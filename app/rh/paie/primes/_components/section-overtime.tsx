@@ -88,9 +88,11 @@ interface Props {
 
 // ─── Constantes ─────────────────────────────────────────────────────────────
 
-const MOIS_FR = [
-  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+const MOIS_KEYS = [
+  'uirh.overtime.mois_01', 'uirh.overtime.mois_02', 'uirh.overtime.mois_03',
+  'uirh.overtime.mois_04', 'uirh.overtime.mois_05', 'uirh.overtime.mois_06',
+  'uirh.overtime.mois_07', 'uirh.overtime.mois_08', 'uirh.overtime.mois_09',
+  'uirh.overtime.mois_10', 'uirh.overtime.mois_11', 'uirh.overtime.mois_12',
 ]
 
 // Taux WRA hardcodés UNIQUEMENT pour le calcul live côté client.
@@ -135,13 +137,13 @@ function lastDayOfPeriode(periode: string): string {
   return `${y}-${String(m).padStart(2, '0')}-${String(last).padStart(2, '0')}`
 }
 
-function moisOptions(): Array<{ value: string; label: string }> {
+function moisOptions(locale: ReturnType<typeof getLocale>): Array<{ value: string; label: string }> {
   const now = new Date()
   const out: Array<{ value: string; label: string }> = []
   for (let i = 0; i < 12; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
-    const label = `${MOIS_FR[d.getMonth()]} ${d.getFullYear()}`
+    const label = `${t(MOIS_KEYS[d.getMonth()], locale)} ${d.getFullYear()}`
     out.push({ value, label })
   }
   return out
@@ -545,7 +547,7 @@ export function SectionOvertime({ societeId }: Props) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {moisOptions().map(o => (
+                {moisOptions(locale).map(o => (
                   <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                 ))}
               </SelectContent>

@@ -115,7 +115,7 @@ function parseRow(row: Record<string, any>, idx: number, locale: ReturnType<type
     error = t('scp.con_err_nom_too_long', locale)
     valid = false
   } else if (email && !EMAIL_RE.test(email)) {
-    error = `email invalide : ${email}`
+    error = t('uijur.con.email_invalid', locale).replace('{email}', email)
     valid = false
   }
 
