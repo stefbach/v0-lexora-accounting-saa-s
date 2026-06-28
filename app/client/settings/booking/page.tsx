@@ -34,7 +34,7 @@ export default function BookingSettingsPage() {
       const j = await r.json()
       setDiag(j)
     } catch (e: any) {
-      setDiag({ error: e?.message || 'Erreur' })
+      setDiag({ error: e?.message || t('cui.error_generic', locale) })
     } finally { setDiagLoading(false) }
   }
 
@@ -78,7 +78,7 @@ export default function BookingSettingsPage() {
 
   async function save() {
     if (!settings?.google_account_email) {
-      setBanner({ kind: 'error', msg: 'Choisis un compte Google connecté avant d\'enregistrer' })
+      setBanner({ kind: 'error', msg: t('scp.bk_choose_google', locale) })
       return
     }
     setSaving(true); setBanner(null)
@@ -87,11 +87,11 @@ export default function BookingSettingsPage() {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j?.error || 'Erreur')
-      setBanner({ kind: 'success', msg: 'Paramètres enregistrés ✓' })
+      if (!r.ok) throw new Error(j?.error || t('cui.error_generic', locale))
+      setBanner({ kind: 'success', msg: t('scp.bk_saved', locale) })
       if (j.settings) setSettings(j.settings)
     } catch (e: any) {
-      setBanner({ kind: 'error', msg: e?.message || 'Erreur' })
+      setBanner({ kind: 'error', msg: e?.message || t('cui.error_generic', locale) })
     } finally { setSaving(false) }
   }
 
@@ -107,10 +107,10 @@ export default function BookingSettingsPage() {
       <div className="flex items-start justify-between gap-4 mb-2">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2"><Calendar className="h-6 w-6" /> {t('scp.booking_title', locale)}</h1>
-          <p className="text-sm text-muted-foreground">Configure ta page publique de prise de RDV connectée à Google Calendar.</p>
+          <p className="text-sm text-muted-foreground">{t('scp.bk_subtitle', locale)}</p>
         </div>
         <a href={publicUrl} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1">
-          Voir la page <ExternalLink className="h-3 w-3" />
+          {t('scp.bk_view_page', locale)} <ExternalLink className="h-3 w-3" />
         </a>
       </div>
 
@@ -123,28 +123,28 @@ export default function BookingSettingsPage() {
 
       {/* Compte Google */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Compte Google (agenda)</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t('scp.bk_google_account', locale)}</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           {googleAccounts.length === 0 ? (
-            <p className="text-sm text-amber-600">{t('scp.no_google_account', locale)} Connecte-en un sur <a href="/client/settings/google-accounts" className="underline">Paramètres → Comptes Google</a>.</p>
+            <p className="text-sm text-amber-600">{t('scp.no_google_account', locale)} {t('scp.bk_connect_one', locale)} <a href="/client/settings/google-accounts" className="underline">{t('scp.bk_settings_google_link', locale)}</a>.</p>
           ) : (
             <div>
-              <Label>Compte à utiliser</Label>
+              <Label>{t('scp.bk_account_to_use', locale)}</Label>
               <select
                 className="w-full mt-1 rounded border px-3 py-2 text-sm"
                 value={settings.google_account_email || ''}
                 onChange={e => update({ google_account_email: e.target.value })}
               >
-                <option value="">— Choisir —</option>
+                <option value="">{t('scp.bk_choose', locale)}</option>
                 {googleAccounts.map((a: any) => (
                   <option key={a.id} value={a.account_email}>{a.account_email}</option>
                 ))}
               </select>
-              <p className="text-xs text-muted-foreground mt-1">Les créneaux seront calculés en croisant les events de cet agenda.</p>
+              <p className="text-xs text-muted-foreground mt-1">{t('scp.bk_slots_hint', locale)}</p>
             </div>
           )}
           <div>
-            <Label>Calendrier (id)</Label>
+            <Label>{t('scp.bk_calendar_id', locale)}</Label>
             <Input value={settings.calendar_id || 'primary'} onChange={e => update({ calendar_id: e.target.value })} placeholder="primary" />
           </div>
         </CardContent>
@@ -153,14 +153,14 @@ export default function BookingSettingsPage() {
       {/* Diagnostic agenda */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2"><Activity className="h-4 w-4" /> Diagnostic connexion agenda</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2"><Activity className="h-4 w-4" /> {t('scp.bk_diag_title', locale)}</CardTitle>
           <Button size="sm" variant="outline" onClick={runDiag} disabled={diagLoading}>
-            {diagLoading ? (<><Loader2 className="animate-spin h-3 w-3 mr-1" /> Test…</>) : 'Tester la connexion'}
+            {diagLoading ? (<><Loader2 className="animate-spin h-3 w-3 mr-1" /> {t('scp.bk_testing', locale)}</>) : t('scp.bk_test_connection', locale)}
           </Button>
         </CardHeader>
         <CardContent>
           {!diag && (
-            <p className="text-xs text-muted-foreground">Vérifie en un clic que Lexora lit bien ton agenda Google (busy times des 7 prochains jours).</p>
+            <p className="text-xs text-muted-foreground">{t('scp.bk_diag_hint', locale)}</p>
           )}
           {diag && (
             <div className="space-y-2 text-sm">
@@ -168,16 +168,16 @@ export default function BookingSettingsPage() {
               {diag.message && <div className="text-amber-700">⚠️ {diag.message}</div>}
               {diag.google_account && (
                 <div>
-                  <span className="text-slate-500">Compte Google :</span> <span className="font-mono">{diag.google_account}</span>
-                  {diag.has_calendar_scope === false && <span className="ml-2 text-red-600 text-xs">⚠️ Scope calendar absent</span>}
+                  <span className="text-slate-500">{t('scp.bk_google_account_label', locale)}</span> <span className="font-mono">{diag.google_account}</span>
+                  {diag.has_calendar_scope === false && <span className="ml-2 text-red-600 text-xs">⚠️ {t('scp.bk_scope_absent', locale)}</span>}
                 </div>
               )}
               {diag.calendar_id_configured && (
-                <div><span className="text-slate-500">Calendar id configuré :</span> <span className="font-mono">{diag.calendar_id_configured}</span></div>
+                <div><span className="text-slate-500">{t('scp.bk_calendar_id_configured', locale)}</span> <span className="font-mono">{diag.calendar_id_configured}</span></div>
               )}
               {diag.available_calendars && (
                 <details className="text-xs">
-                  <summary className="cursor-pointer text-blue-600">{diag.available_calendars.length} calendrier(s) Google visible(s)</summary>
+                  <summary className="cursor-pointer text-blue-600">{diag.available_calendars.length} {t('scp.bk_calendars_visible', locale)}</summary>
                   <ul className="mt-2 ml-4 space-y-0.5">
                     {diag.available_calendars.map((c: any) => (
                       <li key={c.id} className="font-mono">
@@ -190,13 +190,13 @@ export default function BookingSettingsPage() {
               {diag.freebusy && (
                 <div className={`p-2 rounded ${diag.freebusy.errors ? 'bg-red-50 border border-red-200' : 'bg-emerald-50 border border-emerald-200'}`}>
                   {diag.freebusy.errors ? (
-                    <div className="text-red-700">❌ Google refuse l'accès : <code className="text-xs">{JSON.stringify(diag.freebusy.errors)}</code></div>
+                    <div className="text-red-700">❌ {t('scp.bk_google_refuses', locale)} <code className="text-xs">{JSON.stringify(diag.freebusy.errors)}</code></div>
                   ) : (
                     <div className="text-emerald-700">
-                      ✅ Lecture freeBusy OK — <strong>{diag.freebusy.busy_count}</strong> plage(s) occupée(s) trouvée(s) sur les 7 prochains jours.
+                      ✅ {t('scp.bk_freebusy_ok_prefix', locale)} <strong>{diag.freebusy.busy_count}</strong> {t('scp.bk_freebusy_ok_suffix', locale)}
                       {diag.freebusy.busy_first_10?.length > 0 && (
                         <details className="text-xs mt-1">
-                          <summary className="cursor-pointer">Voir les plages</summary>
+                          <summary className="cursor-pointer">{t('scp.bk_view_ranges', locale)}</summary>
                           <ul className="mt-1 ml-4">
                             {diag.freebusy.busy_first_10.map((b: any, i: number) => (
                               <li key={i} className="font-mono">{new Date(b.start).toLocaleString('fr-FR')} → {new Date(b.end).toLocaleString('fr-FR')}</li>
@@ -209,7 +209,7 @@ export default function BookingSettingsPage() {
                 </div>
               )}
               {diag.freebusy_error && <div className="text-red-600">❌ freeBusy : {diag.freebusy_error}</div>}
-              {diag.calendar_list_error && <div className="text-red-600">❌ Liste calendriers : {diag.calendar_list_error}</div>}
+              {diag.calendar_list_error && <div className="text-red-600">❌ {t('scp.bk_calendar_list_label', locale)} {diag.calendar_list_error}</div>}
             </div>
           )}
         </CardContent>
@@ -217,7 +217,7 @@ export default function BookingSettingsPage() {
 
       {/* Page publique */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Page publique</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t('scp.bk_public_page', locale)}</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div>
             <Label>Slug URL</Label>
@@ -226,35 +226,35 @@ export default function BookingSettingsPage() {
               <Input value={settings.slug || 'rdv'} onChange={e => update({ slug: e.target.value })} className="w-32" placeholder="rdv" />
             </div>
           </div>
-          <div><Label>Titre</Label><Input value={settings.page_title || ''} onChange={e => update({ page_title: e.target.value })} /></div>
-          <div><Label>Sous-titre</Label><Input value={settings.page_subtitle || ''} onChange={e => update({ page_subtitle: e.target.value })} /></div>
-          <div><Label>Intro (optionnel)</Label><Textarea rows={3} value={settings.page_intro || ''} onChange={e => update({ page_intro: e.target.value })} /></div>
+          <div><Label>{t('scp.bk_title_field', locale)}</Label><Input value={settings.page_title || ''} onChange={e => update({ page_title: e.target.value })} /></div>
+          <div><Label>{t('scp.bk_subtitle_field', locale)}</Label><Input value={settings.page_subtitle || ''} onChange={e => update({ page_subtitle: e.target.value })} /></div>
+          <div><Label>{t('scp.bk_intro', locale)}</Label><Textarea rows={3} value={settings.page_intro || ''} onChange={e => update({ page_intro: e.target.value })} /></div>
         </CardContent>
       </Card>
 
       {/* Durée et créneaux */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Durée & créneaux</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t('scp.bk_duration_slots', locale)}</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Durée RDV (minutes)</Label>
+              <Label>{t('scp.bk_duration_min', locale)}</Label>
               <select className="w-full mt-1 rounded border px-3 py-2 text-sm" value={settings.duration_minutes} onChange={e => update({ duration_minutes: Number(e.target.value) })}>
                 {[15, 30, 45, 60, 90].map(m => <option key={m} value={m}>{m} min</option>)}
               </select>
             </div>
             <div>
-              <Label>Pas entre créneaux</Label>
+              <Label>{t('scp.bk_slot_step', locale)}</Label>
               <select className="w-full mt-1 rounded border px-3 py-2 text-sm" value={settings.slot_interval_minutes} onChange={e => update({ slot_interval_minutes: Number(e.target.value) })}>
                 {[15, 30, 60].map(m => <option key={m} value={m}>{m} min</option>)}
               </select>
             </div>
             <div>
-              <Label>Délai min avant RDV (h)</Label>
+              <Label>{t('scp.bk_min_notice', locale)}</Label>
               <Input type="number" value={settings.min_notice_hours} onChange={e => update({ min_notice_hours: Number(e.target.value) })} />
             </div>
             <div>
-              <Label>Ouverture sur N jours</Label>
+              <Label>{t('scp.bk_advance_days', locale)}</Label>
               <Input type="number" value={settings.max_advance_days} onChange={e => update({ max_advance_days: Number(e.target.value) })} />
             </div>
           </div>
@@ -263,10 +263,10 @@ export default function BookingSettingsPage() {
 
       {/* Disponibilité */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Disponibilité</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t('scp.bk_availability', locale)}</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div>
-            <Label>Jours ouvrés</Label>
+            <Label>{t('scp.bk_working_days', locale)}</Label>
             <div className="flex gap-2 mt-1">
               {DAYS.map(d => {
                 const active = (settings.working_days || []).includes(d.key)
@@ -274,48 +274,48 @@ export default function BookingSettingsPage() {
                   <button
                     key={d.key} onClick={() => toggleDay(d.key)}
                     className={`px-3 py-1.5 rounded border text-sm ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300'}`}
-                  >{d.label}</button>
+                  >{t('scp.bk_day_' + d.key, locale)}</button>
                 )
               })}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>Heure de début</Label><Input type="time" value={settings.working_hours_start} onChange={e => update({ working_hours_start: e.target.value })} /></div>
-            <div><Label>Heure de fin</Label><Input type="time" value={settings.working_hours_end} onChange={e => update({ working_hours_end: e.target.value })} /></div>
-            <div><Label>Pause déjeuner (début)</Label><Input type="time" value={settings.lunch_break_start || ''} onChange={e => update({ lunch_break_start: e.target.value })} /></div>
-            <div><Label>Pause déjeuner (fin)</Label><Input type="time" value={settings.lunch_break_end || ''} onChange={e => update({ lunch_break_end: e.target.value })} /></div>
+            <div><Label>{t('scp.bk_start_time', locale)}</Label><Input type="time" value={settings.working_hours_start} onChange={e => update({ working_hours_start: e.target.value })} /></div>
+            <div><Label>{t('scp.bk_end_time', locale)}</Label><Input type="time" value={settings.working_hours_end} onChange={e => update({ working_hours_end: e.target.value })} /></div>
+            <div><Label>{t('scp.bk_lunch_start', locale)}</Label><Input type="time" value={settings.lunch_break_start || ''} onChange={e => update({ lunch_break_start: e.target.value })} /></div>
+            <div><Label>{t('scp.bk_lunch_end', locale)}</Label><Input type="time" value={settings.lunch_break_end || ''} onChange={e => update({ lunch_break_end: e.target.value })} /></div>
           </div>
         </CardContent>
       </Card>
 
       {/* Lieu */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Lieu du RDV</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t('scp.bk_location', locale)}</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between">
-            <div><Label>En ligne (Google Meet auto)</Label></div>
+            <div><Label>{t('scp.bk_online', locale)}</Label></div>
             <Switch checked={settings.location_online_enabled} onCheckedChange={(v: boolean) => update({ location_online_enabled: v })} />
           </div>
           <div className="flex items-center justify-between">
-            <div><Label>Présentiel</Label></div>
+            <div><Label>{t('scp.bk_in_person', locale)}</Label></div>
             <Switch checked={settings.location_in_person_enabled} onCheckedChange={(v: boolean) => update({ location_in_person_enabled: v })} />
           </div>
           {settings.location_in_person_enabled && (
-            <div><Label>Adresse présentiel</Label><Input value={settings.in_person_address || ''} onChange={e => update({ in_person_address: e.target.value })} placeholder="Ex : 12 rue X, Port-Louis" /></div>
+            <div><Label>{t('scp.bk_in_person_address', locale)}</Label><Input value={settings.in_person_address || ''} onChange={e => update({ in_person_address: e.target.value })} placeholder={t('scp.bk_in_person_address_ph', locale)} /></div>
           )}
         </CardContent>
       </Card>
 
       {/* Notifications */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Notifications à chaque RDV pris</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t('scp.bk_notifications', locale)}</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between">
-            <Label>Email à toi</Label>
+            <Label>{t('scp.bk_email_to_you', locale)}</Label>
             <Switch checked={settings.notify_via_email} onCheckedChange={(v: boolean) => update({ notify_via_email: v })} />
           </div>
           <div>
-            <Label>Adresse de notification</Label>
+            <Label>{t('scp.bk_notify_address', locale)}</Label>
             <Input value={settings.notify_email || ''} onChange={e => update({ notify_email: e.target.value })} placeholder="ton.email@example.com" />
           </div>
           <div className="flex items-center justify-between">
@@ -328,11 +328,11 @@ export default function BookingSettingsPage() {
       {/* Action */}
       <div className="flex items-center justify-between sticky bottom-4 bg-white/95 backdrop-blur rounded-lg border shadow-lg p-4">
         <div className="flex items-center gap-2">
-          <Label>Page active</Label>
+          <Label>{t('scp.bk_page_active', locale)}</Label>
           <Switch checked={settings.active} onCheckedChange={(v: boolean) => update({ active: v })} />
         </div>
         <Button onClick={save} disabled={saving}>
-          {saving ? (<><Loader2 className="animate-spin h-4 w-4 mr-2" /> Enregistrement…</>) : (<><Save className="h-4 w-4 mr-2" /> Enregistrer</>)}
+          {saving ? (<><Loader2 className="animate-spin h-4 w-4 mr-2" /> {t('scp.bk_saving', locale)}</>) : (<><Save className="h-4 w-4 mr-2" /> {t('cui.save', locale)}</>)}
         </Button>
       </div>
     </div>
