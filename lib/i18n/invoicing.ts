@@ -825,6 +825,15 @@ export const invoicingChunk = {
     'acc.rap.month_oct': 'Octobre',
     'acc.rap.month_nov': 'Novembre',
     'acc.rap.month_dec': 'Décembre',
+    'acc.rap.grp_intercompte_title': 'Virements intercompte (même société)',
+    'acc.rap.grp_intercompte_desc': 'Transferts entre 2 comptes bancaires de la même société (ex DDS MCB → DDS SBM). Compte de transit 5800 — solde doit revenir à 0 après le pendant.',
+    'acc.rap.grp_intersoc_title': 'Virements inter-sociétés (groupe DDS ↔ OCC)',
+    'acc.rap.grp_intersoc_desc': 'Transferts entre 2 sociétés du même groupe. Compte courant Groupe 451 (IAS 24 related parties). Pas de transit — créance/dette permanente.',
+    'acc.rap.partial_tooltip': "Montant indicatif converti au taux figé de la facture. Un éventuel reste à payer reste une créance client (facture partielle), ce n'est pas un écart de change.",
+    'acc.rap.amount_per_invoice': 'Montant affecté par facture (MUR)',
+    'acc.rap.partial_split': 'répartition partielle',
+    'acc.rap.over_balance_err': 'Un montant dépasse le solde restant de sa facture.',
+    'acc.rap.positive_err': 'Chaque montant affecté doit être strictement positif.',
 
     // ── acc.gl EXT ──────────────────────────────────────
     'acc.gl.export_excel': 'Export Excel',
@@ -1752,6 +1761,15 @@ export const invoicingChunk = {
     'acc.rap.month_oct': 'October',
     'acc.rap.month_nov': 'November',
     'acc.rap.month_dec': 'December',
+    'acc.rap.grp_intercompte_title': 'Inter-account transfers (same company)',
+    'acc.rap.grp_intercompte_desc': 'Transfers between 2 bank accounts of the same company (e.g. DDS MCB → DDS SBM). Transit account 5800 — balance must return to 0 after the matching leg.',
+    'acc.rap.grp_intersoc_title': 'Inter-company transfers (DDS ↔ OCC group)',
+    'acc.rap.grp_intersoc_desc': 'Transfers between 2 companies of the same group. Group current account 451 (IAS 24 related parties). No transit — permanent receivable/payable.',
+    'acc.rap.partial_tooltip': 'Indicative amount converted at the invoice\'s fixed rate. Any remaining amount due stays a client receivable (partial invoice), not a forex gap.',
+    'acc.rap.amount_per_invoice': 'Amount allocated per invoice (MUR)',
+    'acc.rap.partial_split': 'partial allocation',
+    'acc.rap.over_balance_err': 'An amount exceeds the remaining balance of its invoice.',
+    'acc.rap.positive_err': 'Each allocated amount must be strictly positive.',
 
     // ── acc.gl EXT ──────────────────────────────────────
     'acc.gl.export_excel': 'Excel export',

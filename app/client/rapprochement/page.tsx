@@ -474,8 +474,8 @@ export default function ClientRapprochementPage() {
     if (buckets.intercompte.length)
       g.push({
         key: "intercompte",
-        title: "Virements intercompte (même société)",
-        desc: "Transferts entre 2 comptes bancaires de la même société (ex DDS MCB → DDS SBM). Compte de transit 5800 — solde doit revenir à 0 après le pendant.",
+        title: t('acc.rap.grp_intercompte_title', locale),
+        desc: t('acc.rap.grp_intercompte_desc', locale),
         icon: "🔄",
         color: "border-blue-300 bg-blue-50",
         items: buckets.intercompte,
@@ -483,8 +483,8 @@ export default function ClientRapprochementPage() {
     if (buckets.inter_societes.length)
       g.push({
         key: "inter_societes",
-        title: "Virements inter-sociétés (groupe DDS ↔ OCC)",
-        desc: "Transferts entre 2 sociétés du même groupe. Compte courant Groupe 451 (IAS 24 related parties). Pas de transit — créance/dette permanente.",
+        title: t('acc.rap.grp_intersoc_title', locale),
+        desc: t('acc.rap.grp_intersoc_desc', locale),
         icon: "🤝",
         color: "border-indigo-300 bg-indigo-50",
         items: buckets.inter_societes,
@@ -2294,7 +2294,7 @@ function AffectDialog({
                             // créance client (facture « partiel »), pas une perte.
                             <p
                               className="text-[10px] font-mono text-muted-foreground"
-                              title="Montant indicatif converti au taux figé de la facture. Un éventuel reste à payer reste une créance client (facture partielle), ce n'est pas un écart de change."
+                              title={t('acc.rap.partial_tooltip', locale)}
                             >
                               ≈ {fmt(fAmt)} MUR (indic.)
                             </p>
@@ -2314,7 +2314,7 @@ function AffectDialog({
               <div className="space-y-2">
                 <div className="rounded border divide-y text-sm">
                   <div className="px-2.5 py-1.5 bg-muted/30 text-xs font-medium flex items-center justify-between">
-                    <span>Montant affecté par facture (MUR)</span>
+                    <span>{t('acc.rap.amount_per_invoice', locale)}</span>
                     <span className="text-muted-foreground">Solde restant</span>
                   </div>
                   {selectedFactures.map((f) => {
@@ -2369,7 +2369,7 @@ function AffectDialog({
                   <span>
                     {selectedFactures.length} facture{selectedFactures.length > 1 ? "s" : ""} · affecté{" "}
                     <span className="font-mono">{fmt(sumAlloc)} MUR</span>
-                    {hasPartial && <span className="text-amber-700"> · répartition partielle</span>}
+                    {hasPartial && <span className="text-amber-700"> · {t('acc.rap.partial_split', locale)}</span>}
                   </span>
                   <span className="font-mono text-xs">
                     Règlement {fmt(txAmount)} {tx.devise || "MUR"} · écart{" "}
@@ -2382,8 +2382,8 @@ function AffectDialog({
                 {!allocValid ? (
                   <p className="text-[11px] text-rose-700">
                     {anyOver
-                      ? "Un montant dépasse le solde restant de sa facture."
-                      : "Chaque montant affecté doit être strictement positif."}
+                      ? t('acc.rap.over_balance_err', locale)
+                      : t('acc.rap.positive_err', locale)}
                   </p>
                 ) : ecartTreatment ? (
                   <div className="rounded border border-amber-200 bg-amber-50 p-2 space-y-1.5">
