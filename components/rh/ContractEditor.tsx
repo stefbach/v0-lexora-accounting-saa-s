@@ -10,6 +10,7 @@
 import { useEditor, EditorContent } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import { useEffect } from "react"
+import { t, getLocale } from "@/lib/i18n"
 
 export interface ContractEditorProps {
   /** Contenu initial (HTML). */
@@ -27,6 +28,7 @@ export function ContractEditor({
   readonly = false,
   className = "",
 }: ContractEditorProps) {
+  const locale = getLocale()
   const editor = useEditor({
     extensions: [StarterKit],
     content: initialHtml || "",
@@ -69,21 +71,21 @@ export function ContractEditor({
             onClick={() => editor.chain().focus().toggleBold().run()}
             active={editor.isActive("bold")}
             label="B"
-            title="Gras (Ctrl+B)"
+            title={t('srh.editor.bold', locale)}
             bold
           />
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleItalic().run()}
             active={editor.isActive("italic")}
             label="I"
-            title="Italique (Ctrl+I)"
+            title={t('srh.editor.italic', locale)}
             italic
           />
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleStrike().run()}
             active={editor.isActive("strike")}
             label="S"
-            title="Barré"
+            title={t('srh.editor.strike', locale)}
             strike
           />
           <div className="w-px bg-gray-200 mx-1" />
@@ -91,49 +93,49 @@ export function ContractEditor({
             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
             active={editor.isActive("heading", { level: 1 })}
             label="H1"
-            title="Titre 1"
+            title={t('srh.editor.h1', locale)}
           />
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
             active={editor.isActive("heading", { level: 2 })}
             label="H2"
-            title="Titre 2"
+            title={t('srh.editor.h2', locale)}
           />
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
             active={editor.isActive("heading", { level: 3 })}
             label="H3"
-            title="Titre 3"
+            title={t('srh.editor.h3', locale)}
           />
           <div className="w-px bg-gray-200 mx-1" />
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleBulletList().run()}
             active={editor.isActive("bulletList")}
             label="• Liste"
-            title="Liste à puces"
+            title={t('srh.editor.bullet_list', locale)}
           />
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
             active={editor.isActive("orderedList")}
             label="1. Liste"
-            title="Liste numérotée"
+            title={t('srh.editor.ordered_list', locale)}
           />
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
             active={editor.isActive("blockquote")}
             label="❝"
-            title="Citation"
+            title={t('srh.editor.quote', locale)}
           />
           <div className="w-px bg-gray-200 mx-1" />
           <ToolbarButton
             onClick={() => editor.chain().focus().undo().run()}
             label="↶"
-            title="Annuler"
+            title={t('srh.editor.undo', locale)}
           />
           <ToolbarButton
             onClick={() => editor.chain().focus().redo().run()}
             label="↷"
-            title="Rétablir"
+            title={t('srh.editor.redo', locale)}
           />
         </div>
       )}
