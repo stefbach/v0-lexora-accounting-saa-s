@@ -38,17 +38,20 @@ function initials(nom: string, prenom: string) {
   return `${(prenom?.[0] || "").toUpperCase()}${(nom?.[0] || "").toUpperCase()}`
 }
 function dateVal(d: string | null | undefined) { return d?.split("T")[0] || "" }
-function anciennete(dateArrivee: string | null | undefined) {
+function anciennete(dateArrivee: string | null | undefined, locale: ReturnType<typeof getLocale>) {
   if (!dateArrivee) return null
   const d = new Date(dateArrivee)
   const now = new Date()
   const years = now.getFullYear() - d.getFullYear()
   const months = now.getMonth() - d.getMonth()
   const totalMonths = years * 12 + months
-  if (totalMonths < 12) return `${totalMonths} mois`
+  const moisLabel = t("uifx.anciennete_months", locale)
+  const yearLabel = (n: number) =>
+    n > 1 ? t("uifx.anciennete_years", locale) : t("uifx.anciennete_year", locale)
+  if (totalMonths < 12) return `${totalMonths} ${moisLabel}`
   const y = Math.floor(totalMonths / 12)
   const m = totalMonths % 12
-  return m > 0 ? `${y} an${y > 1 ? "s" : ""} ${m} mois` : `${y} an${y > 1 ? "s" : ""}`
+  return m > 0 ? `${y} ${yearLabel(y)} ${m} ${moisLabel}` : `${y} ${yearLabel(y)}`
 }
 
 const ROLES = ["salarie", "manager", "rh", "admin", "direction"]
@@ -427,7 +430,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
               )}
               {employe.date_arrivee && (
                 <span className="inline-flex items-center gap-1.5 bg-[#D4AF37]/20 text-[#D4AF37] px-3 py-1 rounded-full text-xs border border-[#D4AF37]/20">
-                  <CalendarDays className="w-3 h-3" />{anciennete(employe.date_arrivee)}
+                  <CalendarDays className="w-3 h-3" />{anciennete(employe.date_arrivee, locale)}
                 </span>
               )}
               {/* G3 — Statut WRA 2019 S.2 (computed depuis salaire_base) */}
