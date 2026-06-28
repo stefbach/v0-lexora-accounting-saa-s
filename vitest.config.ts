@@ -63,6 +63,7 @@ export default defineConfig({
       'e2e',
       'playwright',
       'tests/e2e/**',
+      'tests/playwright/**', // tests Playwright (E2E navigateur) — runner séparé
     ],
     coverage: {
       provider: 'v8',

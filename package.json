@@ -15,7 +15,9 @@
     "n8n:push": "node scripts/sync-n8n.mjs push-all",
     "extract:finance": "npx ts-node scripts/finance-extraction-agent.ts",
     "extract:test": "psql -f scripts/test-extraction-setup.sql",
-    "extract:help": "cat docs/PHASE2_TASK2A_FINANCE_EXTRACTION.md"
+    "extract:help": "cat docs/PHASE2_TASK2A_FINANCE_EXTRACTION.md",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
@@ -99,6 +101,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@next/eslint-plugin-next": "^16.2.6",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4.2.0",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^22",
