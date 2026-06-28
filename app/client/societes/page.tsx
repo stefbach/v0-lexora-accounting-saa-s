@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Building2, Plus, FileText, Users, BookOpen, Edit, Loader2, Check, Sparkles } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { ClientPanel, ClientEmpty, ClientChip } from "@/components/client/ClientKit"
-import { t, getLocale } from "@/lib/i18n"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const FONT = "'Poppins', sans-serif"
 
@@ -24,6 +24,21 @@ interface Societe {
 }
 
 const SECTEURS = ["Technologies de l'information","Santé","Commerce","Finance","Immobilier","Tourisme","Transport","Agriculture","Éducation","Autre"]
+const SECTEUR_KEYS: Record<string, string> = {
+  "Technologies de l'information": 'uicl.sector_it',
+  "Santé": 'uicl.sector_health',
+  "Commerce": 'uicl.sector_trade',
+  "Finance": 'uicl.sector_finance',
+  "Immobilier": 'uicl.sector_realestate',
+  "Tourisme": 'uicl.sector_tourism',
+  "Transport": 'uicl.sector_transport',
+  "Agriculture": 'uicl.sector_agriculture',
+  "Éducation": 'uicl.sector_education',
+  "Autre": 'uicl.sector_other',
+}
+function secteurLabel(s: string, locale: Locale): string {
+  return SECTEUR_KEYS[s] ? t(SECTEUR_KEYS[s], locale) : s
+}
 
 const EMPTY = { nom:"", brn:"", ern:"", numero_tva_mra:"", secteur_activite:"", adresse:"", telephone:"", email:"", statut_tva: false, regime: "domestic", devise_fonctionnelle: "MUR", fsc_license_number: "", fsc_license_type: "", tax_residency_country: "MU" }
 
@@ -128,7 +143,7 @@ export default function SocietesPage() {
                 <Label>{t('core.soc.sector', locale)}</Label>
                 <Select value={form.secteur_activite} onValueChange={v=>setForm(f=>({...f,secteur_activite:v}))}>
                   <SelectTrigger><SelectValue placeholder={t('core.soc.select', locale)}/></SelectTrigger>
-                  <SelectContent>{SECTEURS.map(s=><SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  <SelectContent>{SECTEURS.map(s=><SelectItem key={s} value={s}>{secteurLabel(s, locale)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div><Label>{t('core.soc.address', locale)}</Label><Input value={form.adresse} onChange={F("adresse")} placeholder="Port Louis, Maurice"/></div>
@@ -333,7 +348,7 @@ function SocieteCard({ societe: s, index, onEdit, locale }: { societe: Societe; 
                   }}
                 >
                   <Sparkles size={11} style={{ color: accent }} />
-                  {s.secteur_activite}
+                  {secteurLabel(s.secteur_activite, locale)}
                 </div>
               )}
             </div>

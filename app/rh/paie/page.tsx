@@ -418,7 +418,7 @@ export default function PaiePage() {
       if (preview.error) throw new Error(preview.error)
       if (preview.requires_confirmation) {
         const ok = window.confirm(
-          `${preview.nb_bulletins} bulletin(s) seront comptabilisé(s) au grand livre pour ${periode}.\n\nConfirmer la remontée comptable ?`
+          t('uirh.paie.confirm_compta_gl', locale).replace('{n}', String(preview.nb_bulletins)).replace('{p}', String(periode))
         )
         if (!ok) { setComptabilisationLoading(false); return }
       }
@@ -473,7 +473,7 @@ export default function PaiePage() {
       // Bug A fix — si des employés sont sortis dans la période, libellé
       // explicite "solde tout compte" pour signaler le mode de calcul.
       actionLabel: employesSortants.length > 0
-        ? (hasBulletins ? "Recalculer (solde tout compte)" : "Calculer en solde tout compte")
+        ? (hasBulletins ? t('uirh.paie.btn_recalc_stc', locale) : t('uirh.paie.btn_calc_stc', locale))
         : (hasBulletins ? t('rhpa.paie.btn_recalculer_paie', locale) : t('rhpa.paie.btn_calculer_paie', locale)),
       actionDisabled: calculating || isLocked, phase: "process",
     },
@@ -661,7 +661,7 @@ export default function PaiePage() {
     // comptabilise=true mais on garde la garde au cas où (URL forgée,
     // état stale, etc.).
     if (emp?.comptabilise) {
-      alert(`Bulletin de ${nomComplet} déjà comptabilisé — modification interdite. Voir les écritures liées ou décomptabiliser (admin).`)
+      alert(t('uirh.paie.alert_deja_compta_full', locale).replace('{nom}', nomComplet))
       return
     }
     // FIX-SOLDE-STC — pré-check côté client : si l'employé est sortant ce
@@ -675,7 +675,7 @@ export default function PaiePage() {
         employe_nom: `${empSortant.prenom} ${empSortant.nom}`,
         date_depart: empSortant.date_depart,
         redirect_url: `/rh/depart?employe_id=${employe_id}`,
-        hint: "Le bulletin paie normal ne peut pas être généré pour un employé sortant. Le solde tout compte inclut salaire prorata + indemnités (préavis, licenciement) + 13e prorata + AL payée.",
+        hint: t('uirh.paie.sortant_hint', locale),
       })
       return
     }
@@ -689,7 +689,7 @@ export default function PaiePage() {
       const data = await res.json()
       // FIX-IMMUTABLE — 409 = bulletin comptabilisé, message dédié au lieu d'une alerte générique
       if (res.status === 409 && data?.code === 'BULLETIN_COMPTABILISE') {
-        alert(`Bulletin de ${nomComplet} déjà comptabilisé — modification interdite.\n${data.hint || ''}`)
+        alert(t('uirh.paie.alert_deja_compta_409', locale).replace('{nom}', nomComplet).replace('{hint}', data.hint || ''))
       } else if (res.status === 409 && data?.code === 'EMPLOYE_SORTANT') {
         // FIX-SOLDE-STC — l'API a refusé : ouvrir la modal de redirection.
         setSortantModal({
@@ -816,8 +816,8 @@ export default function PaiePage() {
               <div className="flex-1 space-y-2">
                 <p className="font-semibold text-amber-900">
                   {employesSortants.length === 1
-                    ? "Sortie employé dans la période — solde tout compte"
-                    : `${employesSortants.length} sorties employés dans la période — solde tout compte`}
+                    ? t('uirh.paie.sortie_single', locale)
+                    : t('uirh.paie.sortie_multi', locale).replace('{n}', String(employesSortants.length))}
                 </p>
                 <ul className="text-sm text-amber-800 space-y-1">
                   {employesSortants.map(e => {
@@ -828,16 +828,14 @@ export default function PaiePage() {
                     return (
                       <li key={e.id} className="flex items-center gap-2">
                         <span className="font-medium">{e.prenom} {e.nom}</span>
-                        <span className="text-amber-700">— sortie le {d}</span>
+                        <span className="text-amber-700">{t('uirh.paie.sortie_le', locale).replace('{d}', d)}</span>
                       </li>
                     )
                   })}
                 </ul>
                 <p className="text-xs text-amber-700">
-                  Le bulletin sera calculé en <b>solde tout compte</b> avec prorata
-                  automatique sur la base des jours travaillés. Si un bulletin
-                  existe déjà au mois entier, il sera archivé (consultable depuis
-                  <a href="/rh/historique-paie" className="underline ml-1">Historique paie</a>).
+                  {t('uirh.paie.stc_warn_prefix', locale)} <b>{t('uirh.paie.stc_bold', locale)}</b> {t('uirh.paie.stc_warn_suffix', locale)}
+                  <a href="/rh/historique-paie" className="underline ml-1">{t('uirh.paie.stc_link_hist', locale)}</a>).
                 </p>
               </div>
             </div>
@@ -1081,7 +1079,7 @@ export default function PaiePage() {
                             <TooltipTrigger asChild>
                               <span className="ml-1.5 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded font-semibold cursor-help">EUR</span>
                             </TooltipTrigger>
-                            <TooltipContent><p>Taux: {b.employe?.taux_change_eur || 46.50} MUR</p></TooltipContent>
+                            <TooltipContent><p>{t('uirh.paie.taux_label', locale).replace('{x}', String(b.employe?.taux_change_eur || 46.50))}</p></TooltipContent>
                           </Tooltip>
                         )}
                       </TableCell>
@@ -1130,14 +1128,14 @@ export default function PaiePage() {
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded font-medium cursor-help">
-                                  Solde de Tout Compte
+                                  {t('uirh.paie.stc_badge', locale)}
                                 </span>
                               </TooltipTrigger>
                               <TooltipContent className="max-w-xs text-xs">
-                                Bulletin de paie de sortie — IDENTIQUE au calcul STC affiché dans /rh/depart.
+                                {t('uirh.paie.stc_tooltip', locale)}
                                 {Number(b.retenues_manuelles) > 0 && (
                                   <div className="mt-1 pt-1 border-t border-gray-400">
-                                    Retenues manuelles : <span className="font-mono font-bold">{fmt(b.retenues_manuelles)} MUR</span>
+                                    {t('uirh.paie.retenues_manuelles_label', locale)} <span className="font-mono font-bold">{fmt(b.retenues_manuelles)} MUR</span>
                                   </div>
                                 )}
                               </TooltipContent>
@@ -1152,17 +1150,17 @@ export default function PaiePage() {
                               <TooltipTrigger asChild>
                                 <span
                                   className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs rounded flex items-center gap-0.5 font-medium cursor-help"
-                                  title={b.comptabilise_at ? `Comptabilisé le ${new Date(b.comptabilise_at).toLocaleDateString('fr-FR')}` : 'Comptabilisé'}
+                                  title={b.comptabilise_at ? t('uirh.paie.compta_at_title', locale).replace('{d}', new Date(b.comptabilise_at).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR')) : t('uirh.paie.compta_title', locale)}
                                 >
                                   <CheckCircle className="w-2.5 h-2.5" />
                                   {b.comptabilise_at
-                                    ? `Comptabilisé ${new Date(b.comptabilise_at).toLocaleDateString('fr-FR')}`
+                                    ? t('uirh.paie.compta_at_badge', locale).replace('{d}', new Date(b.comptabilise_at).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR'))
                                     : t('rhpa.paie.badge_cpt', locale)}
                                 </span>
                               </TooltipTrigger>
                               <TooltipContent>
-                                Bulletin verrouillé en comptabilité — modification interdite.
-                                {b.ecriture_id ? ' Cliquer le bouton "Écritures" pour voir le détail.' : ''}
+                                {t('uirh.paie.compta_tooltip', locale)}
+                                {b.ecriture_id ? t('uirh.paie.compta_tooltip_ecritures', locale) : ''}
                               </TooltipContent>
                             </Tooltip>
                           )}
@@ -1205,10 +1203,10 @@ export default function PaiePage() {
                                   onClick={() => window.open(`/comptable/grand-livre?ecriture_id=${b.ecriture_id}`, '_blank')}
                                 >
                                   <BookOpen className="w-3 h-3" />
-                                  Écritures
+                                  {t('uirh.paie.btn_ecritures', locale)}
                                 </Button>
                               </TooltipTrigger>
-                              <TooltipContent>Voir les écritures comptables liées (lecture seule)</TooltipContent>
+                              <TooltipContent>{t('uirh.paie.tt_voir_ecritures', locale)}</TooltipContent>
                             </Tooltip>
                           )}
                           {b.comptabilise && !b.ecriture_id && (
@@ -1216,10 +1214,10 @@ export default function PaiePage() {
                               <TooltipTrigger asChild>
                                 <span className="px-2 py-1 text-xs text-gray-500 italic flex items-center gap-1">
                                   <Lock className="w-3 h-3" />
-                                  Verrouillé
+                                  {t('uirh.paie.verrouille_label', locale)}
                                 </span>
                               </TooltipTrigger>
-                              <TooltipContent>Bulletin comptabilisé — lecture seule</TooltipContent>
+                              <TooltipContent>{t('uirh.paie.tt_compta_lecture_seule', locale)}</TooltipContent>
                             </Tooltip>
                           )}
                           {/* FIX-DECOMPTA — bouton décomptabilisation accessible RH+direction */}
@@ -1631,10 +1629,10 @@ export default function PaiePage() {
                 <AlertTriangle className="w-6 h-6 text-amber-600 mt-0.5 shrink-0" />
                 <div className="flex-1">
                   <h3 className="text-lg font-bold text-amber-900">
-                    Employé sortant — utiliser le module Départ
+                    {t('uirh.paie.modal_sortant_title', locale)}
                   </h3>
                   <p className="text-sm text-gray-700 mt-1">
-                    <span className="font-semibold">{sortantModal.employe_nom}</span> est sorti le{' '}
+                    <span className="font-semibold">{sortantModal.employe_nom}</span> {t('uirh.paie.modal_est_sorti_le', locale)}{' '}
                     <span className="font-semibold">
                       {new Date(sortantModal.date_depart + 'T12:00:00').toLocaleDateString(
                         locale === 'en' ? 'en-GB' : 'fr-FR',
@@ -1646,12 +1644,11 @@ export default function PaiePage() {
                 </div>
               </div>
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-900 mb-4">
-                {sortantModal.hint ||
-                  "Le bulletin paie normal ne peut pas être généré pour un employé sortant. Le solde tout compte inclut salaire prorata + indemnités (préavis, licenciement) + 13e prorata + AL payée."}
+                {sortantModal.hint || t('uirh.paie.sortant_hint', locale)}
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setSortantModal(null)}>
-                  Annuler
+                  {t('uirh.paie.btn_annuler_modal', locale)}
                 </Button>
                 <Button
                   style={{ backgroundColor: NAVY, color: 'white' }}
@@ -1661,7 +1658,7 @@ export default function PaiePage() {
                     router.push(url)
                   }}
                 >
-                  Ouvrir le module Départ
+                  {t('uirh.paie.btn_ouvrir_depart', locale)}
                   <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
               </div>

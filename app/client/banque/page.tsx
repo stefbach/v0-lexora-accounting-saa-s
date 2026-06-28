@@ -929,8 +929,6 @@ function FeedTransactionsPanel({ locale }: { locale: Locale }) {
     })
   }
 
-  const isFr = locale === 'fr'
-
   return (
     <Card className="border-blue-200 bg-blue-50/30">
       <CardContent className="p-4">
@@ -942,15 +940,13 @@ function FeedTransactionsPanel({ locale }: { locale: Locale }) {
           <div className="flex items-center gap-2">
             <Info className="h-4 w-4 text-blue-700" />
             <span className="font-semibold text-blue-900 text-sm">
-              {isFr
-                ? 'Comment alimenter tes transactions bancaires dans Lexora ?'
-                : 'How to feed bank transactions into Lexora?'}
+              {t('uicl.bnq_feed_title', locale)}
             </span>
           </div>
           <span className="text-xs text-blue-700 underline">
             {collapsed
-              ? (isFr ? 'Voir les options' : 'Show options')
-              : (isFr ? 'Masquer' : 'Hide')}
+              ? t('uicl.bnq_feed_show', locale)
+              : t('uicl.bnq_feed_hide', locale)}
           </span>
         </button>
 
@@ -961,16 +957,14 @@ function FeedTransactionsPanel({ locale }: { locale: Locale }) {
               <div className="flex items-center gap-2 mb-1.5">
                 <CheckCircle2 className="h-4 w-4 text-green-700" />
                 <span className="font-semibold text-sm text-green-900">
-                  {isFr ? 'A — Upload web (CSV / MT940 / OCR)' : 'A — Web upload (CSV / MT940 / OCR)'}
+                  {t('uicl.bnq_feed_a_title', locale)}
                 </span>
               </div>
               <p className="text-xs text-gray-700 leading-relaxed">
-                {isFr
-                  ? 'Tu déposes ici (bouton Importer ↑) : un export CSV/MT940 depuis ton Internet Banking, ou un PDF/image de ton relevé (l\'OCR Claude extrait les transactions). MCB, SBM, MauBank reconnus. Aucun mot de passe à donner.'
-                  : 'Drop here (Import button ↑): a CSV/MT940 export from your Internet Banking, or a PDF/image of your statement (Claude OCR extracts the transactions). MCB, SBM, MauBank recognized. No password required.'}
+                {t('uicl.bnq_feed_a_body', locale)}
               </p>
               <p className="text-[11px] text-green-700 mt-1.5 font-medium">
-                {isFr ? '✅ Fonctionne tout de suite' : '✅ Works right now'}
+                {t('uicl.bnq_feed_a_status', locale)}
               </p>
             </div>
 
@@ -979,16 +973,14 @@ function FeedTransactionsPanel({ locale }: { locale: Locale }) {
               <div className="flex items-center gap-2 mb-1.5">
                 <Sparkles className="h-4 w-4 text-cyan-700" />
                 <span className="font-semibold text-sm text-cyan-900">
-                  {isFr ? 'B — Telegram (OCR photo)' : 'B — Telegram (photo OCR)'}
+                  {t('uicl.bnq_feed_b_title', locale)}
                 </span>
               </div>
               <p className="text-xs text-gray-700 leading-relaxed">
-                {isFr
-                  ? 'Tu envoies une photo ou un PDF de ton relevé au bot Telegram Lexora. L\'OCR Claude extrait les transactions et les injecte directement dans la banque de la société active. Idéal en mobilité.'
-                  : 'Send a photo or PDF of your statement to the Lexora Telegram bot. Claude OCR extracts the transactions and injects them into the active company\'s bank. Ideal on the go.'}
+                {t('uicl.bnq_feed_b_body', locale)}
               </p>
               <p className="text-[11px] text-cyan-700 mt-1.5 font-medium">
-                {isFr ? '📱 Fonctionne en mobilité' : '📱 Works on mobile'}
+                {t('uicl.bnq_feed_b_status', locale)}
               </p>
             </div>
 
@@ -997,23 +989,21 @@ function FeedTransactionsPanel({ locale }: { locale: Locale }) {
               <div className="flex items-center gap-2 mb-1.5">
                 <KeyRound className="h-4 w-4 text-amber-700" />
                 <span className="font-semibold text-sm text-amber-900">
-                  {isFr ? 'C — Scraping nocturne auto' : 'C — Nightly auto scraping'}
+                  {t('uicl.bnq_feed_c_title', locale)}
                 </span>
               </div>
               <p className="text-xs text-gray-700 leading-relaxed">
-                {isFr
-                  ? 'Lexora se connecte chaque nuit à 02:00 UTC et récupère solde + transactions. Tu donnes ton login + password Internet Banking (chiffrés AES-256-GCM). MCB activé, autres banques en attente.'
-                  : 'Lexora connects every night at 02:00 UTC to fetch balance + transactions. You provide your Internet Banking login + password (encrypted AES-256-GCM). MCB live, other banks pending.'}
+                {t('uicl.bnq_feed_c_body', locale)}
               </p>
               <div className="mt-1.5 flex items-center justify-between">
                 <span className="text-[11px] text-amber-700 font-medium">
-                  {isFr ? '⚠ Nécessite credentials' : '⚠ Requires credentials'}
+                  {t('uicl.bnq_feed_c_status', locale)}
                 </span>
                 <Link
                   href="/client/direction/bank-credentials"
                   className="text-[11px] text-blue-700 underline hover:text-blue-900"
                 >
-                  {isFr ? 'Configurer →' : 'Configure →'}
+                  {t('uicl.bnq_feed_c_cta', locale)}
                 </Link>
               </div>
             </div>
@@ -1023,16 +1013,14 @@ function FeedTransactionsPanel({ locale }: { locale: Locale }) {
               <div className="flex items-center gap-2 mb-1.5">
                 <Mail className="h-4 w-4 text-gray-600" />
                 <span className="font-semibold text-sm text-gray-700">
-                  {isFr ? 'D — Forward email (à venir)' : 'D — Email forwarding (coming)'}
+                  {t('uicl.bnq_feed_d_title', locale)}
                 </span>
               </div>
               <p className="text-xs text-gray-600 leading-relaxed">
-                {isFr
-                  ? 'Tu configures un forward automatique des relevés que ta banque t\'envoie par email. Lexora reçoit, parse, injecte. Aucun mot de passe à donner.'
-                  : 'Configure an auto-forward of the statement emails your bank sends. Lexora receives, parses, injects. No password required.'}
+                {t('uicl.bnq_feed_d_body', locale)}
               </p>
               <p className="text-[11px] text-gray-500 mt-1.5 italic">
-                {isFr ? 'Roadmap — disponible bientôt' : 'Roadmap — coming soon'}
+                {t('uicl.bnq_feed_d_status', locale)}
               </p>
             </div>
           </div>

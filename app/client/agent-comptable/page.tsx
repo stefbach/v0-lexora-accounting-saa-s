@@ -25,7 +25,7 @@ export default function AgentComptablePage() {
   const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [messages, setMessages] = useState<Msg[]>([
-    { role: "assistant", content: "Bonjour 👋 Je suis votre **Expert Lexora** (compta, RH, paie, MRA + droit Maurice). Demandez-moi par exemple : « affecte l'avance de 50 000 du client Dupont à sa facture FA-2026-012 », « solde de congés de Mélanie ? », « où en est ma conformité MRA ? », ou « calcule le net pour 50 000 brut »." },
+    { role: "assistant", content: t('uicl.agc_greeting', locale) },
   ])
   const [input, setInput] = useState("")
   const [busy, setBusy] = useState(false)
@@ -45,7 +45,7 @@ export default function AgentComptablePage() {
         if (!r.ok || !j?.message) return
         setMessages(prev => [
           ...prev,
-          { role: 'assistant', content: `🔗 Lien Telegram reçu : *${j.message}*` },
+          { role: 'assistant', content: t('uicl.agc_telegram_link', locale).replace('{msg}', String(j.message)) },
         ])
         setInput(j.message)
         // Nettoie l'URL
@@ -68,7 +68,7 @@ export default function AgentComptablePage() {
       })
       const d = await res.json()
       if (!res.ok) {
-        setMessages(prev => [...prev, { role: "assistant", content: `⚠️ ${d?.error || "Erreur"}` }])
+        setMessages(prev => [...prev, { role: "assistant", content: `⚠️ ${d?.error || t('uicl.error', locale)}` }])
         return
       }
       if (d.type === "confirmation") {
@@ -78,7 +78,7 @@ export default function AgentComptablePage() {
         setMessages(prev => [...prev, { role: "assistant", content: d.message }])
       }
     } catch (e: any) {
-      setMessages(prev => [...prev, { role: "assistant", content: `⚠️ ${e?.message || "Erreur réseau"}` }])
+      setMessages(prev => [...prev, { role: "assistant", content: `⚠️ ${e?.message || t('uicl.network_error', locale)}` }])
     } finally { setBusy(false) }
   }
 
@@ -92,15 +92,15 @@ export default function AgentComptablePage() {
 
   const confirm = () => {
     if (!pending) return
-    const next = [...messages, { role: "user" as const, content: "✅ Je confirme cette action." }]
+    const next = [...messages, { role: "user" as const, content: t('uicl.agc_confirm_action', locale) }]
     setMessages(next)
     callAgent(next, { name: pending.name, input: pending.input })
   }
 
   const cancel = () => {
     setPending(null)
-    setMessages(prev => [...prev, { role: "user", content: "❌ Annule cette action." },
-      { role: "assistant", content: "D'accord, action annulée. Que souhaitez-vous faire ?" }])
+    setMessages(prev => [...prev, { role: "user", content: t('uicl.agc_cancel_action', locale) },
+      { role: "assistant", content: t('uicl.agc_cancelled', locale) }])
   }
 
   return (

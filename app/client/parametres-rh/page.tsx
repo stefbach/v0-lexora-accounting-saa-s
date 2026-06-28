@@ -10,7 +10,7 @@ import {
   Plus, Trash2, Pencil, Save, X, Building2, MapPin, Calendar,
   Users, Clock, ChevronLeft, ChevronRight, Loader2, AlertTriangle,
 } from "lucide-react"
-import { t, getLocale } from '@/lib/i18n'
+import { t, getLocale, type Locale } from '@/lib/i18n'
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 // ---------------------------------------------------------------------------
@@ -59,6 +59,13 @@ interface WorkCalendar {
 }
 
 const ALL_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+const DAY_KEYS: Record<string, string> = {
+  Lun: 'uicl.day_mon', Mar: 'uicl.day_tue', Mer: 'uicl.day_wed', Jeu: 'uicl.day_thu',
+  Ven: 'uicl.day_fri', Sam: 'uicl.day_sat', Dim: 'uicl.day_sun',
+}
+function dayLabel(day: string, locale: Locale): string {
+  return DAY_KEYS[day] ? t(DAY_KEYS[day], locale) : day
+}
 
 // ---------------------------------------------------------------------------
 // API helpers
@@ -83,21 +90,22 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
 // ---------------------------------------------------------------------------
 // Inline edit row helper
 // ---------------------------------------------------------------------------
-function InlineActions({ editing, onEdit, onSave, onCancel, onDelete, busy }: {
+function InlineActions({ editing, onEdit, onSave, onCancel, onDelete, busy, locale }: {
   editing: boolean
   onEdit: () => void
   onSave: () => void
   onCancel: () => void
   onDelete: () => void
   busy?: boolean
+  locale: Locale
 }) {
   if (editing) {
     return (
       <div className="flex gap-1">
-        <Button aria-label="Enregistrer" size="sm" variant="ghost" disabled={busy} onClick={onSave} className="text-green-600 hover:text-green-700 h-8 w-8 p-0">
+        <Button aria-label={t('cui.save', locale)} size="sm" variant="ghost" disabled={busy} onClick={onSave} className="text-green-600 hover:text-green-700 h-8 w-8 p-0">
           {busy ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Save className="w-4 h-4" aria-hidden="true" />}
         </Button>
-        <Button aria-label="Annuler" size="sm" variant="ghost" disabled={busy} onClick={onCancel} className="text-gray-400 hover:text-gray-600 h-8 w-8 p-0">
+        <Button aria-label={t('cui.cancel', locale)} size="sm" variant="ghost" disabled={busy} onClick={onCancel} className="text-gray-400 hover:text-gray-600 h-8 w-8 p-0">
           <X className="w-4 h-4" aria-hidden="true" />
         </Button>
       </div>
@@ -105,10 +113,10 @@ function InlineActions({ editing, onEdit, onSave, onCancel, onDelete, busy }: {
   }
   return (
     <div className="flex gap-1">
-      <Button aria-label="Modifier" size="sm" variant="ghost" disabled={busy} onClick={onEdit} className="text-[#0B0F2E] hover:text-[#D4AF37] h-8 w-8 p-0">
+      <Button aria-label={t('cui.edit', locale)} size="sm" variant="ghost" disabled={busy} onClick={onEdit} className="text-[#0B0F2E] hover:text-[#D4AF37] h-8 w-8 p-0">
         <Pencil className="w-4 h-4" aria-hidden="true" />
       </Button>
-      <Button aria-label="Supprimer" size="sm" variant="ghost" disabled={busy} onClick={onDelete} className="text-red-400 hover:text-red-600 h-8 w-8 p-0">
+      <Button aria-label={t('cui.delete', locale)} size="sm" variant="ghost" disabled={busy} onClick={onDelete} className="text-red-400 hover:text-red-600 h-8 w-8 p-0">
         <Trash2 className="w-4 h-4" aria-hidden="true" />
       </Button>
     </div>
@@ -177,7 +185,7 @@ export default function ParametresRHPage() {
       setPayGroups(pg.groupes ?? [])
       setCalendars(c.calendriers ?? [])
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Erreur de chargement'
+      const msg = e instanceof Error ? e.message : t('uicl.load_error', locale)
       setError(msg)
       console.error('[parametres-rh] load error', e)
     } finally {
@@ -224,7 +232,7 @@ export default function ParametresRHPage() {
 
   // ---------------- Mutation handlers ----------------
   const handleErr = (e: unknown) => {
-    const msg = e instanceof Error ? e.message : 'Erreur inattendue'
+    const msg = e instanceof Error ? e.message : t('uicl.unexpected_error', locale)
     alert(msg)
   }
 
@@ -232,7 +240,7 @@ export default function ParametresRHPage() {
   const saveDept = async (id: string | null, draft: Partial<Department>) => {
     if (!societeId) return
     if (!draft.code?.trim() || !draft.nom?.trim()) {
-      alert(t('hr.params.code', locale) + ' + ' + t('hr.params.name', locale) + ' requis')
+      alert(t('hr.params.code', locale) + ' + ' + t('hr.params.name', locale) + ' ' + t('uicl.required_lc', locale))
       return
     }
     setBusy(true)
@@ -274,7 +282,7 @@ export default function ParametresRHPage() {
   const saveOff = async (id: string | null, draft: Partial<Office>) => {
     if (!societeId) return
     if (!draft.code?.trim() || !draft.nom?.trim()) {
-      alert(t('hr.params.code', locale) + ' + ' + t('hr.params.name', locale) + ' requis')
+      alert(t('hr.params.code', locale) + ' + ' + t('hr.params.name', locale) + ' ' + t('uicl.required_lc', locale))
       return
     }
     setBusy(true)
@@ -296,7 +304,7 @@ export default function ParametresRHPage() {
     } catch (e) { handleErr(e) } finally { setBusy(false) }
   }
   const deleteOff = async (id: string) => {
-    if (!confirm('Supprimer ce bureau ?')) return
+    if (!confirm(t('uicl.confirm_del_office', locale))) return
     setBusy(true)
     try {
       await apiPost('/api/rh/bureaux', { action: 'supprimer', id })
@@ -308,7 +316,7 @@ export default function ParametresRHPage() {
   const saveLt = async (id: string | null, draft: Partial<LeaveType>) => {
     if (!societeId) return
     if (!draft.code?.trim() || !draft.nom?.trim()) {
-      alert(t('hr.params.code', locale) + ' + ' + t('hr.params.name', locale) + ' requis')
+      alert(t('hr.params.code', locale) + ' + ' + t('hr.params.name', locale) + ' ' + t('uicl.required_lc', locale))
       return
     }
     setBusy(true)
@@ -338,7 +346,7 @@ export default function ParametresRHPage() {
   }
   const deleteLt = async (id: string, is_global?: boolean) => {
     if (is_global) {
-      alert('Règle globale Maurice (WRA 2019). Modifiez-la pour créer un override société.')
+      alert(t('uicl.global_rule_mu', locale))
       return
     }
     if (!confirm(t('hr.params.del_leave_type_confirm', locale))) return
@@ -377,7 +385,7 @@ export default function ParametresRHPage() {
   const savePg = async (id: string | null, draft: Partial<PayGroup>) => {
     if (!societeId) return
     if (!draft.nom?.trim()) {
-      alert(t('hr.params.group_name', locale) + ' requis')
+      alert(t('hr.params.group_name', locale) + ' ' + t('uicl.required_lc', locale))
       return
     }
     setBusy(true)
@@ -399,7 +407,7 @@ export default function ParametresRHPage() {
     } catch (e) { handleErr(e) } finally { setBusy(false) }
   }
   const deletePg = async (id: string) => {
-    if (!confirm('Supprimer ce groupe de paie ?')) return
+    if (!confirm(t('uicl.confirm_del_paygroup', locale))) return
     setBusy(true)
     try {
       await apiPost('/api/rh/groupes', { action: 'supprimer', id })
@@ -411,7 +419,7 @@ export default function ParametresRHPage() {
   const saveCal = async (id: string | null, draft: Partial<WorkCalendar>) => {
     if (!societeId) return
     if (!draft.nom?.trim()) {
-      alert(t('hr.params.calendar_name_ph', locale) + ' requis')
+      alert(t('hr.params.calendar_name_ph', locale) + ' ' + t('uicl.required_lc', locale))
       return
     }
     setBusy(true)
@@ -437,7 +445,7 @@ export default function ParametresRHPage() {
     } catch (e) { handleErr(e) } finally { setBusy(false) }
   }
   const deleteCal = async (id: string) => {
-    if (!confirm('Supprimer ce calendrier ?')) return
+    if (!confirm(t('uicl.confirm_del_calendar', locale))) return
     setBusy(true)
     try {
       await apiPost('/api/rh/calendriers', { action: 'supprimer', id })
@@ -462,7 +470,7 @@ export default function ParametresRHPage() {
           <CardContent className="py-10 text-center">
             <AlertTriangle className="h-8 w-8 mx-auto text-amber-500 mb-3" />
             <p className="text-gray-600">
-              Aucune société active. Sélectionnez-en une dans le menu de gauche.
+              {t('uicl.no_active_company', locale)}
             </p>
           </CardContent>
         </Card>
@@ -509,13 +517,13 @@ export default function ParametresRHPage() {
                       <Input value={draftDept.code || ""} onChange={e => setDraftDept(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" placeholder="DIR" />
                     </td>
                     <td className="px-4 py-2">
-                      <Input value={draftDept.nom || ""} onChange={e => setDraftDept(p => ({ ...p, nom: e.target.value }))} className="h-8" placeholder="Direction" />
+                      <Input value={draftDept.nom || ""} onChange={e => setDraftDept(p => ({ ...p, nom: e.target.value }))} className="h-8" placeholder={t('uicl.dept_name_ph', locale)} />
                     </td>
                     <td className="px-4 py-2">
-                      <Input value={draftDept.description || ""} onChange={e => setDraftDept(p => ({ ...p, description: e.target.value }))} className="h-8" placeholder="(description)" />
+                      <Input value={draftDept.description || ""} onChange={e => setDraftDept(p => ({ ...p, description: e.target.value }))} className="h-8" placeholder={t('uicl.description_ph', locale)} />
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <InlineActions editing busy={busy}
+                      <InlineActions editing busy={busy} locale={locale}
                         onEdit={() => {}}
                         onSave={() => saveDept(null, draftDept)}
                         onCancel={() => { setEditDeptId(null); setDraftDept({}) }}
@@ -540,7 +548,7 @@ export default function ParametresRHPage() {
                           : (d.description || <span className="text-gray-400">--</span>)}
                       </td>
                       <td className="px-4 py-2 text-right">
-                        <InlineActions editing={editing} busy={busy}
+                        <InlineActions editing={editing} busy={busy} locale={locale}
                           onEdit={() => { setEditDeptId(d.id); setDraftDept({ ...d }) }}
                           onSave={() => saveDept(d.id, draftDept)}
                           onCancel={() => { setEditDeptId(null); setDraftDept({}) }}
@@ -598,9 +606,9 @@ export default function ParametresRHPage() {
                   <tr className="bg-amber-50">
                     <td className="px-4 py-2"><Input value={draftOff.code || ""} onChange={e => setDraftOff(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" placeholder="HQ" /></td>
                     <td className="px-4 py-2"><Input value={draftOff.nom || ""} onChange={e => setDraftOff(p => ({ ...p, nom: e.target.value }))} className="h-8" placeholder={t('hr.params.hq_ph', locale)} /></td>
-                    <td className="px-4 py-2"><Input value={draftOff.adresse || ""} onChange={e => setDraftOff(p => ({ ...p, adresse: e.target.value }))} className="h-8" placeholder="Port Louis" /></td>
+                    <td className="px-4 py-2"><Input value={draftOff.adresse || ""} onChange={e => setDraftOff(p => ({ ...p, adresse: e.target.value }))} className="h-8" placeholder={t('uicl.city_ph', locale)} /></td>
                     <td className="px-4 py-2 text-right">
-                      <InlineActions editing busy={busy}
+                      <InlineActions editing busy={busy} locale={locale}
                         onEdit={() => {}}
                         onSave={() => saveOff(null, draftOff)}
                         onCancel={() => { setEditOffId(null); setDraftOff({}) }}
@@ -623,7 +631,7 @@ export default function ParametresRHPage() {
                         {editing ? <Input aria-label={`${t('hr.params.address', locale)} ${o.nom}`} value={draftOff.adresse || ""} onChange={e => setDraftOff(p => ({ ...p, adresse: e.target.value }))} className="h-8" /> : (o.adresse || <span className="text-gray-400">--</span>)}
                       </td>
                       <td className="px-4 py-2 text-right">
-                        <InlineActions editing={editing} busy={busy}
+                        <InlineActions editing={editing} busy={busy} locale={locale}
                           onEdit={() => { setEditOffId(o.id); setDraftOff({ ...o }) }}
                           onSave={() => saveOff(o.id, draftOff)}
                           onCancel={() => { setEditOffId(null); setDraftOff({}) }}
@@ -682,14 +690,14 @@ export default function ParametresRHPage() {
               <tbody>
                 {editLtId === '__new__' && (
                   <tr className="bg-amber-50">
-                    <td className="px-4 py-2"><Input aria-label={`${t('hr.params.code', locale)} type de congé`} value={draftLt.code || ""} onChange={e => setDraftLt(p => ({ ...p, code: e.target.value }))} className="h-8 w-20" placeholder="AL" /></td>
-                    <td className="px-4 py-2"><Input aria-label={`${t('hr.params.name', locale)} type de congé`} value={draftLt.nom || ""} onChange={e => setDraftLt(p => ({ ...p, nom: e.target.value }))} className="h-8" placeholder="Annual leave" /></td>
+                    <td className="px-4 py-2"><Input aria-label={`${t('hr.params.code', locale)} ${t('uicl.leave_type_lc', locale)}`} value={draftLt.code || ""} onChange={e => setDraftLt(p => ({ ...p, code: e.target.value }))} className="h-8 w-20" placeholder="AL" /></td>
+                    <td className="px-4 py-2"><Input aria-label={`${t('hr.params.name', locale)} ${t('uicl.leave_type_lc', locale)}`} value={draftLt.nom || ""} onChange={e => setDraftLt(p => ({ ...p, nom: e.target.value }))} className="h-8" placeholder="Annual leave" /></td>
                     <td className="px-4 py-2 text-center"><Input aria-label={t('hr.params.days_per_year', locale)} type="number" value={draftLt.daysPerYear ?? 0} onChange={e => setDraftLt(p => ({ ...p, daysPerYear: Number(e.target.value) }))} className="h-8 w-20 mx-auto" /></td>
                     <td className="px-4 py-2 text-center"><Switch aria-label={t('hr.params.certificate', locale)} checked={draftLt.requiresCertificate ?? false} onCheckedChange={v => setDraftLt(p => ({ ...p, requiresCertificate: v }))} /></td>
                     <td className="px-4 py-2 text-center"><Switch aria-label={t('hr.params.paid', locale)} checked={draftLt.paid ?? true} onCheckedChange={v => setDraftLt(p => ({ ...p, paid: v }))} /></td>
                     <td className="px-4 py-2 text-center"><span className="text-xs text-amber-600">{t('hr.params.societe_badge', locale)}</span></td>
                     <td className="px-4 py-2 text-right">
-                      <InlineActions editing busy={busy}
+                      <InlineActions editing busy={busy} locale={locale}
                         onEdit={() => {}}
                         onSave={() => saveLt(null, draftLt)}
                         onCancel={() => { setEditLtId(null); setDraftLt({}) }}
@@ -731,7 +739,7 @@ export default function ParametresRHPage() {
                           : <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">{t('hr.params.societe_badge', locale)}</span>}
                       </td>
                       <td className="px-4 py-2 text-right">
-                        <InlineActions editing={editing} busy={busy}
+                        <InlineActions editing={editing} busy={busy} locale={locale}
                           onEdit={() => { setEditLtId(lt.id); setDraftLt({ ...lt }) }}
                           onSave={() => saveLt(lt.id, draftLt)}
                           onCancel={() => { setEditLtId(null); setDraftLt({}) }}
@@ -749,7 +757,7 @@ export default function ParametresRHPage() {
           </div>
         )}
         <p className="text-xs text-gray-400 mt-3">
-          Les types « global MU » proviennent du seed WRA 2019 (Maurice). Les modifier crée automatiquement un override pour la société active.
+          {t('uicl.global_mu_note', locale)}
         </p>
       </CardContent>
     </Card>
@@ -863,7 +871,7 @@ export default function ParametresRHPage() {
                     <td className="px-4 py-2"><Input aria-label={`${t('hr.params.name', locale)} groupe paie`} value={draftPg.nom || ""} onChange={e => setDraftPg(p => ({ ...p, nom: e.target.value }))} className="h-8" placeholder="Mutualisé" /></td>
                     <td className="px-4 py-2 text-center"><span className="text-xs text-gray-400">--</span></td>
                     <td className="px-4 py-2 text-right">
-                      <InlineActions editing busy={busy}
+                      <InlineActions editing busy={busy} locale={locale}
                         onEdit={() => {}}
                         onSave={() => savePg(null, draftPg)}
                         onCancel={() => { setEditPgId(null); setDraftPg({}) }}
@@ -888,7 +896,7 @@ export default function ParametresRHPage() {
                         <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{pg.nb_membres ?? 0} {t('hr.params.employees_count', locale)}</span>
                       </td>
                       <td className="px-4 py-2 text-right">
-                        <InlineActions editing={editing} busy={busy}
+                        <InlineActions editing={editing} busy={busy} locale={locale}
                           onEdit={() => { setEditPgId(pg.id); setDraftPg({ ...pg }) }}
                           onSave={() => savePg(pg.id, draftPg)}
                           onCancel={() => { setEditPgId(null); setDraftPg({}) }}
@@ -943,7 +951,7 @@ export default function ParametresRHPage() {
                     className="h-8 font-semibold flex-1 mr-3"
                     placeholder={t('hr.params.calendar_name_ph', locale)}
                   />
-                  <InlineActions editing busy={busy}
+                  <InlineActions editing busy={busy} locale={locale}
                     onEdit={() => {}}
                     onSave={() => saveCal(null, draftCal)}
                     onCancel={() => { setEditCalId(null); setDraftCal({}) }}
@@ -958,7 +966,7 @@ export default function ParametresRHPage() {
                       <button key={day}
                         type="button"
                         aria-pressed={active}
-                        aria-label={`${day} actif`}
+                        aria-label={`${dayLabel(day, locale)} ${t('uicl.active_lc', locale)}`}
                         onClick={() => {
                           const current = draftCal.jours_semaine || []
                           setDraftCal(p => ({
@@ -967,7 +975,7 @@ export default function ParametresRHPage() {
                           }))
                         }}
                         className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer hover:opacity-80 ${active ? "bg-[#0B0F2E] text-white" : "bg-gray-100 text-gray-400"}`}>
-                        {day}
+                        {dayLabel(day, locale)}
                       </button>
                     )
                   })}
@@ -990,7 +998,7 @@ export default function ParametresRHPage() {
                         <p className="font-semibold text-[#0B0F2E]">{cal.nom}</p>
                       )}
                     </div>
-                    <InlineActions editing={editing} busy={busy}
+                    <InlineActions editing={editing} busy={busy} locale={locale}
                       onEdit={() => { setEditCalId(cal.id); setDraftCal({ ...cal }) }}
                       onSave={() => saveCal(cal.id, draftCal)}
                       onCancel={() => { setEditCalId(null); setDraftCal({}) }}
@@ -1007,7 +1015,7 @@ export default function ParametresRHPage() {
                         <button key={day}
                           type="button"
                           aria-pressed={active}
-                          aria-label={`${day} ${active ? "actif" : "inactif"}`}
+                          aria-label={`${dayLabel(day, locale)} ${active ? t('uicl.active_lc', locale) : t('uicl.inactive_lc', locale)}`}
                           disabled={!editing}
                           onClick={() => {
                             if (!editing) return
@@ -1018,7 +1026,7 @@ export default function ParametresRHPage() {
                             }))
                           }}
                           className={`px-2 py-1 rounded text-xs font-medium transition-colors ${active ? "bg-[#0B0F2E] text-white" : "bg-gray-100 text-gray-400"} ${editing ? "cursor-pointer hover:opacity-80" : "cursor-default"}`}>
-                          {day}
+                          {dayLabel(day, locale)}
                         </button>
                       )
                     })}
@@ -1058,7 +1066,7 @@ export default function ParametresRHPage() {
         <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
           <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
           <div>
-            <p className="font-medium">Erreur de chargement</p>
+            <p className="font-medium">{t('uicl.load_error', locale)}</p>
             <p className="text-xs">{error}</p>
           </div>
         </div>

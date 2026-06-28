@@ -22,10 +22,17 @@ const GOLD = "#D4AF37"
 
 interface Societe { id: string; nom: string }
 
-const MOIS_LABELS = [
+const MOIS_LABELS_FR = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
 ]
+const MOIS_LABELS_EN = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+function moisLabels(locale: Locale) {
+  return locale === 'en' ? MOIS_LABELS_EN : MOIS_LABELS_FR
+}
 
 export default function ProvisionsEoyPage() {
   const locale: Locale = getLocale()
@@ -118,18 +125,18 @@ export default function ProvisionsEoyPage() {
         body: JSON.stringify({ societe_id: societeId, annee, mois }),
       })
       const d = await r.json()
-      if (!r.ok) { setFeedback(`❌ ${d.error || 'Erreur calcul'}`); return }
+      if (!r.ok) { setFeedback(`❌ ${d.error || t('uirh.proveoy.err_calc', locale)}`); return }
       setSnapshotCalc(d.snapshot)
-    } catch (e: any) { setFeedback(`❌ ${e?.message || 'Erreur réseau'}`) }
+    } catch (e: any) { setFeedback(`❌ ${e?.message || t('uirh.proveoy.err_network', locale)}`) }
     finally { setCalculating(false) }
   }, [societeId, annee, mois])
 
   const handleComptabiliser = useCallback(async () => {
     if (!societeId || !isAdmin) return
     if (!confirm(
-      `Comptabiliser la provision EOY pour ${MOIS_LABELS[mois - 1]} ${annee} ?\n\n` +
-      `Cette action génère 2 écritures (journal OD).\n` +
-      (snapshotPrecedent ? `Le mois précédent sera extourné.` : ''),
+      t('uirh.proveoy.confirm_book_q', locale).replace('{m}', moisLabels(locale)[mois - 1]).replace('{y}', String(annee)) + `\n\n` +
+      t('uirh.proveoy.confirm_book_lines', locale) + `\n` +
+      (snapshotPrecedent ? t('uirh.proveoy.confirm_book_reverse', locale) : ''),
     )) return
     setComptabilizing(true)
     setFeedback(null)
@@ -140,21 +147,20 @@ export default function ProvisionsEoyPage() {
         body: JSON.stringify({ societe_id: societeId, annee, mois }),
       })
       const d = await r.json()
-      if (!r.ok) { setFeedback(`❌ ${d.error || 'Erreur'}`); return }
+      if (!r.ok) { setFeedback(`❌ ${d.error || t('uirh.proveoy.err_generic', locale)}`); return }
       setFeedback(
-        `✅ Provision ${formaterMUREoy(d.provision_cumulee_total || 0)} comptabilisée` +
-        ` (${d.nb_employes_eligibles || 0} employés éligibles)` +
-        (d.extourne_precedent ? ' — extourne mois précédent incluse' : ''),
+        `✅ ${t('uirh.proveoy.fb_booked', locale).replace('{amt}', formaterMUREoy(d.provision_cumulee_total || 0)).replace('{n}', String(d.nb_employes_eligibles || 0))}` +
+        (d.extourne_precedent ? t('uirh.proveoy.fb_reverse_included', locale) : ''),
       )
       loadHistorique()
       setSnapshotCalc(null)
-    } catch (e: any) { setFeedback(`❌ ${e?.message || 'Erreur réseau'}`) }
+    } catch (e: any) { setFeedback(`❌ ${e?.message || t('uirh.proveoy.err_network', locale)}`) }
     finally { setComptabilizing(false) }
   }, [societeId, annee, mois, isAdmin, snapshotPrecedent, loadHistorique])
 
   const handleAnnuler = useCallback(async (id: string) => {
     if (!isAdmin) return
-    if (!confirm('Annuler ce snapshot ? (soft delete, écritures conservées)')) return
+    if (!confirm(t('uirh.proveoy.confirm_cancel_snapshot', locale))) return
     setRowLoading(id)
     try {
       const r = await fetch(`/api/rh/provisions/eoy/${id}`, { method: 'DELETE' })
@@ -246,7 +252,7 @@ export default function ProvisionsEoyPage() {
                 <Select value={String(mois)} onValueChange={v => setMois(Number(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {MOIS_LABELS.slice(0, 11).map((label, idx) => (
+                    {moisLabels(locale).slice(0, 11).map((label, idx) => (
                       <SelectItem key={idx + 1} value={String(idx + 1)}>
                         {label}
                       </SelectItem>
@@ -347,7 +353,7 @@ export default function ProvisionsEoyPage() {
                               </Badge>
                             ) : (
                               <Badge className="bg-slate-100 text-slate-600 border-slate-300 font-normal text-[10px]">
-                                {MOTIF_NON_ELIGIBLE_EOY[l.motif_non_eligible || ''] || 'Non éligible'}
+                                {MOTIF_NON_ELIGIBLE_EOY[l.motif_non_eligible || ''] || t('uirh.proveoy.non_eligible', locale)}
                               </Badge>
                             )}
                           </TableCell>
@@ -364,23 +370,23 @@ export default function ProvisionsEoyPage() {
                 </div>
                 <div className="text-xs font-mono space-y-1">
                   <div className="flex justify-between border-b pb-1">
-                    <span>Journal OD · Pièce PRO-IAS19EOY-{snapshotCalc.annee}{String(snapshotCalc.mois).padStart(2, '0')}</span>
-                    <span>Date : {snapshotCalc.date_snapshot}</span>
+                    <span>{t('uirh.proveoy.journal_od', locale)} · {t('uirh.proveoy.piece', locale)} PRO-IAS19EOY-{snapshotCalc.annee}{String(snapshotCalc.mois).padStart(2, '0')}</span>
+                    <span>{t('uirh.proveoy.date_label', locale)} {snapshotCalc.date_snapshot}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>64176 DÉBIT  Provision EOY (charge)</span>
+                    <span>64176 {t('uirh.proveoy.debit_charge', locale)}</span>
                     <span className="font-semibold">{formaterMUREoy(snapshotCalc.provision_cumulee_total)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>4288  CRÉDIT Provision EOY (passif)</span>
+                    <span>4288  {t('uirh.proveoy.credit_liability', locale)}</span>
                     <span className="font-semibold">{formaterMUREoy(snapshotCalc.provision_cumulee_total)}</span>
                   </div>
                   {snapshotPrecedent && (
                     <div className="flex items-center gap-2 text-amber-900 pt-2 border-t">
                       <RotateCcw className="h-3 w-3" />
                       <span>
-                        + extourne mois {snapshotPrecedent.mois}/{snapshotPrecedent.annee} :
-                        {' '}{formaterMUREoy(snapshotPrecedent.provision_cumulee_total)} (inverse)
+                        {t('uirh.proveoy.reverse_month', locale).replace('{m}', String(snapshotPrecedent.mois)).replace('{y}', String(snapshotPrecedent.annee))}
+                        {' '}{formaterMUREoy(snapshotPrecedent.provision_cumulee_total)} {t('uirh.proveoy.reverse_inverse', locale)}
                       </span>
                     </div>
                   )}
@@ -479,12 +485,10 @@ export default function ProvisionsEoyPage() {
               <AlertTriangle className="h-3 w-3" /> {t('rha.b.proveoy.reminder_title', locale)}
             </div>
             <div>
-              La charge du 13e mois est étalée sur les 12 mois. À chaque fin de mois N (1-11),
-              provision cumulée = earnings (brut + OT + disturbance) jan→N ÷ 12 × N.
+              {t('uirh.proveoy.reminder_body1', locale)}
             </div>
             <div>
-              Décembre : pas de provision. Le paiement réel (75% + 25%) se fait via
-              le module <strong>EOY Bonus</strong> (G11) et solde le compte 4288.
+              {t('uirh.proveoy.reminder_body2_prefix', locale)} <strong>EOY Bonus</strong> {t('uirh.proveoy.reminder_body2_suffix', locale)}
             </div>
           </CardContent>
         </Card>

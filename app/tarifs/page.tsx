@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { LexoraLogo } from "@/components/LexoraLogo"
-import { getLocale, setLocale, type Locale } from "@/lib/i18n"
+import { t, getLocale, setLocale, type Locale } from "@/lib/i18n"
 import {
   FileSearch, BookOpen, FileText, Users, Landmark, BellRing,
   HeartPulse, TrendingUp, Zap, ShieldCheck, Check, Minus,
@@ -995,7 +995,7 @@ export default function TarifsPage() {
     if (estTx <= 50)  return { price: 1500,  tier: "Solo",           tx: "≤ 50 txn/mois" }
     if (estTx <= 200) return { price: 3500,  tier: txt.tierNames[1], tx: "≤ 200 txn/mois" }
     if (estTx <= 500) return { price: 6500,  tier: "PME",            tx: "≤ 500 txn/mois" }
-    return            { price: 12000, tier: txt.tierNames[3], tx: locale === "fr" ? "Transactions illimitées" : "Unlimited transactions" }
+    return            { price: 12000, tier: txt.tierNames[3], tx: t("uimkt.tarifs.unlimited_tx", locale) }
   }
 
   const BUNDLE_DISCOUNT = 0.20 // 20%
@@ -1266,7 +1266,7 @@ export default function TarifsPage() {
               fontFamily: FONT,
             }}>
               <Zap style={{ width: 12, height: 12 }} aria-hidden="true" />
-              {locale === "fr" ? "Tout inclus" : "All included"}
+              {t("uimkt.tarifs.all_included", locale)}
             </span>
             <h2 style={{
               color: C.white, fontSize: "clamp(28px, 3.4vw, 40px)", fontWeight: 800,
@@ -1579,14 +1579,14 @@ export default function TarifsPage() {
               display: "flex", justifyContent: "space-between", alignItems: "center",
             }}>
               <span style={{ color: C.gold, fontSize: "13px", fontWeight: 700 }}>
-                {calcTab === "paie" ? calcPaieTier().tier : calcTab === "compta" ? calcComptaTier().tier : "Pack ERP"}
+                {calcTab === "paie" ? calcPaieTier().tier : calcTab === "compta" ? calcComptaTier().tier : t("uimkt.tarifs.pack_erp", locale)}
               </span>
               <span style={{ color: C.muted, fontSize: "12px" }}>
                 {calcTab === "paie"
-                  ? `${employees} ${locale === "fr" ? (employees > 1 ? "salariés" : "salarié") : (employees > 1 ? "employees" : "employee")}`
+                  ? `${employees} ${employees > 1 ? t("uimkt.tarifs.salaries", locale) : t("uimkt.tarifs.salarie", locale)}`
                   : calcTab === "compta"
                     ? computeComptaPrice(employees).tx
-                    : (locale === "fr" ? "Compta + RH + TIBOK" : "Accounting + HR + TIBOK")}
+                    : (t("uimkt.tarifs.compta_rh_tibok", locale))}
               </span>
             </div>
 
@@ -1595,15 +1595,13 @@ export default function TarifsPage() {
               <div style={{ color: C.muted, fontSize: "13px", lineHeight: 1.9 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                   <span>
-                    {locale === "fr"
-                      ? <>Calcul <span style={{ color: C.white, fontWeight: 600 }}>par salarié</span> — tarif dégressif au volume</>
-                      : <>Priced <span style={{ color: C.white, fontWeight: 600 }}>per employee</span> — volume discount</>}
+                    {t("uimkt.tarifs.calc_per_emp_pre", locale)} <span style={{ color: C.white, fontWeight: 600 }}>{t("uimkt.tarifs.per_salarie", locale)}</span> {t("uimkt.tarifs.calc_per_emp_post", locale)}
                   </span>
                 </div>
                 {paieBreakdown(employees).map((row) => (
                   <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: "2px" }}>
                     <span style={{ fontVariantNumeric: "tabular-nums" }}>
-                      {row.count} × {locale === "fr" ? "sal." : "emp."} <span style={{ opacity: 0.7 }}>({row.label})</span> @ MRs {row.rate}
+                      {row.count} × {t("uimkt.tarifs.sal_short", locale)} <span style={{ opacity: 0.7 }}>({row.label})</span> @ MRs {row.rate}
                     </span>
                     <span style={{ color: C.white, fontVariantNumeric: "tabular-nums" }}>
                       MRs {fmt(row.subtotal)}
@@ -1619,7 +1617,7 @@ export default function TarifsPage() {
                 </div>
                 {employees > 0 && (
                   <div style={{ fontSize: "12px", color: C.muted, marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
-                    ≈ MRs {fmt(perEmpPaie)} {locale === "fr" ? "/ salarié / mois" : "/ employee / month"} · {locale === "fr" ? "plancher MRs 250 · TIBOK inclus" : "floor MRs 250 · TIBOK included"}
+                    ≈ MRs {fmt(perEmpPaie)} {t("uimkt.tarifs.per_sal_month", locale)} · {t("uimkt.tarifs.floor_tibok", locale)}
                   </div>
                 )}
               </div>
@@ -1628,19 +1626,17 @@ export default function TarifsPage() {
               <div style={{ color: C.muted, fontSize: "13px", lineHeight: 1.9 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                   <span>
-                    {locale === "fr"
-                      ? <>Estimation <span style={{ color: C.white, fontWeight: 600 }}>par volume de transactions</span></>
-                      : <>Based on <span style={{ color: C.white, fontWeight: 600 }}>transaction volume</span></>}
+                    {t("uimkt.tarifs.compta_est_pre", locale)} <span style={{ color: C.white, fontWeight: 600 }}>{t("uimkt.tarifs.per_tx_volume", locale)}</span>
                   </span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: "2px" }}>
-                  <span>{locale === "fr" ? "Estimation (≈10 txn / salarié)" : "Estimate (~10 tx / emp)"}</span>
+                  <span>{t("uimkt.tarifs.est_per_emp", locale)}</span>
                   <span style={{ color: C.white, fontVariantNumeric: "tabular-nums" }}>
-                    {fmt(Math.max(20, employees * 10))} {locale === "fr" ? "txn/mois" : "tx/mo"}
+                    {fmt(Math.max(20, employees * 10))} {t("uimkt.tarifs.tx_month", locale)}
                   </span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span>{locale === "fr" ? "Formule" : "Plan"}</span>
+                  <span>{t("uimkt.tarifs.plan", locale)}</span>
                   <span style={{ color: C.white, fontWeight: 600 }}>{calcComptaTier().tier}</span>
                 </div>
                 <div style={{ height: "1px", backgroundColor: C.navyBorder, margin: "8px 0" }} />
@@ -1656,16 +1652,16 @@ export default function TarifsPage() {
               <div style={{ color: C.muted, fontSize: "13px", lineHeight: 1.9 }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span>
-                    RH & Paie ({employees} {locale === "fr" ? "sal." : "emp."})
+                    RH & Paie ({employees} {t("uimkt.tarifs.sal_short", locale)})
                   </span>
                   <span style={{ color: C.white, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>MRs {fmt(calcPaiePrice())}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>{locale === "fr" ? "Comptabilité" : "Accounting"}</span>
+                  <span>{t("uimkt.tarifs.accounting", locale)}</span>
                   <span style={{ color: C.white, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>MRs {fmt(calcComptaPrice())}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", color: C.green, fontWeight: 600, marginTop: "4px" }}>
-                  <span>{locale === "fr" ? "Remise Pack −20%" : "Bundle discount −20%"}</span>
+                  <span>{t("uimkt.tarifs.bundle_discount", locale)}</span>
                   <span style={{ fontVariantNumeric: "tabular-nums" }}>− MRs {fmt(calcPaiePrice() + calcComptaPrice() - calcBundlePrice())}</span>
                 </div>
                 <div style={{ height: "1px", backgroundColor: C.navyBorder, margin: "8px 0" }} />
@@ -1675,7 +1671,7 @@ export default function TarifsPage() {
                 </div>
                 {employees > 0 && (
                   <div style={{ fontSize: "12px", color: C.muted, marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
-                    ≈ MRs {fmt(perEmpBundle)} {locale === "fr" ? "/ salarié / mois" : "/ employee / month"}
+                    ≈ MRs {fmt(perEmpBundle)} {t("uimkt.tarifs.per_sal_month", locale)}
                   </div>
                 )}
               </div>

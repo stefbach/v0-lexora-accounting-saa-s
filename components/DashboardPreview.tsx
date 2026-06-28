@@ -11,6 +11,7 @@
 
 import * as React from "react"
 import { motion, useReducedMotion } from "framer-motion"
+import { t } from "@/lib/i18n"
 import {
   TrendingUp,
   Sparkles,
@@ -152,7 +153,7 @@ export function DashboardPreview({
         >
           <LiveKPI
             icon={<Wallet size={14} strokeWidth={1.8} aria-hidden="true" />}
-            label={locale === "fr" ? "Revenus du mois" : "Monthly revenue"}
+            label={t("uimkt.dash.monthly_revenue", locale)}
             value="Rs 1,248,560"
             accent="#4191FF"
             delta="+12.4%"
@@ -160,7 +161,7 @@ export function DashboardPreview({
           />
           <LiveKPI
             icon={<FileCheck2 size={14} strokeWidth={1.8} aria-hidden="true" />}
-            label={locale === "fr" ? "Factures OCR" : "Invoices processed"}
+            label={t("uimkt.dash.invoices_ocr", locale)}
             value="342"
             accent="#D4AF37"
             delta="+28"
@@ -191,7 +192,7 @@ export function DashboardPreview({
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <TrendingUp size={12} color="#4191FF" strokeWidth={2} aria-hidden="true" />
               <span style={{ fontSize: "11px", fontWeight: 600, color: "#E8EAFC" }}>
-                {locale === "fr" ? "Trésorerie — 12 mois" : "Cashflow — 12 months"}
+                {t("uimkt.dash.cashflow_12m", locale)}
               </span>
             </div>
             <span
@@ -274,7 +275,7 @@ export function DashboardPreview({
               }}
             >
               <span style={{ fontSize: "10px", fontWeight: 600, color: "#A8AFC7" }}>
-                {locale === "fr" ? "Marge nette" : "Net margin"}
+                {t("uimkt.dash.net_margin", locale)}
               </span>
               <span style={{ fontSize: "10px", fontWeight: 700, color: "#4191FF" }}>
                 32.4%
@@ -362,7 +363,7 @@ export function DashboardPreview({
             >
               <BellRing size={10} color="#D4AF37" aria-hidden="true" />
               <span style={{ fontSize: "10px", fontWeight: 600, color: "#A8AFC7" }}>
-                {locale === "fr" ? "Activité IA" : "AI activity"}
+                {t("uimkt.dash.ai_activity", locale)}
               </span>
             </div>
             <AgentTicker prefersReducedMotion={!!prefersReducedMotion} locale={locale} />
@@ -393,7 +394,7 @@ export function DashboardPreview({
         transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
       >
         <Sparkles size={12} aria-hidden="true" />
-        <span>{locale === "fr" ? "Agents actifs" : "Agents online"}</span>
+        <span>{t("uimkt.dash.agents_online", locale)}</span>
       </motion.div>
 
       <motion.div
@@ -519,22 +520,13 @@ function AgentTicker({
   prefersReducedMotion: boolean
   locale: "fr" | "en"
 }) {
-  const messages =
-    locale === "fr"
-      ? [
-          "OCR · facture #EL-2841",
-          "TVA · calcul auto",
-          "Paie · 14 bulletins",
-          "Réconciliation · 92 lignes",
-          "IT Form 3 · prêt",
-        ]
-      : [
-          "OCR · invoice #EL-2841",
-          "VAT · auto computed",
-          "Payroll · 14 payslips",
-          "Reconciliation · 92 rows",
-          "IT Form 3 · ready",
-        ]
+  const messages = [
+    t("uimkt.dash.ticker_ocr", locale),
+    t("uimkt.dash.ticker_vat", locale),
+    t("uimkt.dash.ticker_payroll", locale),
+    t("uimkt.dash.ticker_reco", locale),
+    t("uimkt.dash.ticker_itform", locale),
+  ]
   const [idx, setIdx] = React.useState(0)
 
   React.useEffect(() => {

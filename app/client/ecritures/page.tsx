@@ -143,13 +143,13 @@ function ClientEcrituresContent() {
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        throw new Error(d.error || 'Erreur modification')
+        throw new Error(d.error || t('uicl.ecr_edit_error', locale))
       }
       setEditing(null)
-      showToast('Écriture modifiée', 'success')
+      showToast(t('uicl.ecr_edited', locale), 'success')
       await load()
     } catch (e: any) {
-      showToast(e?.message || 'Erreur modification', 'error')
+      showToast(e?.message || t('uicl.ecr_edit_error', locale), 'error')
     } finally {
       setSaving(false)
     }
@@ -162,12 +162,12 @@ function ClientEcrituresContent() {
       const res = await fetch(`/api/client/ecritures?id=${e.id}`, { method: 'DELETE' })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        throw new Error(d.error || 'Erreur suppression')
+        throw new Error(d.error || t('uicl.ecr_del_error', locale))
       }
-      showToast('Écriture supprimée', 'success')
+      showToast(t('uicl.ecr_deleted', locale), 'success')
       await load()
     } catch (e: any) {
-      showToast(e?.message || 'Erreur suppression', 'error')
+      showToast(e?.message || t('uicl.ecr_del_error', locale), 'error')
     } finally {
       setBusyId(null)
     }
@@ -180,13 +180,13 @@ function ClientEcrituresContent() {
       const res = await fetch(`/api/client/ecritures?folio=${encodeURIComponent(folio)}`, { method: 'DELETE' })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        throw new Error(d.error || 'Erreur suppression batch')
+        throw new Error(d.error || t('uicl.ecr_del_batch_error', locale))
       }
       const data = await res.json()
-      showToast(`${data.deleted} ligne(s) supprimée(s)`, 'success')
+      showToast(t('uicl.ecr_lines_deleted', locale).replace('{n}', String(data.deleted)), 'success')
       await load()
     } catch (e: any) {
-      showToast(e?.message || 'Erreur suppression batch', 'error')
+      showToast(e?.message || t('uicl.ecr_del_batch_error', locale), 'error')
     } finally {
       setBusyId(null)
     }
@@ -417,7 +417,7 @@ function ClientEcrituresContent() {
                                 size="sm"
                                 variant="outline"
                                 className="h-6 px-1.5 text-[10px] text-rose-600 border-rose-200 hover:bg-rose-50"
-                                title="Supprimer cette ligne"
+                                title={t('uicl.ecr_del_line', locale)}
                                 disabled={busyId === e.id}
                                 onClick={() => deleteOne(e)}
                               >
@@ -428,11 +428,11 @@ function ClientEcrituresContent() {
                                   size="sm"
                                   variant="outline"
                                   className="h-6 px-1.5 text-[10px] text-rose-700 border-rose-300 hover:bg-rose-100"
-                                  title={`Supprimer tout le lot (${e.ref_folio})`}
+                                  title={t('uicl.ecr_del_lot_title', locale).replace('{folio}', String(e.ref_folio))}
                                   disabled={busyId === e.ref_folio}
                                   onClick={() => deleteBatch(e.ref_folio!)}
                                 >
-                                  {busyId === e.ref_folio ? <Loader2 className="h-3 w-3 animate-spin" /> : '🗑 Lot'}
+                                  {busyId === e.ref_folio ? <Loader2 className="h-3 w-3 animate-spin" /> : `🗑 ${t('uicl.ecr_lot', locale)}`}
                                 </Button>
                               )}
                             </div>
@@ -472,7 +472,7 @@ function ClientEcrituresContent() {
             </div>
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-medium text-gray-700">Date</label>
+                <label className="text-xs font-medium text-gray-700">{t('uicl.date', locale)}</label>
                 <Input
                   type="date"
                   value={editFields.date_ecriture}
@@ -485,7 +485,7 @@ function ClientEcrituresContent() {
                 <Input
                   value={editFields.numero_compte}
                   onChange={(e) => setEditFields({ ...editFields, numero_compte: e.target.value })}
-                  placeholder="Ex: 411000"
+                  placeholder={t('uicl.ecr_account_ph', locale)}
                   className="mt-1 h-9 font-mono"
                 />
               </div>
@@ -522,11 +522,11 @@ function ClientEcrituresContent() {
             </div>
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-6">
               <Button variant="outline" onClick={() => setEditing(null)} disabled={saving} className="w-full sm:w-auto">
-                Annuler
+                {t('cui.cancel', locale)}
               </Button>
               <Button onClick={saveEdit} disabled={saving} className="w-full sm:w-auto">
                 {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                Enregistrer
+                {t('cui.save', locale)}
               </Button>
             </div>
           </div>

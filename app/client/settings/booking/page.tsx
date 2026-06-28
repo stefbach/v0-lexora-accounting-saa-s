@@ -316,7 +316,7 @@ export default function BookingSettingsPage() {
           </div>
           <div>
             <Label>{t('scp.bk_notify_address', locale)}</Label>
-            <Input value={settings.notify_email || ''} onChange={e => update({ notify_email: e.target.value })} placeholder="ton.email@example.com" />
+            <Input value={settings.notify_email || ''} onChange={e => update({ notify_email: e.target.value })} placeholder={t('uicl.email_ph', locale)} />
           </div>
           <div className="flex items-center justify-between">
             <Label>Telegram</Label>

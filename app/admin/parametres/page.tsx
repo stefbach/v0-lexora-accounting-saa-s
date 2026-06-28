@@ -204,11 +204,11 @@ export default function AdminParametresPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>USD → MUR</Label>
-              <Input type="number" value={params.taux_change_usd_mur} onChange={e => set("taux_change_usd_mur", e.target.value)} placeholder="Ex: 45.50" />
+              <Input type="number" value={params.taux_change_usd_mur} onChange={e => set("taux_change_usd_mur", e.target.value)} placeholder={t('uijur.params.fx_usd_ph', locale)} />
             </div>
             <div className="space-y-2">
               <Label>EUR → MUR</Label>
-              <Input type="number" value={params.taux_change_eur_mur} onChange={e => set("taux_change_eur_mur", e.target.value)} placeholder="Ex: 49.00" />
+              <Input type="number" value={params.taux_change_eur_mur} onChange={e => set("taux_change_eur_mur", e.target.value)} placeholder={t('uijur.params.fx_eur_ph', locale)} />
             </div>
           </div>
         </CardContent>
@@ -224,17 +224,17 @@ export default function AdminParametresPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>{t('adm.params.fiscal_start', locale)}</Label>
-              <Input value={params.exercice_fiscal_debut} onChange={e => set("exercice_fiscal_debut", e.target.value)} placeholder="01-01 ou 01-07" />
+              <Input value={params.exercice_fiscal_debut} onChange={e => set("exercice_fiscal_debut", e.target.value)} placeholder={t('uijur.params.fiscal_start_ph', locale)} />
             </div>
             <div className="space-y-2">
               <Label>{t('adm.params.primary_currency', locale)}</Label>
               <Select value={params.devise_principale} onValueChange={v => set("devise_principale", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="MUR">MUR — Roupie mauricienne</SelectItem>
-                  <SelectItem value="USD">USD — Dollar américain</SelectItem>
-                  <SelectItem value="EUR">EUR — Euro</SelectItem>
-                  <SelectItem value="GBP">GBP — Livre sterling</SelectItem>
+                  <SelectItem value="MUR">{t('uijur.params.cur_mur', locale)}</SelectItem>
+                  <SelectItem value="USD">{t('uijur.params.cur_usd', locale)}</SelectItem>
+                  <SelectItem value="EUR">{t('uijur.params.cur_eur', locale)}</SelectItem>
+                  <SelectItem value="GBP">{t('uijur.params.cur_gbp', locale)}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

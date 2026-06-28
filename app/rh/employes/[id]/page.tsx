@@ -254,7 +254,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         if (cancelled) return
         setSocieteShifts(shifts.map((s: any) => ({
           id: String(s.id),
-          label: s.label || s.nom || s.code || 'Shift',
+          label: s.label || s.nom || s.code || t('uirh.employe.shift_default', locale),
           code: s.code,
           debut: s.debut ?? s.heure_debut ?? null,
           fin: s.fin ?? s.heure_fin ?? null,

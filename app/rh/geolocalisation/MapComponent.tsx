@@ -77,7 +77,7 @@ export default function MapComponent({ positions }: { positions: Position[] }) {
           <div style="font-family:system-ui;min-width:180px;">
             <p style="font-weight:700;font-size:14px;margin:0 0 4px;color:#0B0F2E;">${p.prenom} ${p.nom}</p>
             <p style="font-size:12px;color:#666;margin:0 0 2px;">${p.poste || "—"}</p>
-            <p style="font-size:11px;color:#999;margin:0 0 6px;">${p.adresse || "Adresse non renseignée"}</p>
+            <p style="font-size:11px;color:#999;margin:0 0 6px;">${p.adresse || t('uirh.geoloc.popup_address_missing', locale)}</p>
             <div style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;background:${color}20;color:${color};">
               ${p.shift_label}${p.heure_debut ? ` ${String(p.heure_debut).slice(0,5)}-${String(p.heure_fin).slice(0,5)}` : ""}
             </div>
@@ -102,7 +102,7 @@ export default function MapComponent({ positions }: { positions: Position[] }) {
       corner.onAdd = () => {
         const div = L.DomUtil.create("div")
         div.style.cssText = "background:white;padding:8px 12px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-size:11px;color:#666;max-width:200px;"
-        div.innerHTML = `<strong>${sansGPS.length}</strong> employé(s) sans coordonnées GPS`
+        div.innerHTML = `<strong>${sansGPS.length}</strong> ${t('uirh.geoloc.without_gps_coords', locale)}`
         return div
       }
       corner.addTo(map)
@@ -125,7 +125,7 @@ export default function MapComponent({ positions }: { positions: Position[] }) {
         <div className="p-6 text-center">
           <MapPin className="w-10 h-10 mx-auto mb-3 text-gray-300" />
           <p className="text-gray-500 font-medium">{t('srh.map.no_gps', locale)}</p>
-          <p className="text-xs text-gray-400 mt-1">Renseignez les adresses dans les fiches employés pour les voir sur la carte</p>
+          <p className="text-xs text-gray-400 mt-1">{t('uirh.geoloc.fill_addresses_hint', locale)}</p>
         </div>
       )}
     </div>

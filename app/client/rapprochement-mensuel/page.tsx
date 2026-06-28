@@ -65,7 +65,7 @@ export default function RapprochementMensuelPage() {
   // Créer un nouveau rapprochement
   const handleCreate = async () => {
     if (!societeId || !compteId || !periodEnd || !bankBalance) {
-      alert("Tous les champs sont requis")
+      alert(t("uicl.all_fields_required", locale))
       return
     }
     setLoading(true)
@@ -107,11 +107,11 @@ export default function RapprochementMensuelPage() {
       setNewItem({ nature: "", amount: "", category: "", date_operation: "", description: "" })
       await loadDetail(currentRecon)
       await loadReconciliations()
-    } catch { alert("Erreur ajout") }
+    } catch { alert(t("uicl.add_error", locale)) }
   }
 
   const handleRemoveItem = async (itemId: string) => {
-    if (!confirm("Supprimer cet élément ?")) return
+    if (!confirm(t("uicl.confirm_del_item", locale))) return
     await fetch("/api/comptable/rapprochement-mensuel", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "remove_item", item_id: itemId, reconciliation_id: currentRecon.id }),
@@ -122,7 +122,7 @@ export default function RapprochementMensuelPage() {
 
   const handleAction = async (action: string) => {
     if (!currentRecon) return
-    const confirmMsg = action === 'lock' ? '⚠ Verrouillage définitif. La période ne pourra plus être modifiée. Continuer ?' : null
+    const confirmMsg = action === "lock" ? t("uicl.confirm_lock", locale) : null
     if (confirmMsg && !confirm(confirmMsg)) return
     await fetch("/api/comptable/rapprochement-mensuel", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -375,15 +375,15 @@ export default function RapprochementMensuelPage() {
                     <>
                       <SelectItem value="virement_recu_non_saisi">{t('acc.rm.reason_virement_recu', locale)}</SelectItem>
                       <SelectItem value="interets_crediteurs">{t('acc.rm.reason_interets', locale)}</SelectItem>
-                      <SelectItem value="frais_bancaires_non_saisis">Frais bancaires non saisis</SelectItem>
-                      <SelectItem value="erreur_banque">Erreur banque</SelectItem>
+                      <SelectItem value="frais_bancaires_non_saisis">{t('uicl.rm_bank_fees', locale)}</SelectItem>
+                      <SelectItem value="erreur_banque">{t('uicl.rm_bank_error', locale)}</SelectItem>
                     </>
                   ) : (
                     <>
                       <SelectItem value="cheque_emis_non_encaisse">{t('acc.rm.reason_cheque_emis', locale)}</SelectItem>
-                      <SelectItem value="virement_580_transit">Virement 580 en transit</SelectItem>
-                      <SelectItem value="remise_en_cours">Remise en cours d'encaissement</SelectItem>
-                      <SelectItem value="erreur_saisie_compta">Erreur de saisie compta</SelectItem>
+                      <SelectItem value="virement_580_transit">{t('uicl.rm_transfer_580', locale)}</SelectItem>
+                      <SelectItem value="remise_en_cours">{t('uicl.rm_deposit_progress', locale)}</SelectItem>
+                      <SelectItem value="erreur_saisie_compta">{t('uicl.rm_entry_error', locale)}</SelectItem>
                     </>
                   )}
                 </SelectContent>

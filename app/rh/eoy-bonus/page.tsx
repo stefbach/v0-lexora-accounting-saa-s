@@ -80,12 +80,12 @@ export default function EoyBonusPage() {
     try {
       const res = await fetch(`/api/rh/eoy-bonus?societe_id=${societeId}&annee=${annee}`)
       const d = await res.json()
-      if (!res.ok) { setFeedback(`⚠ ${d?.error || 'erreur'}`); return }
+      if (!res.ok) { setFeedback(`⚠ ${d?.error || t('uirh.eoybonus.err_generic', locale)}`); return }
       setCalculs(d.calculs || [])
       setRecap(d.recap || null)
       setSavedFlag(d.saved ?? null)
     } catch (e: any) {
-      setFeedback(`⚠ ${e?.message || 'réseau'}`)
+      setFeedback(`⚠ ${e?.message || t('uirh.eoybonus.err_network', locale)}`)
     } finally {
       setLoading(false)
     }
@@ -112,12 +112,12 @@ export default function EoyBonusPage() {
       setRecap(d.recap || null)
       setSavedFlag(d.saved === true || d.saved > 0)
       if (path === 'calculer') {
-        setFeedback(`✅ ${d.saved || 0} calcul(s) sauvegardé(s).`)
+        setFeedback(`✅ ${t('uirh.eoybonus.fb_saved', locale).replace('{n}', String(d.saved || 0))}`)
       } else {
-        setFeedback(`🔍 Aperçu : ${(d.calculs || []).length} calcul(s). Non sauvegardé.`)
+        setFeedback(`🔍 ${t('uirh.eoybonus.fb_preview', locale).replace('{n}', String((d.calculs || []).length))}`)
       }
     } catch (e: any) {
-      setFeedback(`⚠ ${e?.message || 'erreur'}`)
+      setFeedback(`⚠ ${e?.message || t('uirh.eoybonus.err_generic', locale)}`)
     } finally {
       setProcessing(null)
     }
@@ -145,11 +145,11 @@ export default function EoyBonusPage() {
       const d = await res.json()
       if (!res.ok) { setFeedback(`⚠ ${d?.error || `HTTP ${res.status}`}`); return }
       setFeedback(kind === 'generer'
-        ? `✅ Bulletin EOY ${portion} généré (${d.bulletin_id?.slice(0, 8) || 'OK'}).`
-        : `✅ Bulletin EOY ${portion} annulé.`)
+        ? `✅ ${t('uirh.eoybonus.fb_bull_gen', locale).replace('{p}', portion).replace('{id}', d.bulletin_id?.slice(0, 8) || 'OK')}`
+        : `✅ ${t('uirh.eoybonus.fb_bull_cancel', locale).replace('{p}', portion)}`)
       await loadExisting()
     } catch (e: any) {
-      setFeedback(`⚠ ${e?.message || 'erreur'}`)
+      setFeedback(`⚠ ${e?.message || t('uirh.eoybonus.err_generic', locale)}`)
     } finally {
       setRowLoading(null)
       setConfirmAction(null)
@@ -298,10 +298,10 @@ export default function EoyBonusPage() {
                   {recap.nb_bulletins_manquants_total > 0 ? (
                     <>
                       <p className="text-lg font-bold text-amber-700 mt-1 flex items-center gap-1">
-                        <AlertTriangle className="h-4 w-4" /> {recap.nb_bulletins_manquants_total} bulletin{recap.nb_bulletins_manquants_total > 1 ? 's' : ''} manquant{recap.nb_bulletins_manquants_total > 1 ? 's' : ''}
+                        <AlertTriangle className="h-4 w-4" /> {(recap.nb_bulletins_manquants_total > 1 ? t('uirh.eoybonus.bull_missing_plural', locale) : t('uirh.eoybonus.bull_missing', locale)).replace('{n}', String(recap.nb_bulletins_manquants_total))}
                       </p>
                       <p className="text-[11px] text-amber-700 mt-1">
-                        {recap.nb_employes_avec_bulletins_manquants} employé{recap.nb_employes_avec_bulletins_manquants > 1 ? 's' : ''} concerné{recap.nb_employes_avec_bulletins_manquants > 1 ? 's' : ''}
+                        {(recap.nb_employes_avec_bulletins_manquants > 1 ? t('uirh.eoybonus.emp_concerned_plural', locale) : t('uirh.eoybonus.emp_concerned', locale)).replace('{n}', String(recap.nb_employes_avec_bulletins_manquants))}
                       </p>
                     </>
                   ) : (
@@ -311,7 +311,7 @@ export default function EoyBonusPage() {
                   )}
                   {recap.nb_non_eligibles > 0 && (
                     <p className="text-[11px] text-gray-500 mt-1">
-                      {recap.nb_non_eligibles} non éligible{recap.nb_non_eligibles > 1 ? 's' : ''}
+                      {(recap.nb_non_eligibles > 1 ? t('uirh.eoybonus.non_eligible_count_plural', locale) : t('uirh.eoybonus.non_eligible_count', locale)).replace('{n}', String(recap.nb_non_eligibles))}
                     </p>
                   )}
                 </CardContent>
@@ -324,9 +324,7 @@ export default function EoyBonusPage() {
               <div className="text-sm text-amber-900">
                 <p className="font-semibold">{t('rhdiv.eoy.phase1_title', locale)}</p>
                 <p className="text-[13px]">
-                  Seuls les calculs sont disponibles. La génération automatique des bulletins
-                  75/25 sera ajoutée en Phase 2 après validation visuelle. Pour l&apos;instant,
-                  les paiements doivent être saisis manuellement depuis /rh/paie.
+                  {t('uirh.eoybonus.phase1_body', locale)}
                 </p>
               </div>
             </div>
@@ -377,7 +375,7 @@ export default function EoyBonusPage() {
                             <TableCell className="font-medium">
                               {c.employe_nom || c.employe_id.slice(0, 8)}
                               {manquants > 0 && c.eligible && (
-                                <span className="ml-2 text-[10px] text-amber-700" title={`${manquants} bulletin(s) manquant(s)`}>
+                                <span className="ml-2 text-[10px] text-amber-700" title={t('uirh.eoybonus.bull_missing_tip', locale).replace('{n}', String(manquants))}>
                                   ⚠ {manquants}j
                                 </span>
                               )}
@@ -415,6 +413,7 @@ export default function EoyBonusPage() {
                               <ActionCell
                                 calcul={c}
                                 userRole={userRole}
+                                locale={locale}
                                 rowLoading={rowLoading === c.id}
                                 onGenerer={(portion) => setConfirmAction({ kind: 'generer', portion, calcul: c })}
                                 onAnnuler={(portion) => setConfirmAction({ kind: 'annuler', portion, calcul: c })}
@@ -443,30 +442,30 @@ export default function EoyBonusPage() {
           <DialogContent className="max-w-xl">
             <DialogHeader>
               <DialogTitle style={{ color: NAVY }}>
-                {detailOpen?.employe_nom || 'Détail'} — EOY {detailOpen?.annee}
+                {detailOpen?.employe_nom || t('uirh.eoybonus.detail_fallback', locale)} — EOY {detailOpen?.annee}
               </DialogTitle>
               <DialogDescription className="text-xs">
-                Détail du calcul Workers&apos; Rights Act S.54
+                {t('uirh.eoybonus.detail_desc', locale)}
               </DialogDescription>
             </DialogHeader>
             {detailOpen && (
               <div className="space-y-3 text-sm">
-                <LineDetail label="Earnings annuels" value={formaterMontantMUR(detailOpen.earnings_annuel)} />
-                <LineDetail label="Mois travaillés" value={detailOpen.nb_mois_travailles.toFixed(2)} />
-                <LineDetail label="Bulletins trouvés" value={`${detailOpen.bulletins_trouves} / ${detailOpen.bulletins_attendus}`} warning={detailOpen.bulletins_trouves < detailOpen.bulletins_attendus} />
-                <LineDetail label="Moyenne mensuelle" value={formaterMontantMUR(detailOpen.moyenne_mensuelle)} />
-                <LineDetail label="Salaire décembre" value={detailOpen.salaire_decembre == null ? '—' : formaterMontantMUR(detailOpen.salaire_decembre)} />
+                <LineDetail label={t('uirh.eoybonus.ld_earnings', locale)} value={formaterMontantMUR(detailOpen.earnings_annuel)} />
+                <LineDetail label={t('uirh.eoybonus.ld_months', locale)} value={detailOpen.nb_mois_travailles.toFixed(2)} />
+                <LineDetail label={t('uirh.eoybonus.ld_bulletins', locale)} value={`${detailOpen.bulletins_trouves} / ${detailOpen.bulletins_attendus}`} warning={detailOpen.bulletins_trouves < detailOpen.bulletins_attendus} />
+                <LineDetail label={t('uirh.eoybonus.ld_avg', locale)} value={formaterMontantMUR(detailOpen.moyenne_mensuelle)} />
+                <LineDetail label={t('uirh.eoybonus.ld_dec_salary', locale)} value={detailOpen.salaire_decembre == null ? '—' : formaterMontantMUR(detailOpen.salaire_decembre)} />
                 <LineDetail
-                  label="Base de calcul"
+                  label={t('uirh.eoybonus.ld_base', locale)}
                   value={formaterMontantMUR(detailOpen.base_calcul)}
                   hint={detailOpen.salaire_decembre != null && detailOpen.salaire_decembre > detailOpen.moyenne_mensuelle
-                    ? 'Max = salaire décembre (WRA S.54 favorable)'
-                    : 'Max = moyenne mensuelle'}
+                    ? t('uirh.eoybonus.ld_base_hint_dec', locale)
+                    : t('uirh.eoybonus.ld_base_hint_avg', locale)}
                 />
-                <LineDetail label="Prorata" value={formaterPct(detailOpen.prorata, 2)} />
+                <LineDetail label={t('uirh.eoybonus.ld_prorata', locale)} value={formaterPct(detailOpen.prorata, 2)} />
                 <div className="pt-2 border-t">
                   <LineDetail
-                    label={detailOpen.eligible ? 'Bonus calculé' : 'Non éligible'}
+                    label={detailOpen.eligible ? t('uirh.eoybonus.ld_bonus', locale) : t('uirh.eoybonus.ld_non_eligible', locale)}
                     value={detailOpen.eligible
                       ? formaterMontantMUR(detailOpen.bonus_calcule)
                       : getMotifLabel(detailOpen.motif_non_eligible)}
@@ -483,24 +482,24 @@ export default function EoyBonusPage() {
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle style={{ color: NAVY }}>
-                {confirmAction?.kind === 'generer' ? '🎁 Générer le bulletin' : '⚠ Annuler le bulletin'} {confirmAction?.portion === '75pct' ? '75%' : '25%'}
+                {confirmAction?.kind === 'generer' ? t('uirh.eoybonus.confirm_gen_title', locale) : t('uirh.eoybonus.confirm_cancel_title', locale)} {confirmAction?.portion === '75pct' ? '75%' : '25%'}
               </DialogTitle>
               <DialogDescription className="text-xs">
                 {confirmAction?.kind === 'generer'
-                  ? 'Un bulletin brouillon sera créé avec les déductions CSG et PAYE calculées selon la MRA.'
-                  : 'Le bulletin paie correspondant sera SUPPRIMÉ et la liaison dans eoy_bonus_calculs nullifiée. Action réservée admin.'}
+                  ? t('uirh.eoybonus.confirm_gen_desc', locale)
+                  : t('uirh.eoybonus.confirm_cancel_desc', locale)}
               </DialogDescription>
             </DialogHeader>
             {confirmAction && (
               <div className="space-y-2 text-sm">
                 <p>
-                  Employé : <strong>{confirmAction.calcul.employe_nom || '—'}</strong>
+                  {t('uirh.eoybonus.confirm_employee', locale)} <strong>{confirmAction.calcul.employe_nom || '—'}</strong>
                 </p>
                 <p>
-                  Bonus annuel : <span className="font-mono">{formaterMontantMUR(confirmAction.calcul.bonus_calcule)}</span>
+                  {t('uirh.eoybonus.confirm_annual_bonus', locale)} <span className="font-mono">{formaterMontantMUR(confirmAction.calcul.bonus_calcule)}</span>
                 </p>
                 <p>
-                  Portion {confirmAction.portion === '75pct' ? '75%' : '25%'} :{' '}
+                  {t('uirh.eoybonus.confirm_portion', locale)} {confirmAction.portion === '75pct' ? '75%' : '25%'} :{' '}
                   <span className="font-mono font-semibold">
                     {formaterMontantMUR(
                       confirmAction.portion === '75pct'
@@ -512,7 +511,7 @@ export default function EoyBonusPage() {
                 </p>
                 {confirmAction.kind === 'annuler' && (
                   <p className="text-amber-700 text-xs italic">
-                    Cette action est irréversible : le bulletin sera supprimé de la table bulletins_paie.
+                    {t('uirh.eoybonus.confirm_irreversible', locale)}
                   </p>
                 )}
               </div>
@@ -528,7 +527,7 @@ export default function EoyBonusPage() {
                 className="text-white"
                 style={{ backgroundColor: confirmAction?.kind === 'generer' ? NAVY : '#dc2626' }}
               >
-                {confirmAction?.kind === 'generer' ? 'Générer' : 'Confirmer suppression'}
+                {confirmAction?.kind === 'generer' ? t('uirh.eoybonus.btn_generate', locale) : t('uirh.eoybonus.btn_confirm_delete', locale)}
               </Button>
             </div>
           </DialogContent>
@@ -540,10 +539,11 @@ export default function EoyBonusPage() {
 
 // ─── G11.10 — Bouton d'action par ligne ──────────────────────────────
 function ActionCell({
-  calcul, userRole, rowLoading, onGenerer, onAnnuler,
+  calcul, userRole, locale, rowLoading, onGenerer, onAnnuler,
 }: {
   calcul: EoyCalculEnriched
   userRole: string
+  locale: Locale
   rowLoading: boolean
   onGenerer: (portion: '75pct' | '25pct') => void
   onAnnuler: (portion: '75pct' | '25pct') => void
@@ -564,15 +564,15 @@ function ActionCell({
   if (has75 && has25) {
     return (
       <div className="flex flex-col items-end gap-0.5 text-[11px]">
-        <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">✓ 75% payé</Badge>
-        <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">✓ 25% payé</Badge>
+        <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">{t('uirh.eoybonus.paid_75', locale)}</Badge>
+        <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">{t('uirh.eoybonus.paid_25', locale)}</Badge>
         {isAdmin && !rowLoading && (
           <button
             type="button"
             className="text-[10px] text-red-600 underline mt-1"
             onClick={() => onAnnuler('25pct')}
           >
-            Annuler 25%
+            {t('uirh.eoybonus.cancel_25', locale)}
           </button>
         )}
       </div>
@@ -582,15 +582,15 @@ function ActionCell({
   if (has75 && !has25) {
     return (
       <div className="flex flex-col items-end gap-0.5 text-[11px]">
-        <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">✓ 75% payé</Badge>
+        <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">{t('uirh.eoybonus.paid_75', locale)}</Badge>
         <button
           type="button"
           disabled={rowLoading || (!inPeriod25 && !isAdmin)}
           className="text-[10px] px-2 py-0.5 rounded bg-indigo-600 text-white disabled:opacity-40"
-          title={!inPeriod25 ? 'Période de génération : 15 déc → 31 janv' : 'Générer le bulletin 25%'}
+          title={!inPeriod25 ? t('uirh.eoybonus.period_25', locale) : t('uirh.eoybonus.gen_25_tip', locale)}
           onClick={() => onGenerer('25pct')}
         >
-          {rowLoading ? '…' : 'Générer 25%'}
+          {rowLoading ? '…' : t('uirh.eoybonus.gen_25', locale)}
         </button>
         {isAdmin && (
           <button
@@ -598,7 +598,7 @@ function ActionCell({
             className="text-[10px] text-red-600 underline"
             onClick={() => onAnnuler('75pct')}
           >
-            Annuler 75%
+            {t('uirh.eoybonus.cancel_75', locale)}
           </button>
         )}
       </div>
@@ -612,10 +612,10 @@ function ActionCell({
       disabled={rowLoading || (!inPeriod75 && !isAdmin)}
       className="text-[11px] px-2 py-1 rounded text-white disabled:opacity-40"
       style={{ backgroundColor: '#0B0F2E' }}
-      title={!inPeriod75 ? 'Période de génération : 1er nov → 31 déc' : 'Générer le bulletin 75%'}
+      title={!inPeriod75 ? t('uirh.eoybonus.period_75', locale) : t('uirh.eoybonus.gen_75_tip', locale)}
       onClick={() => onGenerer('75pct')}
     >
-      {rowLoading ? '…' : 'Générer 75%'}
+      {rowLoading ? '…' : t('uirh.eoybonus.gen_75', locale)}
     </button>
   )
 }

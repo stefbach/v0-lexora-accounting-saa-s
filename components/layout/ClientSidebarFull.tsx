@@ -144,7 +144,7 @@ const MENU: MenuSection[] = [
     ]
   },
   {
-    section: "GBC & Full IFRS",
+    section: "GBC & Full IFRS", sectionKey: "uinav.gbc_full_ifrs",
     requiredModule: "etats_financiers",
     requiredRegime: ['gbc1', 'authorised_company', 'holding', 'branch_foreign_pe'],
     items: [

@@ -11,34 +11,38 @@ import { Loader2, Download, CreditCard, Building2, AlertTriangle, CheckCircle2, 
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { t, getLocale, type Locale } from "@/lib/i18n"
 
-const BANQUES_LABELS: Record<string, string> = {
-  MCB: "Mauritius Commercial Bank",
-  SBM: "State Bank of Mauritius",
-  ABC: "ABC Banking Corporation",
-  AFRASIA: "AfrAsia Bank",
-  MAUBANK: "MauBank",
-  BANKONE: "Bank One",
-  ABSA: "ABSA / Barclays",
-  SCB: "Standard Chartered",
-  HSBC: "HSBC Mauritius",
-  BCP: "BCP",
-  BDM: "Banque des Mascareignes",
-  CIM: "CIM Finance",
-  AUTRE: "Autre banque",
-  SANS_BANQUE: "Coordonnees manquantes",
+function getBanquesLabels(locale: Locale): Record<string, string> {
+  return {
+    MCB: "Mauritius Commercial Bank",
+    SBM: "State Bank of Mauritius",
+    ABC: "ABC Banking Corporation",
+    AFRASIA: "AfrAsia Bank",
+    MAUBANK: "MauBank",
+    BANKONE: "Bank One",
+    ABSA: "ABSA / Barclays",
+    SCB: "Standard Chartered",
+    HSBC: "HSBC Mauritius",
+    BCP: "BCP",
+    BDM: "Banque des Mascareignes",
+    CIM: "CIM Finance",
+    AUTRE: t('uirh.virement.bank_other', locale),
+    SANS_BANQUE: t('uirh.virement.bank_missing_details', locale),
+  }
 }
 
-const FORMAT_LABELS: Record<string, string> = {
-  MCB: "Format BP-V1 (.txt) — MCB Juice Pro Business",
-  SBM: "Format BizEdge (.csv) — pipe-separated",
-  ABC: "Format CSV ABC Corporate",
-  AFRASIA: "Format CSV AfrAsia (guillemets)",
-  MAUBANK: "Format CSV MauBank",
-  BANKONE: "Format CSV Bank One (date DD/MM/YYYY)",
-  ABSA: "Format BatchPay ABSA",
-  SCB: "Format SCMUPAY Standard Chartered",
-  HSBC: "Format CSV HSBC",
-  DEFAULT: "Format CSV générique",
+function getFormatLabels(locale: Locale): Record<string, string> {
+  return {
+    MCB: "Format BP-V1 (.txt) — MCB Juice Pro Business",
+    SBM: "Format BizEdge (.csv) — pipe-separated",
+    ABC: "Format CSV ABC Corporate",
+    AFRASIA: t('uirh.virement.format_afrasia', locale),
+    MAUBANK: "Format CSV MauBank",
+    BANKONE: t('uirh.virement.format_bankone', locale),
+    ABSA: "Format BatchPay ABSA",
+    SCB: "Format SCMUPAY Standard Chartered",
+    HSBC: "Format CSV HSBC",
+    DEFAULT: t('uirh.virement.format_generic', locale),
+  }
 }
 
 function fmt(n: number) {
@@ -118,7 +122,7 @@ export default function ExportVirementPage() {
       if (!res.ok) throw new Error(data.error)
       setPreview(data.recap)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Erreur lors du chargement de l'aperçu")
+      setError(e instanceof Error ? e.message : t('uirh.virement.preview_load_error', locale))
       setPreview(null)
     } finally { setLoadingPreview(false) }
   }, [societe, periode, compteSelectionne])
@@ -154,7 +158,7 @@ export default function ExportVirementPage() {
       a.click()
       setDownloads(prev => [...prev, banqueCode])
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Erreur téléchargement")
+      setError(e instanceof Error ? e.message : t('uirh.virement.download_error', locale))
     } finally { setLoading(false) }
   }
 
@@ -188,10 +192,12 @@ export default function ExportVirementPage() {
       }
       setDownloads(data.fichiers?.map((f: any) => f.banque) || [])
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Erreur téléchargement")
+      setError(e instanceof Error ? e.message : t('uirh.virement.download_error', locale))
     } finally { setLoading(false) }
   }
 
+  const FORMAT_LABELS = getFormatLabels(locale)
+  const BANQUES_LABELS = getBanquesLabels(locale)
   const banqueEmettrice = compteEmetteur?.bank_code || compteEmetteur?.banque?.toUpperCase().slice(0, 3) || "?"
   const formatFichier = FORMAT_LABELS[banqueEmettrice] || FORMAT_LABELS["DEFAULT"]
 
@@ -240,8 +246,8 @@ export default function ExportVirementPage() {
                     {comptesDisponibles.map((c: any) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.banque} — {c.numero_compte || c.nom_compte}
-                        {c.usage_paie && " (Paie)"}
-                        {c.compte_principal && " (Principal)"}
+                        {c.usage_paie && ` ${t('uirh.virement.tag_payroll', locale)}`}
+                        {c.compte_principal && ` ${t('uirh.virement.tag_principal', locale)}`}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -340,7 +346,7 @@ export default function ExportVirementPage() {
                       <TableCell className="text-xs text-gray-500">
                         {/* Format dépend de la banque ÉMETTRICE, pas bénéficiaire */}
                         {banqueEmettrice === 'MCB'
-                          ? (f.banque === 'SANS_BANQUE' ? 'CSV liste' : 'MCB BP-V1 .txt (inclus)')
+                          ? (f.banque === 'SANS_BANQUE' ? t('uirh.virement.fmt_csv_list', locale) : t('uirh.virement.fmt_mcb_included', locale))
                           : (FORMAT_LABELS[f.banque] || FORMAT_LABELS['DEFAULT'])
                         }
                       </TableCell>
@@ -355,7 +361,7 @@ export default function ExportVirementPage() {
                             variant="outline"
                             onClick={() => telechargerBanque(f.banque)}
                             disabled={loading || !compteEmetteur || (banqueEmettrice === 'MCB' && f.banque !== 'SANS_BANQUE')}
-                            title={banqueEmettrice === 'MCB' ? "MCB génère un seul fichier BP-V1 — utiliser 'Tout télécharger'" : ""}
+                            title={banqueEmettrice === 'MCB' ? t('uirh.virement.mcb_title_hint', locale) : ""}
                           >
                             <Download className="w-3 h-3 mr-1"/>
                             {banqueEmettrice === 'MCB' && f.banque !== 'SANS_BANQUE' ? t('rha.b.virement.via_bpv1', locale) : t('rha.b.virement.dl', locale)}
@@ -373,9 +379,7 @@ export default function ExportVirementPage() {
               <div className="p-4 bg-blue-50 border-t text-xs text-blue-700 flex items-start gap-2">
                 <FileText className="w-4 h-4 shrink-0 mt-0.5" />
                 <div>
-                  <strong>Banque émettrice MCB :</strong> Le format BP-V1 MCB regroupe tous les bénéficiaires dans un seul fichier <code>.txt</code>.
-                  Les virements MCB→MCB sont en lignes <code>1</code>, les virements vers d'autres banques en lignes <code>2</code> (avec code banque MCB).
-                  Utilisez <strong>"Tout télécharger"</strong> pour obtenir le fichier unique à uploader sur MCB Juice Pro Business.
+                  {t('uirh.virement.mcb_note', locale)}
                 </div>
               </div>
             )}

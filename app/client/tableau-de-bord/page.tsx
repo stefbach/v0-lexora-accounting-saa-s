@@ -381,10 +381,10 @@ export default function TableauDeBord() {
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                     <Tooltip formatter={(v: number) => fmt(v)} />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                    {/* TODO i18n: chart dataKeys are bound by name to data objects */}
-                    <Bar dataKey="CA" fill="#D4AF37" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="Dépenses" fill="#9F1239" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="Résultat" fill="#0B0F2E" radius={[3, 3, 0, 0]} />
+                    {/* dataKeys restent en français (clés des objets data) ; le libellé affiché (légende/tooltip) passe par `name`. */}
+                    <Bar dataKey="CA" name={t('uicl.chart_revenue', locale)} fill="#D4AF37" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="Dépenses" name={t('uicl.chart_expenses', locale)} fill="#9F1239" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="Résultat" name={t('uicl.chart_result', locale)} fill="#0B0F2E" radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>

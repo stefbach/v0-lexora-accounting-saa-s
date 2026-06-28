@@ -18,10 +18,12 @@ interface ContratInfo {
 }
 
 const MOIS_FR = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"]
+const MOIS_EN = ["January","February","March","April","May","June","July","August","September","October","November","December"]
 
-function formatDate(d: string): string {
+function formatDate(d: string, loc: ReturnType<typeof getLocale>): string {
   const dt = new Date(d + "T12:00:00")
-  return `${dt.getDate()} ${MOIS_FR[dt.getMonth()]} ${dt.getFullYear()}`
+  const months = loc === 'en' ? MOIS_EN : MOIS_FR
+  return `${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`
 }
 
 export default function SignerContratPage() {
@@ -44,7 +46,7 @@ export default function SignerContratPage() {
     setContractId(id)
 
     if (!tk || !id) {
-      setErreur(getLocale() === 'en' ? 'Invalid link. Missing parameters.' : 'Lien invalide. Paramètres manquants.')
+      setErreur(t('uijur.signer.invalid_params', locale))
       setStatut("erreur")
       return
     }
@@ -181,7 +183,7 @@ export default function SignerContratPage() {
             <Row label={t('adm.signer.row_position', locale)} value={emp?.poste || "—"} />
             <Row label={t('adm.signer.row_employer', locale)} value={soc?.nom || "—"} />
             <Row label={t('adm.signer.row_type', locale)} value={contrat?.type_contrat || "—"} />
-            <Row label={t('adm.signer.row_start', locale)} value={contrat?.date_debut ? formatDate(contrat.date_debut) : "—"} />
+            <Row label={t('adm.signer.row_start', locale)} value={contrat?.date_debut ? formatDate(contrat.date_debut, locale) : "—"} />
           </div>
 
           <div className="mt-6 p-4 rounded-lg text-sm text-gray-600" style={{ backgroundColor: "#fafaf7", border: "1px solid #e8e8e0" }}>
