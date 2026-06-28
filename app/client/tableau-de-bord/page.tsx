@@ -36,14 +36,14 @@ function getExerciceChoices(): string[] {
   return [`${y - 2}-${y - 1}`, `${y - 1}-${y}`, `${y}-${y + 1}`]
 }
 
-function formatMoisLabel(mois: string): string {
+function formatMoisLabel(mois: string, locale: ReturnType<typeof getLocale>): string {
   const [y, m] = mois.split("-").map(Number)
-  return new Date(y, m - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+  return new Date(y, m - 1).toLocaleDateString(locale === "en" ? "en-GB" : "fr-FR", { month: "long", year: "numeric" })
 }
 
-function formatMoisShort(mois: string): string {
+function formatMoisShort(mois: string, locale: ReturnType<typeof getLocale>): string {
   const [y, m] = mois.split("-").map(Number)
-  return new Date(y, m - 1).toLocaleDateString("fr-FR", { month: "short" })
+  return new Date(y, m - 1).toLocaleDateString(locale === "en" ? "en-GB" : "fr-FR", { month: "short" })
 }
 
 function shiftMonth(mois: string, delta: number): string {
@@ -197,7 +197,7 @@ export default function TableauDeBord() {
       const cd = chartMonths.map((m, i) => {
         const f = cData[i]?.financial
         return {
-          mois: formatMoisShort(m),
+          mois: formatMoisShort(m, locale),
           CA: Math.round(f?.totalRevenue || 0),
           Dépenses: Math.round(f?.totalExpenses || 0),
           Résultat: Math.round((f?.totalRevenue || 0) - (f?.totalExpenses || 0)),
@@ -254,7 +254,7 @@ export default function TableauDeBord() {
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('core.tdb.hello', locale)} {profile?.full_name?.split(" ")[0] || ""}</h1>
-          <p className="text-gray-500 text-sm mt-0.5 capitalize">{formatMoisLabel(mois)}</p>
+          <p className="text-gray-500 text-sm mt-0.5 capitalize">{formatMoisLabel(mois, locale)}</p>
         </div>
         {societe && (
           <div className="text-right">
@@ -271,7 +271,7 @@ export default function TableauDeBord() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-semibold text-[#0B0F2E]">{t('core.tdb.this_month', locale)}</h2>
-                <Badge variant="outline" className="text-xs capitalize">{formatMoisLabel(mois)}</Badge>
+                <Badge variant="outline" className="text-xs capitalize">{formatMoisLabel(mois, locale)}</Badge>
               </div>
               <div className="flex items-center gap-1">
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMois(shiftMonth(mois, -1))}><ChevronLeft className="w-4 h-4" /></Button>

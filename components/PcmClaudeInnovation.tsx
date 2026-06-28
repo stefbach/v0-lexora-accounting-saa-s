@@ -29,7 +29,14 @@ import {
   Activity,
 } from "lucide-react"
 
-const CAPABILITIES = [
+const CAPABILITIES: {
+  icon: any
+  titleKey: string
+  bodyKey: string
+  color: string
+  tag?: string
+  tagKey?: string
+}[] = [
   {
     icon: ShieldCheck,
     titleKey: "cmkt.pcm.cap1_title",
@@ -42,7 +49,7 @@ const CAPABILITIES = [
     titleKey: "cmkt.pcm.cap2_title",
     bodyKey: "cmkt.pcm.cap2_body",
     color: "#D4AF37",
-    tag: "Bilan · P&L · Notes",
+    tagKey: "uifx.pcmclaude_tag_bilan_pl_notes",
   },
   {
     icon: Brain,
@@ -63,7 +70,7 @@ const CAPABILITIES = [
     titleKey: "cmkt.pcm.cap5_title",
     bodyKey: "cmkt.pcm.cap5_body",
     color: "#D4AF37",
-    tag: "Alertes proactives",
+    tagKey: "uifx.pcmclaude_tag_alertes_proactives",
   },
   {
     icon: InfinityIcon,
@@ -500,7 +507,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                         fontFamily: "'Poppins', sans-serif",
                       }}
                     >
-                      {c.tag}
+                      {c.tagKey ? t(c.tagKey, locale) : c.tag}
                     </span>
                   </div>
 
