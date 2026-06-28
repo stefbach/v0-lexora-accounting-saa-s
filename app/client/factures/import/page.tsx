@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Upload, Download, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Trash2 } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale } from "@/lib/i18n"
 
 interface ParsedRow {
   tiers: string
@@ -79,6 +80,7 @@ function parseCSV(text: string): ParsedRow[] {
 }
 
 export default function ImportFacturesPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [rows, setRows] = useState<ParsedRow[]>([])
   const [fileName, setFileName] = useState("")
@@ -164,7 +166,7 @@ export default function ImportFacturesPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Étapes</CardTitle>
+          <CardTitle className="text-sm">{t('scp.import_steps', locale)}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex gap-2 items-center flex-wrap">

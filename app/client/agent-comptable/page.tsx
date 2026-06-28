@@ -139,7 +139,7 @@ export default function AgentComptablePage() {
 
         <div className="flex gap-2 pt-2 border-t">
           <Input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && send()}
-            placeholder="Ex: affecte l'avance de 50 000 du client Dupont à sa facture…" disabled={busy || !societeId} />
+            placeholder={t('scp.agent_input_ph', locale)} disabled={busy || !societeId} />
           <Button onClick={send} disabled={busy || !input.trim() || !societeId} className="bg-[#0B0F2E] text-white"><Send className="h-4 w-4" /></Button>
         </div>
       </div>

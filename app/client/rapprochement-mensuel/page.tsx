@@ -373,14 +373,14 @@ export default function RapprochementMensuelPage() {
                 <SelectContent>
                   {showAddItem === 'bank' ? (
                     <>
-                      <SelectItem value="virement_recu_non_saisi">Virement reçu non saisi</SelectItem>
-                      <SelectItem value="interets_crediteurs">Intérêts créditeurs non saisis</SelectItem>
+                      <SelectItem value="virement_recu_non_saisi">{t('acc.rm.reason_virement_recu', locale)}</SelectItem>
+                      <SelectItem value="interets_crediteurs">{t('acc.rm.reason_interets', locale)}</SelectItem>
                       <SelectItem value="frais_bancaires_non_saisis">Frais bancaires non saisis</SelectItem>
                       <SelectItem value="erreur_banque">Erreur banque</SelectItem>
                     </>
                   ) : (
                     <>
-                      <SelectItem value="cheque_emis_non_encaisse">Chèque émis non encaissé</SelectItem>
+                      <SelectItem value="cheque_emis_non_encaisse">{t('acc.rm.reason_cheque_emis', locale)}</SelectItem>
                       <SelectItem value="virement_580_transit">Virement 580 en transit</SelectItem>
                       <SelectItem value="remise_en_cours">Remise en cours d'encaissement</SelectItem>
                       <SelectItem value="erreur_saisie_compta">Erreur de saisie compta</SelectItem>

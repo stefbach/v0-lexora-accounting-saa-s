@@ -465,6 +465,9 @@ export const invoicingChunk = {
 
     // ── acc.rm — Rapprochement mensuel ─────────────────────────
     'acc.rm.title': 'Rapprochement bancaire mensuel',
+    'acc.rm.reason_virement_recu': 'Virement reçu non saisi',
+    'acc.rm.reason_interets': 'Intérêts créditeurs non saisis',
+    'acc.rm.reason_cheque_emis': 'Chèque émis non encaissé',
     'acc.rm.subtitle': 'Tableau officiel deux colonnes avec workflow validation DAF',
     'acc.rm.bank_account': 'Compte bancaire',
     'acc.rm.choose_account': 'Choisir un compte...',
@@ -1413,6 +1416,9 @@ export const invoicingChunk = {
 
     // ── acc.rm ───────────────────────────────────────────
     'acc.rm.title': 'Monthly bank reconciliation',
+    'acc.rm.reason_virement_recu': 'Received transfer not recorded',
+    'acc.rm.reason_interets': 'Credit interest not recorded',
+    'acc.rm.reason_cheque_emis': 'Issued cheque not cashed',
     'acc.rm.subtitle': 'Official two-column table with DAF validation workflow',
     'acc.rm.bank_account': 'Bank account',
     'acc.rm.choose_account': 'Choose an account...',

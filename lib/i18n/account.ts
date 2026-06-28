@@ -55,6 +55,7 @@ export const accountChunk = {
 
     // Email Accounts page
     "acct.email.page_title": "Comptes Email",
+    "acct.email.from_name_ph": "ACME Comptabilité",
     "acct.email.page_desc": "Configure plusieurs comptes email pour l'envoi sortant (relances, rapports, notifications). Chaque société peut avoir N comptes partagés ; chaque utilisateur peut avoir ses propres comptes perso. Secrets stockés chiffrés AES-256-GCM.",
     "acct.email.no_societe": "Aucune société sélectionnée.",
     "acct.email.loading": "Chargement…",
@@ -155,6 +156,7 @@ export const accountChunk = {
 
     // Email Accounts page
     "acct.email.page_title": "Email Accounts",
+    "acct.email.from_name_ph": "ACME Accounting",
     "acct.email.page_desc": "Configure multiple email accounts for outgoing mail (reminders, reports, notifications). Each company can have N shared accounts; each user can have their own personal accounts. Secrets stored encrypted AES-256-GCM.",
     "acct.email.no_societe": "No company selected.",
     "acct.email.loading": "Loading…",
