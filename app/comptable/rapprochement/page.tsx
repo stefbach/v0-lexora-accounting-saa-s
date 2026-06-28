@@ -58,18 +58,9 @@ import { ECART_TYPE_OPTIONS, resolveEcartCompte, type EcartTypeChoice } from "@/
 const AGENT_NAME = "Lex Banque"
 
 const MOIS = [
-  { val: "01", label: "Janvier" },
-  { val: "02", label: "Février" },
-  { val: "03", label: "Mars" },
-  { val: "04", label: "Avril" },
-  { val: "05", label: "Mai" },
-  { val: "06", label: "Juin" },
-  { val: "07", label: "Juillet" },
-  { val: "08", label: "Août" },
-  { val: "09", label: "Septembre" },
-  { val: "10", label: "Octobre" },
-  { val: "11", label: "Novembre" },
-  { val: "12", label: "Décembre" },
+  { val: "01" }, { val: "02" }, { val: "03" }, { val: "04" },
+  { val: "05" }, { val: "06" }, { val: "07" }, { val: "08" },
+  { val: "09" }, { val: "10" }, { val: "11" }, { val: "12" },
 ]
 const ANNEES = getAvailableYears(2, 1).map(String)
 
@@ -239,7 +230,7 @@ export default function RapprochementPage() {
       const d = await res.json()
       setData(d)
     } catch (e) {
-      showToast("Erreur chargement", "error")
+      showToast(t('cab.rapprochement.err_loading', locale), "error")
       setData(null)
     } finally {
       setLoading(false)
@@ -312,8 +303,8 @@ export default function RapprochementPage() {
     if (matchAlgo.length)
       g.push({
         key: "ma",
-        title: `Rapprochements algorithme (${matchAlgo.length})`,
-        desc: "Tx ↔ facture proposés par le moteur de matching pur. Confiance élevée.",
+        title: `${t('cab.rapprochement.grp_match_algo', locale)} (${matchAlgo.length})`,
+        desc: t('cab.rapprochement.grp_match_algo_desc', locale),
         items: matchAlgo,
         type: "match",
         isAi: false,
@@ -321,8 +312,8 @@ export default function RapprochementPage() {
     if (matchAi.length)
       g.push({
         key: "mai",
-        title: `Rapprochements IA Claude (${matchAi.length})`,
-        desc: "Cas ambigus rattrapés par l'IA. À vérifier au cas par cas.",
+        title: `${t('cab.rapprochement.grp_match_ai', locale)} (${matchAi.length})`,
+        desc: t('cab.rapprochement.grp_match_ai_desc', locale),
         items: matchAi,
         type: "match",
         isAi: true,
@@ -330,8 +321,8 @@ export default function RapprochementPage() {
     if (classAlgo.length)
       g.push({
         key: "ca",
-        title: `Classifications algorithme (${classAlgo.length})`,
-        desc: "Frais bancaires, salaires, MRA, virements internes. Compte PCM pré-rempli.",
+        title: `${t('cab.rapprochement.grp_class_algo', locale)} (${classAlgo.length})`,
+        desc: t('cab.rapprochement.grp_class_algo_desc', locale),
         items: classAlgo,
         type: "classification",
         isAi: false,
@@ -339,8 +330,8 @@ export default function RapprochementPage() {
     if (classAi.length)
       g.push({
         key: "cai",
-        title: `Classifications IA Claude (${classAi.length})`,
-        desc: "Cas atypiques classés par l'IA. Vérifier le compte PCM.",
+        title: `${t('cab.rapprochement.grp_class_ai', locale)} (${classAi.length})`,
+        desc: t('cab.rapprochement.grp_class_ai_desc', locale),
         items: classAi,
         type: "classification",
         isAi: true,
@@ -363,7 +354,7 @@ export default function RapprochementPage() {
       })
       const d = await res.json()
       if (!res.ok) {
-        showToast(d?.error || `Erreur ${AGENT_NAME}`, "error")
+        showToast(d?.error || t('cab.rapprochement.err_agent', locale).replace('{agent}', AGENT_NAME), "error")
         return
       }
       const total =
@@ -372,11 +363,11 @@ export default function RapprochementPage() {
         (d.stats?.semantic_matches || 0) +
         (d.stats?.semantic_classifications || 0)
       showToast(
-        `${AGENT_NAME} : ${total} suggestion(s), ${d.writes?.transactions_modifiees || 0} écrites`
+        `${AGENT_NAME} : ${t('cab.rapprochement.agent_done', locale).replace('{n}', String(total)).replace('{w}', String(d.writes?.transactions_modifiees || 0))}`
       )
       load()
     } catch (e: any) {
-      showToast(`Erreur ${AGENT_NAME} : ${e?.message || "réseau"}`, "error")
+      showToast(`${t('cab.rapprochement.err_agent', locale).replace('{agent}', AGENT_NAME)} : ${e?.message || t('cab.rapprochement.network', locale)}`, "error")
     } finally {
       setRunningAgent(false)
     }
@@ -428,7 +419,7 @@ export default function RapprochementPage() {
           body.compte_charge = tx.compte_comptable
         }
       } else {
-        return { ok: false, error: "Suggestion incomplète" }
+        return { ok: false, error: t('cab.rapprochement.incomplete_suggestion', locale) }
       }
       try {
         const res = await fetch("/api/comptable/rapprochement", {
@@ -440,7 +431,7 @@ export default function RapprochementPage() {
         if (!res.ok) return { ok: false, error: d?.error || `HTTP ${res.status}` }
         return { ok: true, lettre: d?.lettre }
       } catch (e: any) {
-        return { ok: false, error: e?.message || "Erreur réseau" }
+        return { ok: false, error: e?.message || t('cab.rapprochement.err_network', locale) }
       }
     },
     [selectedSociete, classificationOverrides]
@@ -448,8 +439,8 @@ export default function RapprochementPage() {
 
   const handleValidateOne = async (tx: BankTx) => {
     const r = await validateOne(tx)
-    if (!r.ok) return showToast(`Échec : ${r.error}`, "error")
-    showToast(`Validé (${r.lettre || "—"}) — écriture BNQ créée`)
+    if (!r.ok) return showToast(`${t('cab.rapprochement.failed', locale)} : ${r.error}`, "error")
+    showToast(t('cab.rapprochement.validated_one', locale).replace('{lettre}', r.lettre || "—"))
     load()
   }
 
@@ -472,7 +463,7 @@ export default function RapprochementPage() {
     if (!linkingTx) return
     const fids = Array.from(linkSelectedFids)
     if (fids.length === 0) {
-      return showToast("Sélectionnez au moins une facture", "error")
+      return showToast(t('cab.rapprochement.select_one_invoice', locale), "error")
     }
     const partiel = payload?.partiel === true
     setLinking(true)
@@ -484,12 +475,12 @@ export default function RapprochementPage() {
       ecart_libelle: payload?.ecart_libelle,
     })
     setLinking(false)
-    if (!r.ok) return showToast(`Échec : ${r.error}`, "error")
+    if (!r.ok) return showToast(`${t('cab.rapprochement.failed', locale)} : ${r.error}`, "error")
     if (partiel) {
-      showToast(`Répartition enregistrée sur ${fids.length} facture${fids.length > 1 ? "s" : ""} — écritures BNQ créées (${r.lettre || "—"})`)
+      showToast(t(fids.length > 1 ? 'cab.rapprochement.partial_saved_many' : 'cab.rapprochement.partial_saved_one', locale).replace('{n}', String(fids.length)).replace('{lettre}', r.lettre || "—"))
     } else {
       showToast(
-        `${fids.length} facture${fids.length > 1 ? "s" : ""} liée${fids.length > 1 ? "s" : ""} — écriture BNQ créée (${r.lettre || "—"})`
+        t(fids.length > 1 ? 'cab.rapprochement.invoices_linked_many' : 'cab.rapprochement.invoices_linked_one', locale).replace('{n}', String(fids.length)).replace('{lettre}', r.lettre || "—")
       )
     }
     setLinkingTx(null)
@@ -510,16 +501,16 @@ export default function RapprochementPage() {
         }),
       })
       const d = await res.json()
-      if (!res.ok) return showToast(d?.error || "Rejet impossible", "error")
-      showToast("Suggestion rejetée")
+      if (!res.ok) return showToast(d?.error || t('cab.rapprochement.reject_impossible', locale), "error")
+      showToast(t('cab.rapprochement.suggestion_rejected', locale))
       load()
     } catch (e: any) {
-      showToast(e?.message || "Erreur rejet", "error")
+      showToast(e?.message || t('cab.rapprochement.err_reject', locale), "error")
     }
   }
 
   const handleValidateBatch = async (items: BankTx[]) => {
-    if (items.length === 0) return showToast("Rien de coché", "error")
+    if (items.length === 0) return showToast(t('cab.rapprochement.nothing_checked', locale), "error")
     setValidating(true)
     let ok = 0
     const errors: string[] = []
@@ -530,8 +521,8 @@ export default function RapprochementPage() {
     }
     setValidating(false)
     setSelectedTxIds(new Set())
-    if (errors.length === 0) showToast(`${ok} validation(s) — écritures BNQ créées`)
-    else showToast(`${ok} OK / ${errors.length} échec — ${errors[0]}`, "error")
+    if (errors.length === 0) showToast(t('cab.rapprochement.batch_done', locale).replace('{n}', String(ok)))
+    else showToast(t('cab.rapprochement.batch_partial', locale).replace('{ok}', String(ok)).replace('{n}', String(errors.length)).replace('{first}', errors[0]), "error")
     load()
   }
 
@@ -665,7 +656,7 @@ export default function RapprochementPage() {
                   <SelectContent>
                     {MOIS.map((m) => (
                       <SelectItem key={m.val} value={m.val}>
-                        {m.label}
+                        {t(`cab.rapprochement.month_${m.val}`, locale)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -784,7 +775,7 @@ export default function RapprochementPage() {
                                   ) : (
                                     <CheckCircle2 className="h-4 w-4 mr-1.5" />
                                   )}
-                                  Valider {selectedCount}
+                                  {t('cab.rapprochement.validate', locale)} {selectedCount}
                                 </Button>
                               ) : (
                                 <Button
@@ -794,7 +785,7 @@ export default function RapprochementPage() {
                                   disabled={validating}
                                 >
                                   <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                                  Tout valider ({g.items.length})
+                                  {t('cab.rapprochement.validate_all', locale)} ({g.items.length})
                                 </Button>
                               )}
                             </div>
@@ -902,6 +893,7 @@ function LinkFacturesDialog({
   onConfirm: (payload?: { partiel?: boolean; allocations?: { facture_id: string; montant: number }[]; ecart_compte?: string; ecart_libelle?: string }) => void
   loading: boolean
 }) {
+  const locale = getLocale()
   const open = tx !== null
   const txAmount = tx ? (tx.debit > 0 ? tx.debit : tx.credit) : 0
   const txDevise = (tx?.devise || "MUR").toUpperCase()
@@ -1036,10 +1028,9 @@ function LinkFacturesDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Lier la transaction à une ou plusieurs factures</DialogTitle>
+          <DialogTitle>{t('cab.rapprochement.dlg_title', locale)}</DialogTitle>
           <DialogDescription>
-            Cochez les factures correspondant à ce virement. Le total des factures
-            doit approcher le montant de la transaction.
+            {t('cab.rapprochement.dlg_desc', locale)}
           </DialogDescription>
         </DialogHeader>
 
@@ -1048,18 +1039,18 @@ function LinkFacturesDialog({
           <p className="text-xs text-muted-foreground">{formatDate(tx.date)}</p>
           <p className="font-medium break-words">{tx.libelle}</p>
           <p className="font-mono">
-            {tx.debit > 0 ? "Débit" : "Crédit"} {fmt(txAmount)} {txDevise}
+            {tx.debit > 0 ? t('cab.rapprochement.debit', locale) : t('cab.rapprochement.credit', locale)} {fmt(txAmount)} {txDevise}
           </p>
           {tx.tiers_detecte && (
             <p className="text-xs text-muted-foreground">
-              Tiers détecté : <span className="font-medium">{tx.tiers_detecte}</span>
+              {t('cab.rapprochement.tiers_detected', locale)} <span className="font-medium">{tx.tiers_detecte}</span>
             </p>
           )}
         </div>
 
         {/* Filtre texte */}
         <Input
-          placeholder="Filtrer par numéro de facture ou tiers…"
+          placeholder={t('cab.rapprochement.filter_ph', locale)}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="h-9"
@@ -1068,7 +1059,7 @@ function LinkFacturesDialog({
         {/* Filtre par date de facture (plage) */}
         <div className="flex items-end gap-2">
           <div className="flex-1">
-            <label className="text-[11px] text-muted-foreground">Date facture — du</label>
+            <label className="text-[11px] text-muted-foreground">{t('cab.rapprochement.date_invoice_from', locale)}</label>
             <Input
               type="date"
               value={dateDebut}
@@ -1077,7 +1068,7 @@ function LinkFacturesDialog({
             />
           </div>
           <div className="flex-1">
-            <label className="text-[11px] text-muted-foreground">au</label>
+            <label className="text-[11px] text-muted-foreground">{t('cab.rapprochement.date_to', locale)}</label>
             <Input
               type="date"
               value={dateFin}
@@ -1095,7 +1086,7 @@ function LinkFacturesDialog({
                 setDateFin("")
               }}
             >
-              Effacer
+              {t('cab.rapprochement.clear', locale)}
             </Button>
           )}
         </div>
@@ -1104,7 +1095,7 @@ function LinkFacturesDialog({
         <div className="flex-1 overflow-y-auto rounded border divide-y">
           {filtered.length === 0 ? (
             <p className="p-4 text-sm text-muted-foreground text-center">
-              Aucune facture impayée trouvée.
+              {t('cab.rapprochement.no_unpaid_invoice', locale)}
             </p>
           ) : (
             filtered.map((f) => {
@@ -1137,7 +1128,7 @@ function LinkFacturesDialog({
                       )}
                       {f.statut === "partiel" && (
                         <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-300">
-                          partiel
+                          {t('cab.rapprochement.partial', locale)}
                         </Badge>
                       )}
                     </div>
@@ -1153,7 +1144,7 @@ function LinkFacturesDialog({
                       )}
                       {f.solde_non_paye != null && Number(f.solde_non_paye) > 0 && Number(f.solde_non_paye) < monMur - 1 && (
                         <span className="font-mono text-amber-700">
-                          {" "}· reste {fmt(Number(f.solde_non_paye))} MUR
+                          {" "}· {t('cab.rapprochement.remaining', locale)} {fmt(Number(f.solde_non_paye))} MUR
                         </span>
                       )}
                     </p>
@@ -1170,8 +1161,8 @@ function LinkFacturesDialog({
         {selectedFactures.length > 0 && (
           <div className="rounded border divide-y text-sm">
             <div className="px-2.5 py-1.5 bg-muted/30 text-xs font-medium flex items-center justify-between">
-              <span>Montant affecté par facture (MUR)</span>
-              <span className="text-muted-foreground">Solde restant</span>
+              <span>{t('cab.rapprochement.amount_per_invoice', locale)}</span>
+              <span className="text-muted-foreground">{t('cab.rapprochement.remaining_balance', locale)}</span>
             </div>
             {selectedFactures.map((f) => {
               const reste = remainingOf(f)
@@ -1191,7 +1182,7 @@ function LinkFacturesDialog({
                     {partial && !over && (
                       <>
                         <Badge className="ml-1 text-[10px] bg-amber-100 text-amber-800 border-amber-300">
-                          partiel
+                          {t('cab.rapprochement.partial', locale)}
                         </Badge>
                         {/* Solder = imputer le solde complet → la facture est
                             soldée et le delta avec le prélèvement devient un
@@ -1204,7 +1195,7 @@ function LinkFacturesDialog({
                           }}
                           className="ml-1 text-[10px] text-blue-600 underline hover:text-blue-800"
                         >
-                          solder
+                          {t('cab.rapprochement.settle', locale)}
                         </button>
                       </>
                     )}
@@ -1239,14 +1230,14 @@ function LinkFacturesDialog({
             }`}
           >
             <span>
-              {selectedFactures.length} facture{selectedFactures.length > 1 ? "s" : ""} · affecté{" "}
+              {selectedFactures.length} {t(selectedFactures.length > 1 ? 'cab.rapprochement.summary_many' : 'cab.rapprochement.summary_one', locale)} · {t('cab.rapprochement.allocated', locale)}{" "}
               <span className="font-mono">{fmt(sumAlloc)} MUR</span>
               {hasPartial && (
-                <span className="text-amber-700"> · répartition partielle</span>
+                <span className="text-amber-700"> · {t('cab.rapprochement.partial_split', locale)}</span>
               )}
             </span>
             <span className="font-mono text-xs">
-              Prélèvement {fmt(txAmount)} {txDevise} · écart{" "}
+              {t('cab.rapprochement.levy', locale)} {fmt(txAmount)} {txDevise} · {t('cab.rapprochement.gap', locale)}{" "}
               <span className={Math.abs(diffAlloc) <= 1 ? "" : "text-amber-700"}>
                 {diffAlloc >= 0 ? "+" : ""}
                 {fmt(diffAlloc)}
@@ -1258,13 +1249,13 @@ function LinkFacturesDialog({
         {!allocValid ? (
           <p className="text-xs text-rose-700">
             {anyOverSolde
-              ? "Un montant dépasse le solde restant de sa facture."
-              : "Chaque montant affecté doit être strictement positif."}
+              ? t('cab.rapprochement.over_balance_err', locale)
+              : t('cab.rapprochement.positive_err', locale)}
           </p>
         ) : ecartTreatment ? (
           <div className="rounded border border-amber-200 bg-amber-50 p-2 space-y-1.5">
             <span className="text-xs text-amber-800">
-              Écart de {fmt(Math.abs(ecartTreatment.ecartBrut))} MUR — où l'imputer&nbsp;?
+              {t('cab.rapprochement.gap_of', locale).replace('{amount}', fmt(Math.abs(ecartTreatment.ecartBrut)))}
             </span>
             <select
               value={ecartType}
@@ -1292,7 +1283,7 @@ function LinkFacturesDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={loading}>
-            Annuler
+            {t('cui.cancel', locale)}
           </Button>
           <Button
             onClick={handleConfirmClick}
@@ -1302,22 +1293,22 @@ function LinkFacturesDialog({
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                {hasPartial || ecartTreatment ? "Enregistrement…" : "Liaison…"}
+                {hasPartial || ecartTreatment ? t('cab.rapprochement.saving', locale) : t('cab.rapprochement.linking', locale)}
               </>
             ) : ecartTreatment ? (
               <>
                 <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                Solder + écart → {(resolveEcartCompte(ecartType, diffAlloc) ?? ecartTreatment).compte} ({selectedFactures.length})
+                {t('cab.rapprochement.settle_gap', locale)} {(resolveEcartCompte(ecartType, diffAlloc) ?? ecartTreatment).compte} ({selectedFactures.length})
               </>
             ) : hasPartial ? (
               <>
                 <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                Enregistrer la répartition ({selectedFactures.length})
+                {t('cab.rapprochement.save_split', locale)} ({selectedFactures.length})
               </>
             ) : (
               <>
                 <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                Lier {selectedFids.size} facture{selectedFids.size > 1 ? "s" : ""}
+                {t('cab.rapprochement.link', locale)} {selectedFids.size} {t(selectedFids.size > 1 ? 'cab.rapprochement.invoice_many' : 'cab.rapprochement.invoice_one', locale)}
               </>
             )}
           </Button>
@@ -1526,6 +1517,7 @@ function SuggestionRow({
   onReclassify?: (txId: string, classification: string, compte: string) => void
   reclassOptions?: typeof RECLASS_OPTIONS
 }) {
+  const locale = getLocale()
   const montant = tx.debit > 0 ? -tx.debit : tx.credit
   const fids =
     Array.isArray(tx.facture_ids) && tx.facture_ids.length > 0
@@ -1558,7 +1550,7 @@ function SuggestionRow({
             {factures.length > 0 ? (
               factures.map((f, i) => (
                 <span key={f.id}>
-                  Facture <span className="font-mono">{f.numero_facture || f.id.slice(0, 8)}</span>
+                  {t('cab.rapprochement.invoice_cap', locale)} <span className="font-mono">{f.numero_facture || f.id.slice(0, 8)}</span>
                   {f.tiers && (
                     <span className="text-muted-foreground"> · {f.tiers.slice(0, 50)}</span>
                   )}
@@ -1572,12 +1564,12 @@ function SuggestionRow({
                 </span>
               ))
             ) : (
-              <span className="italic text-muted-foreground">facture introuvable</span>
+              <span className="italic text-muted-foreground">{t('cab.rapprochement.invoice_not_found', locale)}</span>
             )}
           </p>
         ) : (
           <p className="text-xs flex items-center gap-1.5 flex-wrap">
-            <span className="text-muted-foreground">→ Compte PCM </span>
+            <span className="text-muted-foreground">{t('cab.rapprochement.pcm_account', locale)} </span>
             {onReclassify ? (
               <Select
                 value={override?.classification ?? (tx.classification || "")}
@@ -1642,7 +1634,7 @@ function SuggestionRow({
           )}
           {tx.rapprochement_multi && (
             <Badge className="text-[10px] bg-blue-100 text-blue-700 border-blue-300">
-              {tx.nb_factures}× factures
+              {tx.nb_factures}× {t('cab.rapprochement.invoices_lc', locale)}
             </Badge>
           )}
         </div>
@@ -1655,7 +1647,7 @@ function SuggestionRow({
           className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
         >
           <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-          Valider
+          {t('cab.rapprochement.validate', locale)}
         </Button>
         <Button
           size="sm"
@@ -1664,7 +1656,7 @@ function SuggestionRow({
           className="h-7 text-xs text-muted-foreground hover:text-rose-700 hover:bg-rose-50"
         >
           <XCircle className="h-3.5 w-3.5 mr-1" />
-          Rejeter
+          {t('cab.rapprochement.reject', locale)}
         </Button>
       </div>
     </div>
@@ -1680,6 +1672,7 @@ function TxRow({
   facturesById: Map<string, Facture>
   onLink?: () => void
 }) {
+  const locale = getLocale()
   const montant = tx.debit > 0 ? -tx.debit : tx.credit
   return (
     <div className="flex items-start justify-between gap-3 p-3 hover:bg-muted/20">
@@ -1699,7 +1692,7 @@ function TxRow({
           )}
           {tx.facture_id && (
             <Badge variant="outline" className="text-[10px]">
-              Facture {facturesById.get(tx.facture_id)?.numero_facture || tx.facture_id.slice(0, 8)}
+              {t('cab.rapprochement.invoice_cap', locale)} {facturesById.get(tx.facture_id)?.numero_facture || tx.facture_id.slice(0, 8)}
             </Badge>
           )}
           {tx.matched_strategy && (
@@ -1726,7 +1719,7 @@ function TxRow({
             className="h-7 text-xs"
           >
             <Link2 className="h-3.5 w-3.5 mr-1" />
-            Lier factures
+            {t('cab.rapprochement.link_invoices', locale)}
           </Button>
         )}
       </div>
