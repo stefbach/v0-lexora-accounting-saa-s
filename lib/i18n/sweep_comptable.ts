@@ -30,6 +30,9 @@ export const sweepComptableChunk = {
     'scp.cloture_fiscal_years': 'Exercices fiscaux',
     'scp.cloture_no_fiscal_years': 'Aucun exercice fiscal trouvé pour cette société.',
     'scp.cloture_regen_aria': 'Régénérer le snapshot du bilan pour',
+    // gbc export
+    'scp.export_pdf': 'Exporter PDF',
+    'scp.export_pdf_error': 'Erreur export PDF',
   },
   en: {
     'scp.agent_title': 'Accounting Agent',
@@ -54,5 +57,7 @@ export const sweepComptableChunk = {
     'scp.cloture_fiscal_years': 'Fiscal years',
     'scp.cloture_no_fiscal_years': 'No fiscal year found for this company.',
     'scp.cloture_regen_aria': 'Regenerate the balance sheet snapshot for',
+    'scp.export_pdf': 'Export PDF',
+    'scp.export_pdf_error': 'PDF export error',
   },
 }
