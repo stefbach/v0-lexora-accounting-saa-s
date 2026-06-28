@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils"
+import { t, getLocale } from "@/lib/i18n"
 import { Badge } from "@/components/ui/badge"
 import {
   Table,
@@ -29,25 +30,26 @@ function formatPeriode(periode: string): string {
 }
 
 export function TVATable({ data }: TVATableProps) {
+  const locale = getLocale()
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Mois</TableHead>
-          <TableHead>Société</TableHead>
-          <TableHead className="text-right">TVA Collectée</TableHead>
-          <TableHead className="text-right">TVA Déductible</TableHead>
-          <TableHead className="text-right">TVA Nette</TableHead>
-          <TableHead>Statut</TableHead>
-          <TableHead>Deadline</TableHead>
-          <TableHead>Déclaration</TableHead>
+          <TableHead>{t('mra.tva.tbl_month', locale)}</TableHead>
+          <TableHead>{t('mra.tva.tbl_company', locale)}</TableHead>
+          <TableHead className="text-right">{t('mra.tva.tbl_collected', locale)}</TableHead>
+          <TableHead className="text-right">{t('mra.tva.tbl_deductible', locale)}</TableHead>
+          <TableHead className="text-right">{t('mra.tva.tbl_net', locale)}</TableHead>
+          <TableHead>{t('mra.tva.tbl_status', locale)}</TableHead>
+          <TableHead>{t('mra.tva.tbl_deadline', locale)}</TableHead>
+          <TableHead>{t('mra.tva.tbl_declaration', locale)}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {data.length === 0 && (
           <TableRow>
             <TableCell colSpan={8} className="text-center text-muted-foreground">
-              Aucune donnée TVA
+              {t('mra.tva.tbl_empty', locale)}
             </TableCell>
           </TableRow>
         )}
@@ -74,7 +76,7 @@ export function TVATable({ data }: TVATableProps) {
                   variant="outline"
                   className="bg-orange-100 text-orange-800 border-orange-200"
                 >
-                  À faire
+                  {t('mra.tva.tbl_todo', locale)}
                 </Badge>
               )}
               {row.statut_declaration === "declare" && (
@@ -83,7 +85,7 @@ export function TVATable({ data }: TVATableProps) {
                     variant="outline"
                     className="bg-green-100 text-green-800 border-green-200"
                   >
-                    Déclaré
+                    {t('mra.tva.tbl_declared', locale)}
                   </Badge>
                   {row.date_declaration && (
                     <span className="text-xs text-muted-foreground">
@@ -102,7 +104,7 @@ export function TVATable({ data }: TVATableProps) {
                   </Badge>
                   {(row.penalites ?? 0) > 0 && (
                     <span className="text-xs text-red-600">
-                      Pénalité: {formatMUR(row.penalites ?? 0)}
+                      {t('mra.tva.tbl_penalty', locale)} {formatMUR(row.penalites ?? 0)}
                     </span>
                   )}
                 </div>
