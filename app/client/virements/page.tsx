@@ -39,6 +39,7 @@ import {
   Plus,
 } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale } from "@/lib/i18n"
 
 interface CompteBancaire {
   id: string
@@ -114,6 +115,7 @@ function buildMcbBpV1(virs: Virement[], comptes: CompteBancaire[]): string {
 }
 
 export default function ClientVirementsPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [comptes, setComptes] = useState<CompteBancaire[]>([])
   const [virements, setVirements] = useState<Virement[]>([])
@@ -151,7 +153,7 @@ export default function ClientVirementsPage() {
       setComptes(Array.isArray(dComptes.comptes) ? dComptes.comptes : [])
       setVirements(Array.isArray(dVirs.virements) ? dVirs.virements : [])
     } catch (e: any) {
-      setError(e?.message || "Erreur de chargement")
+      setError(e?.message || t('scp.vir_err_loading', locale))
     } finally {
       setLoading(false)
     }
@@ -200,14 +202,14 @@ export default function ClientVirementsPage() {
       })
       const d = await res.json()
       if (!res.ok) {
-        setError(d?.error || `Erreur ${res.status}`)
+        setError(d?.error || t('scp.vir_err_status', locale).replace('{status}', String(res.status)))
       } else {
-        setInfo(d?._stub ? 'Virement préparé (mode stub — pas encore persisté)' : 'Virement préparé.')
+        setInfo(d?._stub ? t('scp.vir_prepared_stub', locale) : t('scp.vir_prepared', locale))
         resetForm()
         await load()
       }
     } catch (e: any) {
-      setError(e?.message || 'Erreur inconnue')
+      setError(e?.message || t('scp.vir_unknown_error', locale))
     } finally {
       setSubmitting(false)
     }
@@ -238,7 +240,7 @@ export default function ClientVirementsPage() {
     if (list.length === 0) {
       return (
         <p className="py-8 text-center text-sm text-muted-foreground">
-          Aucun virement dans cette catégorie.
+          {t('scp.vir_empty', locale)}
         </p>
       )
     }
@@ -247,13 +249,13 @@ export default function ClientVirementsPage() {
         <table className="w-full text-xs">
           <thead className="bg-muted/40">
             <tr>
-              <th className="text-left p-2 font-medium">Date</th>
-              <th className="text-left p-2 font-medium">Mode</th>
-              <th className="text-left p-2 font-medium">Source</th>
-              <th className="text-left p-2 font-medium">Destination</th>
-              <th className="text-right p-2 font-medium">Montant</th>
-              <th className="text-left p-2 font-medium">Libellé</th>
-              <th className="text-center p-2 font-medium">Statut</th>
+              <th className="text-left p-2 font-medium">{t('scp.vir_col_date', locale)}</th>
+              <th className="text-left p-2 font-medium">{t('scp.vir_col_mode', locale)}</th>
+              <th className="text-left p-2 font-medium">{t('scp.vir_col_source', locale)}</th>
+              <th className="text-left p-2 font-medium">{t('scp.vir_col_dest', locale)}</th>
+              <th className="text-right p-2 font-medium">{t('scp.vir_col_amount', locale)}</th>
+              <th className="text-left p-2 font-medium">{t('scp.vir_col_label', locale)}</th>
+              <th className="text-center p-2 font-medium">{t('scp.vir_col_status', locale)}</th>
             </tr>
           </thead>
           <tbody>
@@ -303,12 +305,12 @@ export default function ClientVirementsPage() {
   return (
     <ClientPageShell
       breadcrumbs={[
-        { label: 'Espace client', href: '/client/tableau-de-bord' },
-        { label: 'Virements' },
+        { label: t('scp.vir_client_area', locale), href: '/client/tableau-de-bord' },
+        { label: t('scp.vir_breadcrumb', locale) },
       ]}
-      kicker="Comptabilité"
-      title="Virements bancaires"
-      subtitle="Préparer des virements internes ou externes, exporter le fichier pour la banque"
+      kicker={t('scp.vir_kicker', locale)}
+      title={t('scp.vir_title', locale)}
+      subtitle={t('scp.vir_subtitle', locale)}
     >
       <div className="space-y-6">
         {error && (
@@ -327,14 +329,14 @@ export default function ClientVirementsPage() {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Plus className="h-5 w-5 text-blue-600" />
-              Nouveau virement
+              {t('scp.vir_new', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Mode
+                  {t('scp.vir_mode', locale)}
                 </label>
                 <Select value={mode} onValueChange={(v) => setMode(v as any)}>
                   <SelectTrigger>
@@ -342,20 +344,20 @@ export default function ClientVirementsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="interne">
-                      Interne (entre comptes société)
+                      {t('scp.vir_internal', locale)}
                     </SelectItem>
-                    <SelectItem value="externe">Externe (vers tiers)</SelectItem>
+                    <SelectItem value="externe">{t('scp.vir_external', locale)}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
                 <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Compte source
+                  {t('scp.vir_source_account', locale)}
                 </label>
                 <Select value={compteSource} onValueChange={setCompteSource}>
                   <SelectTrigger>
-                    <SelectValue placeholder="— Choisir —" />
+                    <SelectValue placeholder={t('scp.vir_choose', locale)} />
                   </SelectTrigger>
                   <SelectContent>
                     {comptes.map((c) => (
@@ -370,11 +372,11 @@ export default function ClientVirementsPage() {
               {mode === 'interne' ? (
                 <div>
                   <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Compte destination
+                    {t('scp.vir_dest_account', locale)}
                   </label>
                   <Select value={compteDest} onValueChange={setCompteDest}>
                     <SelectTrigger>
-                      <SelectValue placeholder="— Choisir —" />
+                      <SelectValue placeholder={t('scp.vir_choose', locale)} />
                     </SelectTrigger>
                     <SelectContent>
                       {comptes
@@ -391,17 +393,17 @@ export default function ClientVirementsPage() {
                 <>
                   <div>
                     <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Tiers destination
+                      {t('scp.vir_tiers_dest', locale)}
                     </label>
                     <Input
-                      placeholder="Nom du bénéficiaire"
+                      placeholder={t('scp.vir_beneficiary_ph', locale)}
                       value={tiersDest}
                       onChange={(e) => setTiersDest(e.target.value)}
                     />
                   </div>
                   <div>
                     <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      IBAN destination
+                      {t('scp.vir_iban_dest', locale)}
                     </label>
                     <Input
                       placeholder="MU17BOMM..."
@@ -414,7 +416,7 @@ export default function ClientVirementsPage() {
 
               <div>
                 <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Montant
+                  {t('scp.vir_amount', locale)}
                 </label>
                 <Input
                   type="number"
@@ -428,7 +430,7 @@ export default function ClientVirementsPage() {
 
               <div>
                 <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Devise
+                  {t('scp.vir_currency', locale)}
                 </label>
                 <Select value={devise} onValueChange={setDevise}>
                   <SelectTrigger>
@@ -446,10 +448,10 @@ export default function ClientVirementsPage() {
 
               <div className="md:col-span-2">
                 <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Libellé
+                  {t('scp.vir_label', locale)}
                 </label>
                 <Input
-                  placeholder="Référence facture, motif…"
+                  placeholder={t('scp.vir_label_ph', locale)}
                   value={libelle}
                   onChange={(e) => setLibelle(e.target.value)}
                 />
@@ -457,7 +459,7 @@ export default function ClientVirementsPage() {
 
               <div>
                 <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Date d'exécution
+                  {t('scp.vir_exec_date', locale)}
                 </label>
                 <Input
                   type="date"
@@ -477,7 +479,7 @@ export default function ClientVirementsPage() {
                   ) : (
                     <Send className="h-4 w-4 mr-1.5" />
                   )}
-                  Préparer le virement
+                  {t('scp.vir_prepare_btn', locale)}
                 </Button>
               </div>
             </form>
@@ -490,7 +492,7 @@ export default function ClientVirementsPage() {
             <div className="flex items-center justify-between flex-wrap gap-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <ArrowRightLeft className="h-5 w-5 text-blue-600" />
-                Virements préparés
+                {t('scp.vir_prepared_title', locale)}
               </CardTitle>
               <Button
                 size="sm"
@@ -500,7 +502,7 @@ export default function ClientVirementsPage() {
                 className="border-blue-300 text-blue-700 hover:bg-blue-50"
               >
                 <FileDown className="h-4 w-4 mr-1.5" />
-                Préparer fichier virement (MCB BP-V1)
+                {t('scp.vir_export_file', locale)}
               </Button>
             </div>
           </CardHeader>
@@ -508,19 +510,19 @@ export default function ClientVirementsPage() {
             {loading ? (
               <div className="flex items-center justify-center py-8 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                Chargement…
+                {t('cui.loading', locale)}
               </div>
             ) : (
               <Tabs defaultValue="a_effectuer">
                 <TabsList>
                   <TabsTrigger value="a_effectuer">
-                    À effectuer ({aEffectuer.length})
+                    {t('scp.vir_tab_todo', locale)} ({aEffectuer.length})
                   </TabsTrigger>
                   <TabsTrigger value="effectue">
-                    Effectués ({effectues.length})
+                    {t('scp.vir_tab_done', locale)} ({effectues.length})
                   </TabsTrigger>
                   <TabsTrigger value="historique">
-                    Historique ({virements.length})
+                    {t('scp.vir_tab_history', locale)} ({virements.length})
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="a_effectuer" className="mt-3">
