@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
@@ -69,7 +70,7 @@ export async function GET(request: Request) {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
@@ -86,7 +87,7 @@ export async function GET(request: Request) {
       .eq('id', societe_id)
       .single()
     if (socErr || !societe) {
-      return NextResponse.json({ error: 'Société introuvable' }, { status: 404 })
+      return apiError('company_not_found', 404)
     }
 
     const frequence: 'mensuelle' | 'trimestrielle' =

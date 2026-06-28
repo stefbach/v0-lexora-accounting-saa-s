@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 import { resolveInternalAuth } from '@/lib/lexora-internal-auth'
@@ -230,7 +231,7 @@ export async function GET(request: Request) {
     } else {
       supabase = await createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+      if (!user) return apiError('unauthorized', 401)
     }
 
     const { searchParams } = new URL(request.url)
@@ -256,7 +257,7 @@ export async function GET(request: Request) {
       .select('nom, brn, numero_tva_mra, statut_tva, tan_societe, registered_office, mra_declarant_name')
       .eq('id', societe_id)
       .maybeSingle()
-    if (socErr || !societe) return NextResponse.json({ error: 'Société introuvable' }, { status: 404 })
+    if (socErr || !societe) return apiError('company_not_found', 404)
 
     if (!societe.statut_tva) {
       return NextResponse.json({

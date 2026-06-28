@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
@@ -105,7 +106,7 @@ export async function POST(request: Request) {
   try {
     const auth = await createClient()
     const { data: { user } } = await auth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const b = (await request.json().catch(() => null)) as PvBody | null
     if (!b?.societe_id || !b?.type) return NextResponse.json({ error: 'societe_id et type requis' }, { status: 400 })
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
     try {
       await assertSocieteAccess(supabase, user.id, b.societe_id)
     } catch (e) {
-      if (e instanceof SocieteAccessError) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      if (e instanceof SocieteAccessError) return apiError('access_denied', 403)
       throw e
     }
 

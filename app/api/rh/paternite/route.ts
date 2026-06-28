@@ -6,6 +6,7 @@
  * GET  → liste des paternités actives
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getUserSocieteIds } from '@/lib/rh/access'
@@ -74,10 +75,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'employe_id et date_naissance_enfant requis' }, { status: 400 })
     }
     const { data: emp } = await supabase.from('employes').select('societe_id').eq('id', employe_id).maybeSingle()
-    if (!emp) return NextResponse.json({ error: 'Employé non trouvé' }, { status: 404 })
+    if (!emp) return apiError('employee_not_found', 404)
     const accessibleIds = await getUserSocieteIds(auth.user!.id)
     if (!accessibleIds.includes(emp.societe_id)) {
-      return NextResponse.json({ error: 'Accès refusé à cet employé' }, { status: 403 })
+      return apiError('access_denied_employee', 403)
     }
     const r = await declarerPaternite(supabase, {
       employe_id,

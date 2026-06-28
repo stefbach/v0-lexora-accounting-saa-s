@@ -15,6 +15,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { createLexoraInvoice } from '@/lib/lexora-billing/create-invoice'
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
 
   // Société cliente
   const { data: societe } = await admin.from('societes').select('*').eq('id', societe_id).maybeSingle()
-  if (!societe) return NextResponse.json({ error: 'Société introuvable' }, { status: 404 })
+  if (!societe) return apiError('company_not_found', 404)
 
   // Dirigeant : profil le + ancien lié via dossiers ou created_by
   let dirigeantNom: string | null = null

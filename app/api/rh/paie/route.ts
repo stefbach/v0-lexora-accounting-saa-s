@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { resolveInternalAuth } from '@/lib/lexora-internal-auth'
@@ -259,7 +260,7 @@ export async function GET(request: Request) {
     step('START')
     // FIX MCP : resolveUserAuth pour outil MCP `list_bulletins_paie` (session + X-Lexora-Api-Key).
     const user = await resolveUserAuth(request)
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
     step('step1: auth OK', { userId: user.id })
     const supabase = getAdminClient()
 
@@ -293,7 +294,7 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: `Erreur contrôle d'accès : ${e?.message || 'inconnue'}` }, { status: 500 })
       }
       step('step3: userHasAccessToSociete', { societe_id, hasAccess })
-      if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+      if (!hasAccess) return apiError('access_denied_company', 403)
     }
     if (employe_id && !societe_id) {
       let hasAccess = false
@@ -304,7 +305,7 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: `Erreur contrôle d'accès : ${e?.message || 'inconnue'}` }, { status: 500 })
       }
       step('step3b: userHasAccessToEmploye', { employe_id, hasAccess })
-      if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cet employé' }, { status: 403 })
+      if (!hasAccess) return apiError('access_denied_employee', 403)
     }
     // If neither societe_id nor employe_id, restrict to accessible societes
     let accessibleIds: string[] = []
@@ -521,7 +522,7 @@ export async function POST(request: Request) {
     } else {
       const supabaseAuth = await createServerClient()
       const { data: { user: sessionUser } } = await supabaseAuth.auth.getUser()
-      if (!sessionUser) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+      if (!sessionUser) return apiError('unauthorized', 401)
       user = { id: sessionUser.id, email: sessionUser.email }
     }
 
@@ -572,14 +573,14 @@ export async function POST(request: Request) {
       const targetSocieteId = societe_id || null
       if (targetSocieteId) {
         const hasAccess = await userHasAccessToSociete(user.id, targetSocieteId)
-        if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+        if (!hasAccess) return apiError('access_denied_company', 403)
       } else if (employe_id) {
         const hasAccess = await userHasAccessToEmploye(user.id, employe_id)
-        if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cet employé' }, { status: 403 })
+        if (!hasAccess) return apiError('access_denied_employee', 403)
       }
 
       const { data: emp } = await supabase.from('employes').select('*').eq('id', employe_id).single()
-      if (!emp) return NextResponse.json({ error: 'Employé non trouvé' }, { status: 404 })
+      if (!emp) return apiError('employee_not_found', 404)
 
       // FIX-SOLDE-STC (cas Alicia) — Si l'employé a une date_depart qui tombe
       // dans la période demandée, le bulletin "normal" calculé ici serait
@@ -1419,7 +1420,7 @@ export async function POST(request: Request) {
 
       // Multi-tenant: verify access to this société
       const hasAccess = await userHasAccessToSociete(user.id, societe_id)
-      if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+      if (!hasAccess) return apiError('access_denied_company', 403)
 
       // LOCK GUARD: check if period is locked
       // FIX — is_archived=false : les anciennes versions archivées gardent

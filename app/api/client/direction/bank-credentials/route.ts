@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
@@ -86,7 +87,7 @@ export async function PUT(req: NextRequest) {
 
   const supabaseAuth = await createClient()
   const { data: { user } } = await supabaseAuth.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+  if (!user) return apiError('not_authenticated', 401)
 
   const admin = getAdminClient()
   const { data: compte } = await admin
@@ -98,7 +99,7 @@ export async function PUT(req: NextRequest) {
     .from('user_societes').select('role')
     .eq('user_id', user.id).eq('societe_id', compte.societe_id).maybeSingle()
   if (!SOCIETE_ROLES.includes(us?.role || '')) {
-    return NextResponse.json({ error: 'Accès réservé à la direction' }, { status: 403 })
+    return apiError('management_only', 403)
   }
 
   const body = await req.json().catch(() => null)

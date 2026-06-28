@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { z } from 'zod'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
@@ -119,7 +120,7 @@ export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const role = await getUserRole(user.id)
     if (!ALLOWED_ROLES_READ.includes(role)) {
@@ -133,7 +134,7 @@ export async function GET(request: Request) {
     }
 
     if (!(await userHasAccessToSociete(user.id, societe_id))) {
-      return NextResponse.json({ error: 'Forbidden — société hors périmètre' }, { status: 403 })
+      return apiError('forbidden_out_of_scope', 403)
     }
 
     const supabase = getAdminClient()
@@ -182,7 +183,7 @@ export async function PUT(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const role = await getUserRole(user.id)
     if (!ALLOWED_ROLES_WRITE.includes(role)) {
@@ -206,7 +207,7 @@ export async function PUT(request: Request) {
     const { societe_id, shifts_planning, config_planning, regles_planning } = parsed.data
 
     if (!(await userHasAccessToSociete(user.id, societe_id))) {
-      return NextResponse.json({ error: 'Forbidden — société hors périmètre' }, { status: 403 })
+      return apiError('forbidden_out_of_scope', 403)
     }
 
     // Cohérence horaire par shift (avertissement non-bloquant via `warnings`).
@@ -232,7 +233,7 @@ export async function PUT(request: Request) {
     if (regles_planning !== undefined) update.regles_planning = regles_planning
 
     if (Object.keys(update).length === 0) {
-      return NextResponse.json({ error: 'Aucun champ à mettre à jour' }, { status: 400 })
+      return apiError('no_fields_to_update', 400)
     }
 
     const { data, error } = await supabase
@@ -268,7 +269,7 @@ export async function POST(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const role = await getUserRole(user.id)
     if (!ALLOWED_ROLES_WRITE.includes(role)) {
@@ -283,7 +284,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
     }
     if (!(await userHasAccessToSociete(user.id, societe_id))) {
-      return NextResponse.json({ error: 'Forbidden — société hors périmètre' }, { status: 403 })
+      return apiError('forbidden_out_of_scope', 403)
     }
 
     const supabase = getAdminClient()

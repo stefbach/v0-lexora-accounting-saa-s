@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { apiError } from '@/lib/api-error'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSystemPrompt, injectTauxChange, injectSocietes, CLAUDE_CONFIG, SYSTEM_PROMPT_GENERIC_EXTRACTION } from '@/lib/ai/prompts'
@@ -36,7 +37,7 @@ export async function POST(
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    if (!user) return apiError('not_authenticated', 401)
 
     const supabase = getAdminClient()
     const { id } = await params
@@ -53,7 +54,7 @@ export async function POST(
       .single()
 
     if (fetchError || !doc) {
-      return NextResponse.json({ error: 'Document non trouvé' }, { status: 404 })
+      return apiError('document_not_found', 404)
     }
 
     // Access control
@@ -65,7 +66,7 @@ export async function POST(
     const isComptableOrAdmin = ['admin', 'comptable', 'comptable_dedie'].includes(userRole || '')
 
     if (!isOwner && !isComptableOrAdmin) {
-      return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
+      return apiError('unauthorized_access', 403)
     }
 
     if (!doc.storage_path) {

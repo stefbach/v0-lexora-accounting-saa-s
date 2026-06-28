@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { userHasAccessToSociete } from '@/lib/rh/access'
@@ -46,7 +47,7 @@ export async function GET(
       data: { user },
     } = await supabaseAuth.auth.getUser()
     if (!user) {
-      return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+      return apiError('unauthorized', 401)
     }
 
     const supabase = getAdminClient()
@@ -70,10 +71,7 @@ export async function GET(
     // 2. Multi-tenant access check
     const hasAccess = await userHasAccessToSociete(user.id, ref.societe_id)
     if (!hasAccess) {
-      return NextResponse.json(
-        { error: 'Accès refusé à cette société' },
-        { status: 403 }
-      )
+      return apiError('access_denied_company', 403)
     }
 
     // 3. Fetch the complete version chain

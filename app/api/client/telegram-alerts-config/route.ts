@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+  if (!user) return apiError('not_authenticated', 401)
 
   const societeId = req.nextUrl.searchParams.get('societe_id')
   if (!societeId) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+  if (!user) return apiError('not_authenticated', 401)
 
   const societeId = req.nextUrl.searchParams.get('societe_id')
   if (!societeId) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })

@@ -10,6 +10,7 @@
  * DELETE : hard delete (remove Storage + DELETE row).
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getDocument, supprimerDocument } from '@/lib/rh/documents-rh'
@@ -37,7 +38,7 @@ export async function PATCH(
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const supabase = getAdminClient()
     const role = await requireRH(user.id, supabase)
@@ -82,7 +83,7 @@ export async function DELETE(
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const supabase = getAdminClient()
     const role = await requireRH(user.id, supabase)

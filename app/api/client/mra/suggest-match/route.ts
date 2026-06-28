@@ -15,6 +15,7 @@
  * Auth multi-mode (session / API key / token interne → agent Telegram).
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient as createSupabase } from '@supabase/supabase-js'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
@@ -36,7 +37,7 @@ const TYPE_LABEL: Record<string, string> = {
 export async function POST(request: Request) {
   try {
     const user = await resolveUserAuth(request)
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const body = await request.json().catch(() => ({}))
     const societe_id = String(body?.societe_id || '')

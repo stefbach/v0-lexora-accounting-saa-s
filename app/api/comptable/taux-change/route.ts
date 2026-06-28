@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { fetchAndStoreRates } from '@/lib/taux-change'
@@ -22,7 +23,7 @@ export async function GET() {
   try {
     const authClient = await createServerClient()
     const { data: { user }, error: authError } = await authClient.auth.getUser()
-    if (authError || !user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (authError || !user) return apiError('unauthorized', 401)
 
     const supabase = getAdminClient()
 
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
   try {
     const authClient = await createServerClient()
     const { data: { user }, error: authError } = await authClient.auth.getUser()
-    if (authError || !user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (authError || !user) return apiError('unauthorized', 401)
 
     const body = await request.json()
     const { action } = body

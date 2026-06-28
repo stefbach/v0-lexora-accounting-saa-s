@@ -19,6 +19,7 @@
  * GET ?societe_id=&exercice=  → retourne l'état de la saisie (déjà fait ?).
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getUserSocieteIds } from '@/lib/rh/access'
@@ -83,7 +84,7 @@ export async function GET(request: Request) {
       .eq('id', societe_id)
       .maybeSingle()
     if (!societe) {
-      return NextResponse.json({ error: 'Société introuvable' }, { status: 404 })
+      return apiError('company_not_found', 404)
     }
 
     let saisie: unknown = null

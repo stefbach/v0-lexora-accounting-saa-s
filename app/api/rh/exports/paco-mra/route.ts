@@ -19,6 +19,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import { lastDayOfMonth } from '@/lib/rh/period'
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const supabase = getAdminClient()
 
@@ -92,7 +93,7 @@ export async function POST(request: Request) {
     const { data: societeRow } = await supabase
       .from('societes').select('*').eq('id', societe_id).single()
     if (!societeRow) {
-      return NextResponse.json({ error: 'Société introuvable' }, { status: 404 })
+      return apiError('company_not_found', 404)
     }
 
     const ern = (societeRow.ern || '').toString().trim()

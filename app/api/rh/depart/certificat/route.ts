@@ -13,6 +13,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { userHasAccessToEmploye } from '@/lib/rh/access'
@@ -127,13 +128,13 @@ export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const { searchParams } = new URL(request.url)
     const employe_id = searchParams.get('employe_id')
     if (!employe_id) return NextResponse.json({ error: 'employe_id requis' }, { status: 400 })
     if (!(await userHasAccessToEmploye(user.id, employe_id))) {
-      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      return apiError('access_denied', 403)
     }
 
     const r = await loadEmpAndSoc(employe_id)
@@ -167,13 +168,13 @@ export async function POST(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const body = await request.json().catch(() => ({}))
     const { employe_id, date_depart, type_depart } = body
     if (!employe_id || !date_depart) return NextResponse.json({ error: 'employe_id + date_depart requis' }, { status: 400 })
     if (!(await userHasAccessToEmploye(user.id, employe_id))) {
-      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      return apiError('access_denied', 403)
     }
 
     const r = await loadEmpAndSoc(employe_id)

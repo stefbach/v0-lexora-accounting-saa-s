@@ -1,4 +1,5 @@
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { apiError } from '@/lib/api-error'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPaginated } from '@/lib/supabase/paginate'
 import { NextResponse } from 'next/server'
@@ -64,7 +65,7 @@ export async function GET(request: Request) {
     // Accepte session OU X-Internal-Token (MCP, bot, cron)
     const { resolveUserAuth } = await import('@/lib/supabase/auth-resolver')
     const user = await resolveUserAuth(request)
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    if (!user) return apiError('not_authenticated', 401)
 
     const supabase = getAdminClient()
     const rates = await getTauxChange()
@@ -96,7 +97,7 @@ export async function GET(request: Request) {
       // Verify the logged-in user is a comptable
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
       if (!profile || !['comptable', 'comptable_dedie', 'admin'].includes(profile.role)) {
-        return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
+        return apiError('unauthorized_access', 403)
       }
       targetClientId = requestedClientId
     }

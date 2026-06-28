@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
@@ -26,7 +27,7 @@ import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+  if (!user) return apiError('not_authenticated', 401)
 
   const body = await req.json().catch(() => null)
   const societeId: string | undefined = body?.societe_id
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
     .eq('id', employeId)
     .maybeSingle()
   if (empErr || !emp) {
-    return NextResponse.json({ error: 'Employé introuvable' }, { status: 404 })
+    return apiError('employee_not_found_alt', 404)
   }
   if (emp.societe_id !== societeId) {
     return NextResponse.json({ error: 'Employé hors société active' }, { status: 403 })
@@ -221,7 +222,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+  if (!user) return apiError('not_authenticated', 401)
 
   const societeId = req.nextUrl.searchParams.get('societe_id')
   const employeId = req.nextUrl.searchParams.get('employe_id')
@@ -234,7 +235,7 @@ export async function DELETE(req: NextRequest) {
     .from('user_societes').select('role')
     .eq('user_id', user.id).eq('societe_id', societeId).maybeSingle()
   if (!['admin', 'super_admin', 'direction', 'client_admin', 'client_assistant', 'rh'].includes(caller?.role || '')) {
-    return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    return apiError('access_denied', 403)
   }
 
   const admin = getAdminClient()

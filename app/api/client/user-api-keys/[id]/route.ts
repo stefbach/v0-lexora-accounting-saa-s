@@ -5,6 +5,7 @@
  * audit historique). La clé devient inutilisable immédiatement.
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 
@@ -16,7 +17,7 @@ export async function DELETE(
 ) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+  if (!user) return apiError('not_authenticated', 401)
 
   const { id } = await context.params
   if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { apiError } from '@/lib/api-error'
 import { getAdminClient } from "@/lib/supabase/admin"
 import {
   assertSocieteAccess,
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
     // `list_releves_bancaires` retourne 401 alors que la clé est valide.
     const user = await resolveUserAuth(request)
     if (!user) {
-      return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
+      return apiError('unauthorized', 401)
     }
     userIdForLog = user.id
 

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { apiError } from '@/lib/api-error'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -143,7 +144,7 @@ export async function PUT(request: NextRequest) {
     }
 
     if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: 'Aucun champ à mettre à jour' }, { status: 400 })
+      return apiError('no_fields_to_update', 400)
     }
 
     const { data, error } = await supabase
@@ -154,7 +155,7 @@ export async function PUT(request: NextRequest) {
       .single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    if (!data) return NextResponse.json({ error: 'Société introuvable' }, { status: 404 })
+    if (!data) return apiError('company_not_found', 404)
 
     // Propagation : si l'admin change ou délie le comptable de la société,
     // on synchronise les dossiers liés (qui ont aussi un comptable_id).

@@ -1,4 +1,5 @@
 import { getAdminClient } from '@/lib/supabase/admin'
+import { apiError } from '@/lib/api-error'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 import { NextResponse } from 'next/server'
 
@@ -10,7 +11,7 @@ export async function GET(request: Request) {
     const user = await resolveUserAuth(request)
 
     if (!user) {
-      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+      return apiError('not_authenticated', 401)
     }
 
     // Use admin client to bypass RLS

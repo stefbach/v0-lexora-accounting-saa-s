@@ -9,25 +9,27 @@ const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
 
 // Calendrier des obligations légales récurrentes (sources citées).
+// `obligation`/`echeance` are rendered via t("uiconf." + id + "_obligation"/"_echeance").
+// `autorite`, `base`, `cat` are kept as-is (codes / legal refs / filter+color key).
 const OBLIGATIONS = [
-  { obligation: "Assemblée générale annuelle", echeance: "6 mois après clôture", autorite: "ROC", base: "CA 2001 s.118", cat: "Sociétés" },
-  { obligation: "Dépôt du rapport annuel", echeance: "28 jours après l'AG", autorite: "ROC", base: "CA 2001 s.176", cat: "Sociétés" },
-  { obligation: "Notification changement de dirigeant", echeance: "28 jours", autorite: "ROC", base: "CA 2001 s.163", cat: "Sociétés" },
-  { obligation: "Déclaration bénéficiaires effectifs (UBO)", echeance: "14 jours", autorite: "ROC", base: "BORA 2020 s.4", cat: "Sociétés" },
-  { obligation: "Impôt sur les sociétés", echeance: "6 mois après clôture", autorite: "MRA", base: "ITA s.118", cat: "Fiscal" },
-  { obligation: "Déclaration TVA mensuelle", echeance: "20 du mois suivant", autorite: "MRA", base: "VAT Act s.24", cat: "Fiscal" },
-  { obligation: "PAYE mensuel", echeance: "20 du mois suivant", autorite: "MRA", base: "ITA s.93", cat: "Fiscal" },
-  { obligation: "CSG / NSF mensuel", echeance: "20 du mois suivant", autorite: "MRA", base: "CSG Act", cat: "Social" },
-  { obligation: "Renouvellement licence FSC", echeance: "1 mois avant expiry", autorite: "FSC", base: "FSA 2007 s.20", cat: "Financier" },
-  { obligation: "Rapport annuel FSC (GBL/AC)", echeance: "3 mois après clôture", autorite: "FSC", base: "FSC Guidelines", cat: "Financier" },
-  { obligation: "Audit légal des comptes (au-dessus du seuil)", echeance: "Avant l'AG annuelle", autorite: "ROC", base: "CA 2001 s.194-198", cat: "Sociétés" },
-  { obligation: "Registre des charges / sûretés", echeance: "À chaque charge", autorite: "ROC", base: "CA 2001 s.127", cat: "Sociétés" },
-  { obligation: "Documentation prix de transfert", echeance: "Avec la déclaration d'impôt", autorite: "MRA", base: "ITA · TP rules", cat: "Fiscal" },
-  { obligation: "TDS — versement à la source", echeance: "20 du mois suivant", autorite: "MRA", base: "ITA s.111", cat: "Fiscal" },
-  { obligation: "Return of Employees (annuel)", echeance: "15 août", autorite: "MRA", base: "ITA", cat: "Social" },
-  { obligation: "Substance return (GBC / PER 80%)", echeance: "Annuelle", autorite: "FSC / MRA", base: "ITA · FSA 2007", cat: "Financier" },
-  { obligation: "Évaluation des risques AML/CFT", echeance: "Annuelle (revue)", autorite: "FIU / FSC", base: "FIAMLA s.17", cat: "Financier" },
-  { obligation: "Renouvellement Occupation/Work Permit", echeance: "Avant expiration", autorite: "EDB", base: "Immigration / Non-Citizens Act", cat: "Social" },
+  { id: "oblig_ag_annuelle", autorite: "ROC", base: "CA 2001 s.118", cat: "Sociétés" },
+  { id: "oblig_rapport_annuel", autorite: "ROC", base: "CA 2001 s.176", cat: "Sociétés" },
+  { id: "oblig_changement_dirigeant", autorite: "ROC", base: "CA 2001 s.163", cat: "Sociétés" },
+  { id: "oblig_ubo", autorite: "ROC", base: "BORA 2020 s.4", cat: "Sociétés" },
+  { id: "oblig_is", autorite: "MRA", base: "ITA s.118", cat: "Fiscal" },
+  { id: "oblig_tva", autorite: "MRA", base: "VAT Act s.24", cat: "Fiscal" },
+  { id: "oblig_paye", autorite: "MRA", base: "ITA s.93", cat: "Fiscal" },
+  { id: "oblig_csg_nsf", autorite: "MRA", base: "CSG Act", cat: "Social" },
+  { id: "oblig_licence_fsc", autorite: "FSC", base: "FSA 2007 s.20", cat: "Financier" },
+  { id: "oblig_rapport_fsc", autorite: "FSC", base: "FSC Guidelines", cat: "Financier" },
+  { id: "oblig_audit_legal", autorite: "ROC", base: "CA 2001 s.194-198", cat: "Sociétés" },
+  { id: "oblig_registre_charges", autorite: "ROC", base: "CA 2001 s.127", cat: "Sociétés" },
+  { id: "oblig_prix_transfert", autorite: "MRA", base: "ITA · TP rules", cat: "Fiscal" },
+  { id: "oblig_tds", autorite: "MRA", base: "ITA s.111", cat: "Fiscal" },
+  { id: "oblig_return_employees", autorite: "MRA", base: "ITA", cat: "Social" },
+  { id: "oblig_substance_return", autorite: "FSC / MRA", base: "ITA · FSA 2007", cat: "Financier" },
+  { id: "oblig_aml_cft", autorite: "FIU / FSC", base: "FIAMLA s.17", cat: "Financier" },
+  { id: "oblig_work_permit", autorite: "EDB", base: "Immigration / Non-Citizens Act", cat: "Social" },
 ]
 
 const CAT_COLOR: Record<string, string> = {
@@ -73,15 +75,15 @@ export default function ConformitePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {obligations.map((o, i) => (
-                <tr key={i} className="hover:bg-gray-50">
+              {obligations.map((o) => (
+                <tr key={o.id} className="hover:bg-gray-50">
                   <td className="px-5 py-2.5">
                     <div className="flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full" style={{ background: CAT_COLOR[o.cat] || GOLD }} />
-                      <span className="font-medium text-gray-800">{o.obligation}</span>
+                      <span className="font-medium text-gray-800">{t("uiconf." + o.id + "_obligation", locale)}</span>
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 text-gray-600">{o.echeance}</td>
+                  <td className="px-3 py-2.5 text-gray-600">{t("uiconf." + o.id + "_echeance", locale)}</td>
                   <td className="px-3 py-2.5"><span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{o.autorite}</span></td>
                   <td className="px-3 py-2.5 text-xs text-gray-500">{o.base}</td>
                 </tr>

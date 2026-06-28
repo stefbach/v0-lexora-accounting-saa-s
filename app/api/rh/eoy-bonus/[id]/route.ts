@@ -4,6 +4,7 @@
  * Soft delete : marque le calcul comme 'annule'. Admin uniquement.
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { userHasAccessToSociete } from '@/lib/rh/access'
@@ -25,7 +26,7 @@ export async function DELETE(
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const supabase = getAdminClient()
     const { data: prof } = await supabase
@@ -48,7 +49,7 @@ export async function DELETE(
       .maybeSingle()
     if (!calcul) return NextResponse.json({ error: 'Calcul introuvable' }, { status: 404 })
     const hasAccess = await userHasAccessToSociete(user.id, String((calcul as { societe_id: string }).societe_id))
-    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    if (!hasAccess) return apiError('access_denied', 403)
 
     const { error } = await supabase
       .from('eoy_bonus_calculs')

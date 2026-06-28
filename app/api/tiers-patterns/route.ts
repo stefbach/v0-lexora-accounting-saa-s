@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { apiError } from '@/lib/api-error'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    if (!user) return apiError('not_authenticated', 401)
 
     const supabase = getAdminClient()
     const { searchParams } = new URL(request.url)
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    if (!user) return apiError('not_authenticated', 401)
 
     const supabase = getAdminClient()
     const body = await request.json()
@@ -117,7 +118,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    if (!user) return apiError('not_authenticated', 401)
 
     const supabase = getAdminClient()
     const { searchParams } = new URL(request.url)
@@ -128,7 +129,7 @@ export async function DELETE(request: NextRequest) {
     // Only admins/comptables can delete
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
     if (!['admin', 'comptable', 'comptable_dedie'].includes(profile?.role || '')) {
-      return NextResponse.json({ error: 'Non autorisé' }, { status: 403 })
+      return apiError('unauthorized', 403)
     }
 
     const { error } = await supabase.from('tiers_patterns').delete().eq('id', id)

@@ -9,6 +9,7 @@
  * Auth : session OU clé API OU token interne (agent Telegram).
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient as createSupabase } from '@supabase/supabase-js'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
@@ -35,7 +36,7 @@ async function loadAndAssert(admin: any, userId: string, id: string) {
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const user = await resolveUserAuth(request)
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
     const { id } = await ctx.params
     const admin = getAdminClient()
     const decl = await loadAndAssert(admin, user.id, id)
@@ -50,7 +51,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const user = await resolveUserAuth(request)
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
     const { id } = await ctx.params
     const body = await request.json().catch(() => ({}))
     // action depuis le body OU la query string (?action=) — ce dernier permet

@@ -18,6 +18,7 @@
  * peut faire plusieurs Mo) — l'UI doit appeler /[exercice] pour les détails.
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import {
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
       data: { user },
     } = await authClient.auth.getUser()
     if (!user) {
-      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+      return apiError('not_authenticated', 401)
     }
 
     const admin = getAdminClient()

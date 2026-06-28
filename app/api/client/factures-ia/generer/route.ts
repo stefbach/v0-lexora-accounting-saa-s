@@ -13,6 +13,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
     } else {
       const authClient = await createClient()
       const { data: { user: u }, error: authError } = await authClient.auth.getUser()
-      if (authError || !u) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+      if (authError || !u) return apiError('unauthorized', 401)
       user = { id: u.id, email: u.email }
     }
 

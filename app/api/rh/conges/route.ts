@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getUserSocieteIds } from '@/lib/rh/access'
@@ -753,7 +754,7 @@ export async function POST(request: Request) {
           .from('employes').select('societe_id').eq('id', existing.employe_id).maybeSingle()
         const accessibleIds = await getUserSocieteIds(user.id)
         if (!empAcc || !accessibleIds.includes(empAcc.societe_id)) {
-          return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+          return apiError('access_denied_company', 403)
         }
       }
 

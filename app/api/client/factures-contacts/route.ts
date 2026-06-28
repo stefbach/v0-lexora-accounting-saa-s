@@ -8,6 +8,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
@@ -32,7 +33,7 @@ export async function GET(request: Request) {
     const supabase = getAdminClient()
     // FIX MCP : resolveUserAuth pour outil MCP `list_tiers` (annuaire contacts).
     const user = await resolveUserAuth(request)
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     await assertSocieteAccess(supabase, user.id, societe_id)
 
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
     const supabase = getAdminClient()
     const authClient = await createClient()
     const { data: { user }, error: authError } = await authClient.auth.getUser()
-    if (authError || !user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (authError || !user) return apiError('unauthorized', 401)
 
     await assertSocieteAccess(supabase, user.id, societe_id)
 

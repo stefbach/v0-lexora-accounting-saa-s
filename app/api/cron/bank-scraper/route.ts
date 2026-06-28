@@ -11,6 +11,7 @@
  * AUTH : Header 'Authorization: Bearer <CRON_SECRET>'.
  */
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { verifyCronSecret } from '@/lib/claude'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { scrapeBankAccount, detectAnomalies, BANK_NAMES, type BankCode } from '@/lib/banks/scraper'
@@ -21,7 +22,7 @@ export const maxDuration = 300
 
 export async function GET(request: Request) {
   if (!verifyCronSecret(request)) {
-    return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    return apiError('unauthorized', 401)
   }
 
   const admin = getAdminClient()

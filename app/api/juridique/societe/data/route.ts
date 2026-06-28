@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
@@ -19,13 +20,13 @@ export async function GET(request: Request) {
 
     const auth = await createClient()
     const { data: { user } } = await auth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    if (!user) return apiError('unauthorized', 401)
 
     const supabase = getAdminClient()
     try {
       await assertSocieteAccess(supabase, user.id, societeId)
     } catch (e) {
-      if (e instanceof SocieteAccessError) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      if (e instanceof SocieteAccessError) return apiError('access_denied', 403)
       throw e
     }
 
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
       supabase.from('v_balance_compte_societe').select('classe, solde').eq('societe_id', societeId),
     ])
 
-    if (societeRes.error || !societeRes.data) return NextResponse.json({ error: 'Société introuvable' }, { status: 404 })
+    if (societeRes.error || !societeRes.data) return apiError('company_not_found', 404)
 
     // Associés : table actionnaires en priorité, repli sur directors_shareholders.
     let associes = (actionnairesRes.data || []).map((a) => ({

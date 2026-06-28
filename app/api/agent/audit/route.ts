@@ -9,6 +9,7 @@
  * Body : { societe_id: string, date_debut?: string, date_fin?: string }
  */
 import { NextResponse } from "next/server"
+import { apiError } from '@/lib/api-error'
 import { authenticateAgentRequest } from "@/lib/agent-auth"
 import { getAdminClient } from "@/lib/supabase/admin"
 
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
   ])
 
   if (!societe) {
-    return NextResponse.json({ error: "société introuvable" }, { status: 404 })
+    return apiError('company_not_found_lc', 404)
   }
 
   // Relevés sur la période

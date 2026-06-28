@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { verifyCronSecret } from '@/lib/claude'
 import { envoyerNotification } from '@/lib/notifications'
@@ -16,7 +17,7 @@ function getServiceClient() {
 // Cron: 15th of month at 8AM — Alert for TVA declarations due in 5 days (20th)
 export async function GET(request: Request) {
   if (!verifyCronSecret(request)) {
-    return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    return apiError('unauthorized', 401)
   }
 
   const supabase = getServiceClient()

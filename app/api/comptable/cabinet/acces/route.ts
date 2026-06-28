@@ -13,6 +13,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 
@@ -36,7 +37,7 @@ async function requireDirigeant() {
 
 export async function GET(request: Request) {
   const ctx = await requireDirigeant()
-  if (!ctx) return NextResponse.json({ error: 'Réservé au comptable dirigeant' }, { status: 403 })
+  if (!ctx) return apiError('lead_accountant_only', 403)
   const { supabase } = ctx
   const { searchParams } = new URL(request.url)
   const collaborateur_id = searchParams.get('collaborateur_id')
@@ -54,7 +55,7 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   const ctx = await requireDirigeant()
-  if (!ctx) return NextResponse.json({ error: 'Réservé au comptable dirigeant' }, { status: 403 })
+  if (!ctx) return apiError('lead_accountant_only', 403)
   const { user, supabase } = ctx
   const { collaborateur_id, societe_id, scope } = await request.json()
   if (!collaborateur_id || !societe_id) {
@@ -93,7 +94,7 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   const ctx = await requireDirigeant()
-  if (!ctx) return NextResponse.json({ error: 'Réservé au comptable dirigeant' }, { status: 403 })
+  if (!ctx) return apiError('lead_accountant_only', 403)
   const { supabase } = ctx
   const { searchParams } = new URL(request.url)
   const collaborateur_id = searchParams.get('collaborateur_id')
