@@ -344,55 +344,55 @@ export default function TVAPage() {
       // Use factures table (single source of truth, no OCR duplicates)
       const rows = [
         ...facturesClientLocal.map((f: any) => ({
-          "Date": f.date_facture || "—",
-          "N° Facture": f.numero_facture || "—",
-          "Tiers": f.tiers || "—",
-          "Montant HT (MUR)": Number(f.montant_ht) || 0,
-          "TVA 15% (MUR)": Number(f.montant_tva) || 0,
-          "Montant TTC (MUR)": Number(f.montant_ttc) || 0,
-          "Type": "Client",
+          [t('mra.tva.xls_col_date', locale)]: f.date_facture || "—",
+          [t('mra.tva.xls_col_facture_no', locale)]: f.numero_facture || "—",
+          [t('mra.tva.xls_col_tiers', locale)]: f.tiers || "—",
+          [t('mra.tva.xls_col_ht', locale)]: Number(f.montant_ht) || 0,
+          [t('mra.tva.xls_col_tva15', locale)]: Number(f.montant_tva) || 0,
+          [t('mra.tva.xls_col_ttc', locale)]: Number(f.montant_ttc) || 0,
+          [t('mra.tva.xls_col_type', locale)]: t('mra.tva.xls_type_client', locale),
         })),
         ...facturesFournisseurLocal.map((f: any) => ({
-          "Date": f.date_facture || "—",
-          "N° Facture": f.numero_facture || "—",
-          "Tiers": f.tiers || "—",
-          "Montant HT (MUR)": Number(f.montant_ht) || 0,
-          "TVA 15% (MUR)": Number(f.montant_tva) || 0,
-          "Montant TTC (MUR)": Number(f.montant_ttc) || 0,
-          "Type": "Fournisseur local",
+          [t('mra.tva.xls_col_date', locale)]: f.date_facture || "—",
+          [t('mra.tva.xls_col_facture_no', locale)]: f.numero_facture || "—",
+          [t('mra.tva.xls_col_tiers', locale)]: f.tiers || "—",
+          [t('mra.tva.xls_col_ht', locale)]: Number(f.montant_ht) || 0,
+          [t('mra.tva.xls_col_tva15', locale)]: Number(f.montant_tva) || 0,
+          [t('mra.tva.xls_col_ttc', locale)]: Number(f.montant_ttc) || 0,
+          [t('mra.tva.xls_col_type', locale)]: t('mra.tva.xls_type_supplier_local', locale),
         })),
       ]
       const ws = XLSX.utils.json_to_sheet(rows)
-      XLSX.utils.book_append_sheet(wb, ws, "TVA Normale")
+      XLSX.utils.book_append_sheet(wb, ws, t('mra.tva.xls_sheet_normale', locale))
       XLSX.writeFile(wb, `tva_normale_${period}_${dateStr}.xlsx`)
     } else if (type === "deductible") {
       // TVA déductible = fournisseurs locaux avec TVA > 0 — source factures (pas OCR)
       const deductibleRows = facturesFournisseurLocal.filter((f: any) => (Number(f.montant_tva) || 0) > 0)
       const rows = deductibleRows.map((f: any) => ({
-        "Date": f.date_facture || "—",
-        "N° Facture": f.numero_facture || "—",
-        "Fournisseur": f.tiers || "—",
-        "Montant HT (MUR)": Number(f.montant_ht) || 0,
-        "TVA déductible (MUR)": Number(f.montant_tva) || 0,
-        "Montant TTC (MUR)": Number(f.montant_ttc) || 0,
+        [t('mra.tva.xls_col_date', locale)]: f.date_facture || "—",
+        [t('mra.tva.xls_col_facture_no', locale)]: f.numero_facture || "—",
+        [t('mra.tva.xls_col_supplier', locale)]: f.tiers || "—",
+        [t('mra.tva.xls_col_ht', locale)]: Number(f.montant_ht) || 0,
+        [t('mra.tva.xls_col_tva_deductible', locale)]: Number(f.montant_tva) || 0,
+        [t('mra.tva.xls_col_ttc', locale)]: Number(f.montant_ttc) || 0,
       }))
       const ws = XLSX.utils.json_to_sheet(rows)
-      XLSX.utils.book_append_sheet(wb, ws, "TVA Déductible")
+      XLSX.utils.book_append_sheet(wb, ws, t('mra.tva.xls_sheet_deductible', locale))
       XLSX.writeFile(wb, `tva_deductible_${period}_${dateStr}.xlsx`)
     } else {
       const rows = reverseChargeFacts.map((f: any) => {
         const ht = Number(f.montant_ht) || 0
         return {
-          "Date": f.date_facture || "—",
-          "Fournisseur": f.tiers || "—",
-          "Devise": f.devise || "—",
-          "Base HT (MUR)": ht,
-          "TVA collectée (15%)": Math.round(ht * TVA_RATE * 100) / 100,
-          "TVA déductible (15%)": Math.round(ht * TVA_RATE * 100) / 100,
+          [t('mra.tva.xls_col_date', locale)]: f.date_facture || "—",
+          [t('mra.tva.xls_col_supplier', locale)]: f.tiers || "—",
+          [t('mra.tva.xls_col_devise', locale)]: f.devise || "—",
+          [t('mra.tva.xls_col_base_ht', locale)]: ht,
+          [t('mra.tva.xls_col_tva_collected_15', locale)]: Math.round(ht * TVA_RATE * 100) / 100,
+          [t('mra.tva.xls_col_tva_deductible_15', locale)]: Math.round(ht * TVA_RATE * 100) / 100,
         }
       })
       const ws = XLSX.utils.json_to_sheet(rows)
-      XLSX.utils.book_append_sheet(wb, ws, "TVA Reverse Charge")
+      XLSX.utils.book_append_sheet(wb, ws, t('mra.tva.xls_sheet_reverse', locale))
       XLSX.writeFile(wb, `tva_reverse_charge_${period}_${dateStr}.xlsx`)
     }
   }
