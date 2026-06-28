@@ -53,7 +53,11 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { t, getLocale } from "@/lib/i18n"
+import { sweepPcmChunk } from "@/lib/i18n/sweep_pcm"
 import { ECART_TYPE_OPTIONS, resolveEcartCompte, type EcartTypeChoice } from "@/lib/accounting/rapprochement/ecart-ui"
+
+// Réfère le chunk pour éviter le tree-shaking jusqu'au câblage dans lib/i18n.ts.
+void sweepPcmChunk
 
 const AGENT_NAME = "Lex Banque"
 
@@ -1494,6 +1498,19 @@ const RECLASS_OPTIONS: Array<{
   { group: "Divers", value: "autre", compte: "471", label: "471 — Compte d'attente (à requalifier)" },
 ]
 
+// Slugifie un intitulé de groupe vers sa clé i18n `spcm.grp_<slug>`
+// (cf lib/i18n/sweep_pcm.ts). Garde le regroupement par chaîne FR stable
+// côté logique ; seul l'affichage passe par t().
+function groupKey(group: string): string {
+  return "spcm.grp_" + group.toLowerCase().replace(/[^a-z0-9]+/g, "_")
+}
+// Clé i18n d'une option : si l'option provient du PCM société (DB runtime),
+// `value` = numéro de compte → pas de clé statique, on retombe sur le label.
+function optionLabel(o: { value: string; label: string }, locale: Parameters<typeof t>[1]): string {
+  const translated = t("spcm.opt_" + o.value, locale)
+  return translated === "spcm.opt_" + o.value ? o.label : translated
+}
+
 function SuggestionRow({
   tx,
   type,
@@ -1597,11 +1614,15 @@ function SuggestionRow({
                     return Array.from(grouped.entries()).map(([groupName, opts]) => (
                       <SelectGroup key={groupName}>
                         <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-                          {groupName}
+                          {(() => {
+                            const gk = groupKey(groupName)
+                            const tr = t(gk, locale)
+                            return tr === gk ? groupName : tr
+                          })()}
                         </SelectLabel>
                         {opts.map((opt) => (
                           <SelectItem key={opt.value} value={opt.value} className="text-xs font-mono">
-                            {opt.label}
+                            {optionLabel(opt, locale)}
                           </SelectItem>
                         ))}
                       </SelectGroup>

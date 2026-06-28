@@ -58,7 +58,18 @@ import {
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale, type Locale } from '@/lib/i18n'
+import { sweepPcmChunk } from '@/lib/i18n/sweep_pcm'
 import { ECART_TYPE_OPTIONS, resolveEcartCompte, type EcartTypeChoice } from '@/lib/accounting/rapprochement/ecart-ui'
+
+// Réfère le chunk pour éviter le tree-shaking jusqu'au câblage dans lib/i18n.ts.
+void sweepPcmChunk
+
+// Libellé bilingue d'une option client (clé `spcm.copt_<value>`),
+// fallback sur le libellé FR codé en dur si la clé n'existe pas.
+function clientOptionLabel(value: string, label: string, locale: Locale): string {
+  const tr = t('spcm.copt_' + value, locale)
+  return tr === 'spcm.copt_' + value ? label : tr
+}
 
 const AGENT_NAME = "Lex Banque"
 
@@ -1482,7 +1493,7 @@ function SuggestionRow({
                   <SelectContent>
                     {RECLASS_OPTIONS_CLIENT.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value} className="text-xs font-mono">
-                        {opt.label}
+                        {clientOptionLabel(opt.value, opt.label, locale)}
                       </SelectItem>
                     ))}
                   </SelectContent>
