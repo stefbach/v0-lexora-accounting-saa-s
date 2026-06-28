@@ -56,7 +56,7 @@ export default function BankCredentialsPage() {
     try {
       const r = await fetch(`/api/client/direction/bank-credentials?societe_id=${societeId}`, { cache: 'no-store' })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Erreur')
+      if (!r.ok) throw new Error(j.error || t('cui.error_generic', locale))
       setComptes(j.comptes || [])
       const act: Record<string, boolean> = {}
       const nt: Record<string, string> = {}
@@ -65,7 +65,7 @@ export default function BankCredentialsPage() {
         nt[c.id] = c.scraping?.notes || ''
       }
       setActives(act); setNotes(nt)
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setLoading(false) }
+    } catch (e: any) { setError(e?.message || t('cui.error_generic', locale)) } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [societeId])
 
@@ -85,37 +85,37 @@ export default function BankCredentialsPage() {
         body: JSON.stringify(body),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Erreur')
-      setSuccess('Credentials enregistrées et chiffrées.')
+      if (!r.ok) throw new Error(j.error || t('cui.error_generic', locale))
+      setSuccess(t('scp.cred_bank_saved', locale))
       setUsernames(p => ({ ...p, [compteId]: '' }))
       setPasswords(p => ({ ...p, [compteId]: '' }))
       setPins(p => ({ ...p, [compteId]: '' }))
       setEditing(null)
       await load()
-    } catch (e: any) { setError(e?.message || 'Erreur') }
+    } catch (e: any) { setError(e?.message || t('cui.error_generic', locale)) }
   }
 
   const createAccount = async () => {
     if (!societeId) return
     setError(null); setSuccess(null)
-    if (!newAccount.banque.trim()) { setError('Banque requise'); return }
+    if (!newAccount.banque.trim()) { setError(t('scp.cred_bank_required', locale)); return }
     try {
       const r = await fetch(`/api/client/comptes-bancaires`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ societe_id: societeId, ...newAccount }),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Erreur')
+      if (!r.ok) throw new Error(j.error || t('cui.error_generic', locale))
       // Récupère l'id du compte créé pour ouvrir directement le formulaire d'accès
       const newId: string | undefined =
         j?.compte?.id || j?.compte_bancaire?.id || j?.id || j?.data?.id
-      setSuccess('Compte bancaire créé — saisis maintenant le login et le mot de passe ci-dessous.')
+      setSuccess(t('scp.cred_bank_created', locale))
       setCreating(false)
       setNewAccount({ banque: 'MCB', nom_compte: '', numero_compte: '', iban: '', swift: '', devise: 'MUR', compte_principal: false })
       await load()
       // Ouvre d'emblée la saisie login/mot de passe du nouveau compte
       if (newId) setEditing(newId)
-    } catch (e: any) { setError(e?.message || 'Erreur') }
+    } catch (e: any) { setError(e?.message || t('cui.error_generic', locale)) }
   }
 
   const scrapeNow = async (compteId: string) => {
@@ -125,16 +125,16 @@ export default function BankCredentialsPage() {
         method: 'POST',
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Erreur')
+      if (!r.ok) throw new Error(j.error || t('cui.error_generic', locale))
       if (j.status === 'manual_needed') {
-        setError(`Robot pas encore activé : ${j.error || 'Playwright non installé'}`)
+        setError(`${t('scp.cred_robot_not_active', locale)} ${j.error || t('scp.cred_pw_not_installed', locale)}`)
       } else if (j.status === 'success') {
-        setSuccess(`Scrape OK — solde ${j.balance_mur || '?'} ${j.balance_devise || 'MUR'}, ${j.nb_transactions || 0} tx`)
+        setSuccess(`${t('scp.cred_scrape_ok', locale)} ${j.balance_mur || '?'} ${j.balance_devise || 'MUR'}, ${j.nb_transactions || 0} tx`)
       } else {
-        setError(`Scrape ${j.status} : ${j.error || 'inconnu'}`)
+        setError(`${t('scp.cred_scrape_label', locale)} ${j.status} : ${j.error || t('scp.cred_unknown', locale)}`)
       }
       await load()
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setScrapingNow(null) }
+    } catch (e: any) { setError(e?.message || t('cui.error_generic', locale)) } finally { setScrapingNow(null) }
   }
 
   if (!societeId) return <div className="p-8"><div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{t('cui.no_societe', locale)}</div></div>
@@ -144,18 +144,12 @@ export default function BankCredentialsPage() {
     <div className="p-6 space-y-6 max-w-5xl">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Building2 className="h-6 w-6 text-blue-600" /> Accès Bancaires (Scraping)</h1>
-          <p className="text-sm text-slate-500">
-            Configure les identifiants Internet Banking pour scrape quotidien automatique
-            des soldes et transactions. Secrets stockés chiffrés <b>AES-256-GCM</b>.
-            Banques supportées : MCB, SBM, ABC, MauBank, MyT Money, AfrAsia, Bank One.
-          </p>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Building2 className="h-6 w-6 text-blue-600" /> {t('scp.cred_bank_title', locale)}</h1>
+          <p className="text-sm text-slate-500">{t('scp.cred_bank_desc', locale)}</p>
           <p className="mt-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2 flex items-start gap-2">
             <KeyRound className="h-4 w-4 mt-0.5 shrink-0" />
             <span>
-              <b>Où saisir le login et le mot de passe ?</b> Ajoute un compte bancaire ci-dessus,
-              puis sur sa carte clique <b>« Configurer l'accès (login / mot de passe) »</b> pour
-              saisir l'identifiant et le mot de passe Internet Banking.
+              <b>{t('scp.cred_bank_where_q', locale)}</b> {t('scp.cred_bank_where_text', locale)}
             </span>
           </p>
         </div>
@@ -172,11 +166,11 @@ export default function BankCredentialsPage() {
 
       {creating && (
         <Card>
-          <CardHeader><CardTitle className="text-base">Nouveau compte bancaire</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t('scp.cred_new_account', locale)}</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-slate-600">Banque <span className="text-red-500">*</span></label>
+                <label className="text-xs font-medium text-slate-600">{t('scp.cred_bank', locale)} <span className="text-red-500">*</span></label>
                 <select
                   value={newAccount.banque}
                   onChange={e => setNewAccount(s => ({ ...s, banque: e.target.value }))}
@@ -192,21 +186,21 @@ export default function BankCredentialsPage() {
                   <option>Standard Chartered</option>
                   <option>HSBC</option>
                   <option>Barclays</option>
-                  <option>Autre</option>
+                  <option>{t('scp.cred_other', locale)}</option>
                 </select>
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-600">Nom du compte (libellé)</label>
+                <label className="text-xs font-medium text-slate-600">{t('scp.cred_account_name', locale)}</label>
                 <input
                   type="text"
                   value={newAccount.nom_compte}
                   onChange={e => setNewAccount(s => ({ ...s, nom_compte: e.target.value }))}
-                  placeholder="ex: Compte courant principal"
+                  placeholder={t('scp.cred_account_name_ph', locale)}
                   className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-600">Numéro de compte</label>
+                <label className="text-xs font-medium text-slate-600">{t('scp.cred_account_number', locale)}</label>
                 <input
                   type="text"
                   value={newAccount.numero_compte}
@@ -216,7 +210,7 @@ export default function BankCredentialsPage() {
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-600">Devise</label>
+                <label className="text-xs font-medium text-slate-600">{t('scp.cred_currency', locale)}</label>
                 <select
                   value={newAccount.devise}
                   onChange={e => setNewAccount(s => ({ ...s, devise: e.target.value }))}
@@ -256,10 +250,10 @@ export default function BankCredentialsPage() {
                 checked={newAccount.compte_principal}
                 onChange={e => setNewAccount(s => ({ ...s, compte_principal: e.target.checked }))}
               />
-              <span>Marquer comme compte principal</span>
+              <span>{t('scp.cred_mark_principal', locale)}</span>
             </label>
             <div className="flex justify-end gap-2">
-              <Button onClick={() => setCreating(false)} variant="outline">Annuler</Button>
+              <Button onClick={() => setCreating(false)} variant="outline">{t('cui.cancel', locale)}</Button>
               <Button onClick={createAccount} className="bg-emerald-600 hover:bg-emerald-700 text-white">
                 <Save className="h-4 w-4 mr-1" /> {t('scp.create_account', locale)}
               </Button>
@@ -270,31 +264,30 @@ export default function BankCredentialsPage() {
 
       {comptes.length === 0 && !creating ? (
         <Card><CardContent className="py-8 text-center text-slate-500">
-          {t('scp.no_bank_account', locale)} Clique sur <b>Ajouter un compte bancaire</b> ci-dessus pour en créer un,
-          puis sur sa carte clique <b>« Configurer l'accès »</b> pour saisir le login et le mot de passe Internet Banking.
+          {t('scp.no_bank_account', locale)} {t('scp.cred_empty_hint', locale)}
         </CardContent></Card>
       ) : comptes.map(cb => (
         <Card key={cb.id}>
           <CardHeader>
             <CardTitle className="text-base flex items-center justify-between">
               <span>
-                {cb.banque || 'Banque ?'} · {cb.numero_compte || cb.intitule || cb.id}
+                {cb.banque || t('scp.cred_bank_q', locale)} · {cb.numero_compte || cb.intitule || cb.id}
                 {cb.devise && <span className="text-xs text-slate-500 ml-2">({cb.devise})</span>}
               </span>
               <div className="flex gap-2">
                 {cb.scraping?.configured ? (
-                  <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 text-xs">Configuré</Badge>
+                  <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 text-xs">{t('scp.cred_configured_m', locale)}</Badge>
                 ) : (
-                  <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">Non configuré</Badge>
+                  <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">{t('scp.cred_not_configured_m', locale)}</Badge>
                 )}
                 {cb.scraping?.last_scrape_status === 'success' && (
-                  <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 text-xs">Dernier scrape OK</Badge>
+                  <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 text-xs">{t('scp.cred_last_scrape_ok', locale)}</Badge>
                 )}
                 {cb.scraping?.last_scrape_status === 'failed' && (
-                  <Badge className="bg-red-100 text-red-700 border-red-300 text-xs">Échec</Badge>
+                  <Badge className="bg-red-100 text-red-700 border-red-300 text-xs">{t('scp.reclass_failed', locale)}</Badge>
                 )}
                 {cb.scraping?.last_scrape_status === 'manual_needed' && (
-                  <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">Manuel</Badge>
+                  <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">{t('scp.cred_manual', locale)}</Badge>
                 )}
               </div>
             </CardTitle>
@@ -302,15 +295,15 @@ export default function BankCredentialsPage() {
           <CardContent className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
               <div>
-                <div className="text-slate-500">Solde officiel</div>
+                <div className="text-slate-500">{t('scp.cred_official_balance', locale)}</div>
                 <div className="font-mono">{cb.solde_actuel?.toLocaleString('fr-FR') || '—'} {cb.devise || 'MUR'}</div>
               </div>
               <div>
-                <div className="text-slate-500">Solde scrapé</div>
+                <div className="text-slate-500">{t('scp.cred_scraped_balance', locale)}</div>
                 <div className="font-mono">{cb.scraping?.last_balance_mur?.toLocaleString('fr-FR') || '—'} MUR</div>
               </div>
               <div>
-                <div className="text-slate-500">Dernier scrape</div>
+                <div className="text-slate-500">{t('scp.cred_last_scrape', locale)}</div>
                 <div>{cb.scraping?.last_scrape_at ? new Date(cb.scraping.last_scrape_at).toLocaleString('fr-FR') : '—'}</div>
                 {cb.scraping?.last_scrape_error && <div className="text-red-600 text-[10px] mt-1">{cb.scraping.last_scrape_error.slice(0, 100)}</div>}
               </div>
@@ -320,8 +313,8 @@ export default function BankCredentialsPage() {
               <div className="space-y-3 border-t pt-3">
                 <div>
                   <label className="text-xs font-medium text-slate-600">
-                    Username Internet Banking
-                    {cb.scraping?.has_username && <span className="text-emerald-600 ml-2">(déjà configuré — laisse vide pour ne pas changer)</span>}
+                    {t('scp.cred_ib_username', locale)}
+                    {cb.scraping?.has_username && <span className="text-emerald-600 ml-2">{t('scp.cred_already_set_hint', locale)}</span>}
                   </label>
                   <input
                     type="text"
@@ -332,8 +325,8 @@ export default function BankCredentialsPage() {
                 </div>
                 <div>
                   <label className="text-xs font-medium text-slate-600">
-                    Password
-                    {cb.scraping?.has_password && <span className="text-emerald-600 ml-2">(déjà configuré)</span>}
+                    {t('scp.cred_password', locale)}
+                    {cb.scraping?.has_password && <span className="text-emerald-600 ml-2">{t('scp.cred_already_set_short', locale)}</span>}
                   </label>
                   <div className="mt-1 flex gap-2">
                     <input
@@ -349,8 +342,8 @@ export default function BankCredentialsPage() {
                 </div>
                 <div>
                   <label className="text-xs font-medium text-slate-600">
-                    PIN secondaire (optionnel — certains comptes business)
-                    {cb.scraping?.has_pin && <span className="text-emerald-600 ml-2">(configuré)</span>}
+                    {t('scp.cred_secondary_pin', locale)}
+                    {cb.scraping?.has_pin && <span className="text-emerald-600 ml-2">{t('scp.cred_set_hint', locale)}</span>}
                   </label>
                   <input
                     type={showPwd[cb.id] ? 'text' : 'password'}
@@ -360,13 +353,13 @@ export default function BankCredentialsPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-600">Notes</label>
+                  <label className="text-xs font-medium text-slate-600">{t('scp.cred_notes', locale)}</label>
                   <textarea
                     value={notes[cb.id] || ''}
                     onChange={e => setNotes(p => ({ ...p, [cb.id]: e.target.value }))}
                     rows={2}
                     className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
-                    placeholder="ex: PIN change tous les 90j. Compte joint avec X."
+                    placeholder={t('scp.cred_bank_notes_ph', locale)}
                   />
                 </div>
                 <label className="flex items-center gap-2 text-sm">
@@ -375,12 +368,12 @@ export default function BankCredentialsPage() {
                     checked={actives[cb.id] ?? true}
                     onChange={e => setActives(p => ({ ...p, [cb.id]: e.target.checked }))}
                   />
-                  <span>Scraping automatique activé</span>
+                  <span>{t('scp.cred_auto_scrape', locale)}</span>
                 </label>
                 <div className="flex justify-end gap-2">
-                  <Button onClick={() => setEditing(null)} variant="outline">Annuler</Button>
+                  <Button onClick={() => setEditing(null)} variant="outline">{t('cui.cancel', locale)}</Button>
                   <Button onClick={() => save(cb.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                    <Save className="h-4 w-4 mr-1" /> Enregistrer (chiffré)
+                    <Save className="h-4 w-4 mr-1" /> {t('scp.cred_save_encrypted', locale)}
                   </Button>
                 </div>
               </div>
@@ -389,7 +382,7 @@ export default function BankCredentialsPage() {
                 {!cb.scraping?.configured && (
                   <div className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5 flex items-center gap-1.5">
                     <KeyRound className="h-3 w-3 shrink-0" />
-                    Accès non configuré — cliquez <b>« Configurer l'accès »</b> pour saisir le login et le mot de passe Internet Banking.
+                    {t('scp.cred_access_not_configured', locale)}
                   </div>
                 )}
                 <div className="flex justify-end gap-2">
@@ -398,7 +391,7 @@ export default function BankCredentialsPage() {
                     disabled={!cb.scraping?.configured || scrapingNow === cb.id}
                     variant="outline" size="sm">
                     {scrapingNow === cb.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Play className="h-3 w-3 mr-1" />}
-                    Scraper maintenant
+                    {t('scp.cred_scrape_now', locale)}
                   </Button>
                   <Button
                     onClick={() => setEditing(cb.id)}
@@ -407,7 +400,7 @@ export default function BankCredentialsPage() {
                       ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
                       : "bg-blue-600 hover:bg-blue-700 text-white"}>
                     <KeyRound className="h-3 w-3 mr-1" />
-                    {cb.scraping?.configured ? "Modifier l'accès" : "Configurer l'accès (login / mot de passe)"}
+                    {cb.scraping?.configured ? t('scp.cred_edit_access', locale) : t('scp.cred_config_access', locale)}
                   </Button>
                 </div>
               </div>
@@ -419,11 +412,7 @@ export default function BankCredentialsPage() {
       <div className="text-xs text-slate-500 flex items-start gap-2 p-3 rounded bg-amber-50 border border-amber-200">
         <AlertCircle className="h-4 w-4 mt-0.5 text-amber-700" />
         <div>
-          <strong>Sécurité :</strong> les credentials sont chiffrés AES-256-GCM avec env <code>CRYPT_KEY</code>.
-          Le robot Playwright tourne sur Vercel en isolé pour chaque scrape, sans laisser les credentials en mémoire après usage.
-          Si ta banque a un 2FA / OTP / CAPTCHA → le scrape échouera et tu seras notifié via Telegram pour intervenir manuellement.
-          Le robot Playwright n'est pas encore activé (stub) — tu peux configurer les credentials dès maintenant, ils seront utilisés
-          quand on déploiera le robot.
+          <strong>{t('scp.cred_security_label', locale)}</strong> {t('scp.cred_bank_security_text', locale)}
         </div>
       </div>
     </div>
