@@ -69,6 +69,13 @@ export default function AssistantRedactionPage() {
   const [result, setResult] = useState("")
   const [sources, setSources] = useState<Source[]>([])
   const [copied, setCopied] = useState(false)
+  // Envoi email
+  const [societeId, setSocieteId] = useState("")
+  const [destEmail, setDestEmail] = useState("")
+  const [emailAccounts, setEmailAccounts] = useState<Array<{ id: string; label: string; from_email: string; provider: string }>>([])
+  const [accountId, setAccountId] = useState("")
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
 
   // Préremplit l'expéditeur avec la première société accessible.
   useEffect(() => {
@@ -77,9 +84,39 @@ export default function AssistantRedactionPage() {
       fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
     ]).then(([d1, d2]) => {
       const s = (d1.societes || [])[0] || (d2.societes || [])[0]
-      if (s) { setExpNom(s.nom || ""); setExpContact(s.email || "") }
+      if (s) { setExpNom(s.nom || ""); setExpContact(s.email || ""); setSocieteId(s.id || "") }
     })
   }, [])
+
+  // Comptes email de la société (pour le sélecteur « Envoyer depuis »).
+  useEffect(() => {
+    if (!societeId) { setEmailAccounts([]); return }
+    fetch(`/api/client/email-accounts?societe_id=${societeId}`)
+      .then(r => r.json())
+      .then(d => {
+        const accs = Array.isArray(d?.accounts) ? d.accounts : []
+        setEmailAccounts(accs.map((a: { id: string; label: string; from_email: string; provider: string }) => ({ id: a.id, label: a.label, from_email: a.from_email, provider: a.provider })))
+      })
+      .catch(() => setEmailAccounts([]))
+  }, [societeId])
+
+  async function sendByEmail() {
+    if (!result || !destEmail.trim()) return
+    setSending(true); setError(null); setSent(false)
+    try {
+      const res = await fetch("/api/redaction/send", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ societe_id: societeId, to: destEmail.trim(), subject: objet || destNom || "Message", body: result, account_id: accountId || undefined }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(d?.error || t('samsc.red_send_error', locale)); return }
+      setSent(true); setTimeout(() => setSent(false), 4000)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : t('samsc.red_send_error', locale))
+    } finally {
+      setSending(false)
+    }
+  }
 
   const readJson = async (r: Response) => { if ((r.headers.get("content-type") || "").includes("json")) return r.json(); throw new Error(t('samsc.red_err_server', locale)) }
 
@@ -269,6 +306,24 @@ export default function AssistantRedactionPage() {
                         <div className="mt-4 pt-3 border-t border-gray-100">
                           <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5"><Scale className="w-3.5 h-3.5" style={{ color: GOLD }} /> {t('samsc.red_sources', locale)}</p>
                           <ul className="space-y-1">{sources.map((s) => <li key={s.ref} className="text-[11px] text-gray-500"><span className="font-mono text-gray-400">[{s.ref}]</span> <span className="font-medium" style={{ color: NAVY }}>{s.source} {s.reference}</span> — {s.titre}</li>)}</ul>
+                        </div>
+                      )}
+                      {mode === 'email' && (
+                        <div className="mt-4 pt-3 border-t border-gray-100 space-y-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" style={{ color: GOLD }} /> {t('samsc.red_send_title', locale)}</p>
+                          <input type="email" value={destEmail} onChange={(e) => setDestEmail(e.target.value)} className={field} placeholder={t('samsc.red_send_to_ph', locale)} />
+                          {emailAccounts.length > 0 && (
+                            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className={field}>
+                              <option value="">{t('samsc.red_send_default_account', locale)}</option>
+                              {emailAccounts.map((a) => <option key={a.id} value={a.id}>{a.label} — {a.from_email}</option>)}
+                            </select>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <button onClick={sendByEmail} disabled={sending || !destEmail.trim()} className="inline-flex items-center text-xs px-3 py-1.5 rounded-lg font-semibold disabled:opacity-50" style={{ background: NAVY, color: GOLD }}>
+                              {sending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Mail className="w-3.5 h-3.5 mr-1" />}{t('samsc.red_send_btn', locale)}
+                            </button>
+                            {sent && <span className="text-xs text-emerald-600 font-medium inline-flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> {t('samsc.red_send_ok', locale)}</span>}
+                          </div>
                         </div>
                       )}
                     </>
