@@ -924,7 +924,6 @@ export async function POST(request: Request) {
           if (!pt || (!pt.heure_entree && pt.absent_justifie !== true)) {
             jours_absence_injust++
             anomaliesPointage.push(`Absence non justifiée le ${day}`)
-            console.warn(`[paie DEBUG] ABSENCE INJUST ${emp.prenom} ${emp.nom} | day=${day} today=${today} pt=${JSON.stringify(pt)} enConge=${(congesApprouves||[]).some((c:any)=>{ const d=String(c.date_debut??'').slice(0,10); const f=String(c.date_fin??'').slice(0,10); return d&&f&&day>=d&&day<=f })} conges=${JSON.stringify((congesApprouves||[]).map((c:any)=>({debut:String(c.date_debut).slice(0,10),fin:String(c.date_fin).slice(0,10),type:c.type_conge})))}`)
           } else if (pt.heure_entree && !pt.heure_sortie) {
             anomaliesPointage.push(`Oubli de pointage sortie le ${day}`)
           }
