@@ -919,8 +919,8 @@ export async function POST(request: Request) {
             }
             continue
           }
-          // F2 : skip les jours dans le futur (sans congé approuvé)
-          if (day > today) continue
+          // F2 : skip les jours dans le futur ET aujourd'hui (shift pas encore terminé)
+          if (day >= today) continue
           if (!pt || (!pt.heure_entree && pt.absent_justifie !== true)) {
             jours_absence_injust++
             anomaliesPointage.push(`Absence non justifiée le ${day}`)
@@ -1913,8 +1913,8 @@ export async function POST(request: Request) {
               }
               continue
             }
-            // F2 : skip les jours dans le futur (sans congé approuvé)
-            if (day > todayBatch) continue
+            // F2 : skip les jours dans le futur ET aujourd'hui (shift pas encore terminé)
+            if (day >= todayBatch) continue
             if (!pt || (!pt.heure_entree && pt.absent_justifie !== true)) {
               jours_absence_injust++
               anomaliesPointageBatch.push(`Absence non justifiée le ${day}`)

@@ -98,14 +98,6 @@ export default function PrimesPage() {
     } catch (e) { console.error(e) } finally { setLoading(false) }
   }, [societe])
 
-  const [saisiesDebug, setSaisiesDebug] = useState<{
-    httpStatus: number | null
-    httpOk: boolean
-    requestUrl: string
-    rawBody: any
-    errorMessage: string | null
-  } | null>(null)
-
   const loadSaisies = useCallback(async () => {
     setLoading(true)
     const params = new URLSearchParams({ periode, type: "saisie" })
@@ -115,23 +107,9 @@ export default function PrimesPage() {
       const res = await fetch(requestUrl)
       const body = await res.json().catch(() => ({ error: t('rhp.primes.err_non_json', locale) }))
       setSaisies(Array.isArray(body?.primes) ? body.primes : [])
-      setSaisiesDebug({
-        httpStatus: res.status,
-        httpOk: res.ok,
-        requestUrl,
-        rawBody: body,
-        errorMessage: res.ok ? null : (body?.error || `HTTP ${res.status}`),
-      })
     } catch (e: any) {
       console.error(e)
       setSaisies([])
-      setSaisiesDebug({
-        httpStatus: null,
-        httpOk: false,
-        requestUrl,
-        rawBody: null,
-        errorMessage: `${t('rhp.primes.err_reseau', locale)}${e?.message || e}`,
-      })
     } finally { setLoading(false) }
   }, [societe, periode])
 
@@ -499,109 +477,6 @@ export default function PrimesPage() {
 
           {societe === "all" && <p className="text-sm text-gray-500">{t('rha.a.primes.saisie_pick_societe', locale)}</p>}
 
-          {/* Bannière diagnostique — DIAGNOSTIC + FIX en un message clair. */}
-          {!loading && saisies.length === 0 && saisiesDebug && (() => {
-            const dbg = saisiesDebug.rawBody?._debug
-            // Conclusion = un seul message qui dit la cause + le fix
-            let conclusion: { titre: string; cause: string; fix: string; severity: "red" | "amber" } = {
-              titre: t('rhp.primes.diag_empty_title', locale),
-              cause: t('rhp.primes.diag_empty_cause', locale),
-              fix: t('rhp.primes.diag_empty_fix', locale),
-              severity: "amber",
-            }
-            if (!saisiesDebug.httpOk) {
-              if (saisiesDebug.httpStatus === 401) {
-                conclusion = {
-                  titre: t('rhp.primes.diag_401_title', locale),
-                  cause: t('rhp.primes.diag_401_cause', locale),
-                  fix: t('rhp.primes.diag_401_fix', locale),
-                  severity: "red",
-                }
-              } else if (saisiesDebug.httpStatus === 500) {
-                conclusion = {
-                  titre: t('rhp.primes.diag_500_title', locale),
-                  cause: saisiesDebug.errorMessage || t('rhp.primes.diag_500_cause', locale),
-                  fix: t('rhp.primes.diag_500_fix', locale),
-                  severity: "red",
-                }
-              } else {
-                conclusion = {
-                  titre: t('rhp.primes.diag_http_title', locale).replace('{status}', String(saisiesDebug.httpStatus)),
-                  cause: saisiesDebug.errorMessage || t('rhp.primes.diag_http_cause', locale),
-                  fix: t('rhp.primes.diag_http_fix', locale),
-                  severity: "red",
-                }
-              }
-            } else if (dbg) {
-              if (dbg.error) {
-                conclusion = {
-                  titre: t('rhp.primes.diag_load_title', locale),
-                  cause: dbg.error,
-                  fix: t('rhp.primes.diag_load_fix', locale),
-                  severity: "red",
-                }
-              } else if (!dbg.using_admin_client) {
-                conclusion = {
-                  titre: t('rhp.primes.diag_norolekey_title', locale),
-                  cause: t('rhp.primes.diag_norolekey_cause', locale),
-                  fix: t('rhp.primes.diag_norolekey_fix', locale),
-                  severity: "red",
-                }
-              } else if (dbg.probe_error) {
-                conclusion = {
-                  titre: t('rhp.primes.diag_probe_title', locale),
-                  cause: t('rhp.primes.diag_probe_cause', locale).replace('{err}', dbg.probe_error),
-                  fix: t('rhp.primes.diag_probe_fix', locale),
-                  severity: "red",
-                }
-              } else if (dbg.probe_total_primes === 0) {
-                conclusion = {
-                  titre: t('rhp.primes.diag_emptytable_title', locale),
-                  cause: t('rhp.primes.diag_emptytable_cause', locale),
-                  fix: t('rhp.primes.diag_emptytable_fix', locale),
-                  severity: "red",
-                }
-              } else if (dbg.nb_employes_societe === 0) {
-                conclusion = {
-                  titre: t('rhp.primes.diag_noemp_title', locale),
-                  cause: t('rhp.primes.diag_noemp_cause', locale).replace('{total}', String(dbg.probe_total_primes)),
-                  fix: t('rhp.primes.diag_noemp_fix', locale),
-                  severity: "red",
-                }
-              } else {
-                // Admin OK, primes existent en table, employés visibles, mais 0 prime pour ce filtre
-                const periodesDB = dbg.periodes_existantes_en_db || []
-                const periodesAffichees = periodesDB.length > 0 ? periodesDB.join(', ') : t('rhp.primes.diag_none_visible', locale)
-                const url = dbg.supabase_url_partial || '?'
-                conclusion = {
-                  titre: t('rhp.primes.diag_mismatch_title', locale),
-                  cause: t('rhp.primes.diag_mismatch_cause', locale).replace('{url}', url).replace('{total}', String(dbg.probe_total_primes)).replace('{nbemp}', String(dbg.nb_employes_societe)).replace('{periode}', String(dbg.query_periode_filter)).replace('{periodes}', periodesAffichees),
-                  fix: t('rhp.primes.diag_mismatch_fix', locale),
-                  severity: "red",
-                }
-              }
-            }
-
-            return (
-              <div className={`rounded-lg border-2 px-4 py-3 ${
-                conclusion.severity === "red" ? "border-red-400 bg-red-50 text-red-950" : "border-amber-400 bg-amber-50 text-amber-950"
-              }`}>
-                <p className="font-bold text-base mb-2">
-                  {conclusion.severity === "red" ? "🔴" : "🟠"} {conclusion.titre}
-                </p>
-                <p className="text-sm mb-1"><strong>{t('rhp.primes.diag_why', locale)}</strong> {conclusion.cause}</p>
-                <p className="text-sm"><strong>{t('rhp.primes.diag_solution', locale)}</strong> {conclusion.fix}</p>
-                <details className="mt-2 text-xs">
-                  <summary className="cursor-pointer opacity-70 hover:opacity-100">{t('rhp.primes.diag_tech', locale)}</summary>
-                  <div className="mt-2 font-mono space-y-1 bg-white/60 p-2 rounded">
-                    <p>URL : {saisiesDebug.requestUrl}</p>
-                    <p>HTTP : {saisiesDebug.httpStatus ?? t('rhp.primes.diag_net_err', locale)}</p>
-                    <p>{t('rhp.primes.diag_response', locale)} {JSON.stringify(saisiesDebug.rawBody)?.slice(0, 800) || t('rhp.primes.diag_empty_val', locale)}</p>
-                  </div>
-                </details>
-              </div>
-            )
-          })()}
 
           <Card>
             <CardHeader><CardTitle className="text-[#0B0F2E]">{t('rha.a.primes.primes_de', locale)} {periode} ({saisies.length})</CardTitle></CardHeader>
