@@ -76,6 +76,7 @@ export default function AssistantRedactionPage() {
   const [accountId, setAccountId] = useState("")
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
+  const [attachPdf, setAttachPdf] = useState(false)
 
   // Préremplit l'expéditeur avec la première société accessible.
   useEffect(() => {
@@ -106,7 +107,11 @@ export default function AssistantRedactionPage() {
     try {
       const res = await fetch("/api/redaction/send", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ societe_id: societeId, to: destEmail.trim(), subject: objet || destNom || "Message", body: result, account_id: accountId || undefined }),
+        body: JSON.stringify({
+          societe_id: societeId, to: destEmail.trim(), subject: objet || destNom || "Message", body: result, account_id: accountId || undefined,
+          attach_pdf: attachPdf,
+          pdf_data: attachPdf ? { expediteur: { nom: expNom, contact: expContact }, destinataire: { nom: destNom, adresse: destAddr }, objet, corps: result, signataire: signataire || expNom } : undefined,
+        }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setError(d?.error || t('samsc.red_send_error', locale)); return }
@@ -319,6 +324,10 @@ export default function AssistantRedactionPage() {
                               {emailAccounts.map((a) => <option key={a.id} value={a.id}>{a.label} — {a.from_email}</option>)}
                             </select>
                           )}
+                          <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                            <input type="checkbox" checked={attachPdf} onChange={(e) => setAttachPdf(e.target.checked)} className="rounded border-gray-300" />
+                            {t('samsc.red_attach_pdf', locale)}
+                          </label>
                           <div className="flex items-center gap-2">
                             <button onClick={sendByEmail} disabled={sending || !destEmail.trim()} className="inline-flex items-center text-xs px-3 py-1.5 rounded-lg font-semibold disabled:opacity-50" style={{ background: NAVY, color: GOLD }}>
                               {sending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Mail className="w-3.5 h-3.5 mr-1" />}{t('samsc.red_send_btn', locale)}
