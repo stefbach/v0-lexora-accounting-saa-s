@@ -3,6 +3,22 @@ import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
 import { selectEmailAccount, sendEmail, sendEmailFallbackResend } from '@/lib/email/router'
+import { renderToBuffer } from '@react-pdf/renderer'
+import { CourrierPdf, type CourrierPdfData } from '@/lib/redaction/courrier-pdf'
+
+export const maxDuration = 60
+
+/** Génère le PDF du courrier et le renvoie en pièce jointe base64. */
+async function buildPdfAttachment(data: CourrierPdfData, subject: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const buffer = await renderToBuffer(CourrierPdf({ data }) as any)
+  const slug = (data.objet || subject || 'courrier').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
+  return {
+    filename: `${slug || 'courrier'}.pdf`,
+    content: Buffer.from(buffer).toString('base64'),
+    contentType: 'application/pdf',
+  }
+}
 
 /**
  * Envoi d'un email rédigé via l'Assistant de rédaction.
@@ -60,7 +76,19 @@ export async function POST(req: NextRequest) {
 
     const html = toEmailHtml(body)
     const text = toPlain(body)
-    const msg = { to: [to], cc, subject, html, text, reply_to }
+
+    // Pièce jointe PDF optionnelle (courrier rédigé).
+    let attachments: Array<{ filename: string; content: string; contentType?: string }> | undefined
+    if (b.attach_pdf && b.pdf_data && typeof b.pdf_data === 'object') {
+      try {
+        const pdfData = { ...(b.pdf_data as CourrierPdfData), corps: String((b.pdf_data as CourrierPdfData).corps || body) }
+        attachments = [await buildPdfAttachment(pdfData, subject)]
+      } catch (e) {
+        return NextResponse.json({ error: `Génération du PDF impossible : ${e instanceof Error ? e.message : 'erreur'}` }, { status: 500 })
+      }
+    }
+
+    const msg = { to: [to], cc, subject, html, text, reply_to, attachments }
 
     // Sélection du compte email de la société (ou compte explicite).
     const account = await selectEmailAccount({ societe_id, user_id: user.id, account_id })
@@ -91,7 +119,7 @@ export async function POST(req: NextRequest) {
         const { message_id } = await sendGmail(user.id, {
           from_email: gmailFastPath.from_email,
           from_name: gmailFastPath.from_name,
-          to: [to], cc, bcc: undefined, subject, html, text, reply_to,
+          to: [to], cc, bcc: undefined, subject, html, text, reply_to, attachments,
         })
         result = { ok: true, message_id, provider: 'gmail_oauth' }
       } catch (e: unknown) {
