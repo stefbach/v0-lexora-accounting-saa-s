@@ -52,6 +52,7 @@ import { sweepUiJurChunk } from './i18n/sweep_ui_jur'
 import { sweepUiFxChunk } from './i18n/sweep_ui_fx'
 import { sweepUiConfChunk } from './i18n/sweep_ui_conf'
 import { sweepApierrChunk } from './i18n/sweep_apierr'
+import { rhPrimesChunk } from './i18n/rh_primes'
 
 export type Locale = 'fr' | 'en'
 
@@ -715,6 +716,7 @@ const translations: Record<Locale, Record<string, string>> = {
     ...sweepUiFxChunk.fr,
     ...sweepUiConfChunk.fr,
     ...sweepApierrChunk.fr,
+    ...rhPrimesChunk.fr,
   },
   en: {
     ...baseTranslations.en,
@@ -772,6 +774,7 @@ const translations: Record<Locale, Record<string, string>> = {
     ...sweepUiFxChunk.en,
     ...sweepUiConfChunk.en,
     ...sweepApierrChunk.en,
+    ...rhPrimesChunk.en,
   },
 }
 
