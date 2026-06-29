@@ -266,6 +266,13 @@ export const invoicingExtChunk = {
     'inv.nfia.err_load_context': 'Erreur chargement contexte',
     'inv.nfia.err_ia': 'Erreur IA',
     'inv.nfia.err_generate': 'Erreur génération',
+    // Réutiliser une facture existante comme modèle (inv.nf.reuse_*)
+    'inv.nf.reuse_title': "Repartir d'une facture déjà émise",
+    'inv.nf.reuse_hint': 'Reprenez une facture des mois précédents comme modèle : client, lignes et conditions sont copiés. Un nouveau numéro et la date du jour sont appliqués.',
+    'inv.nf.reuse_select_ph': 'Choisir une facture à réutiliser…',
+    'inv.nf.reuse_none': 'Aucune facture récente à réutiliser',
+    'inv.nf.reuse_load_error': 'Impossible de charger la facture modèle',
+    'inv.nf.reuse_applied': 'Modèle appliqué — vérifiez puis enregistrez',
   } as Record<string, string>,
 
   en: {
@@ -533,5 +540,12 @@ export const invoicingExtChunk = {
     'inv.nfia.err_load_context': 'Context loading error',
     'inv.nfia.err_ia': 'AI error',
     'inv.nfia.err_generate': 'Generation error',
+    // Reuse an existing invoice as a template (inv.nf.reuse_*)
+    'inv.nf.reuse_title': 'Start from an invoice already issued',
+    'inv.nf.reuse_hint': 'Reuse an invoice from previous months as a template: client, lines and terms are copied. A new number and today’s date are applied.',
+    'inv.nf.reuse_select_ph': 'Choose an invoice to reuse…',
+    'inv.nf.reuse_none': 'No recent invoice to reuse',
+    'inv.nf.reuse_load_error': 'Could not load the template invoice',
+    'inv.nf.reuse_applied': 'Template applied — review then save',
   } as Record<string, string>,
 }

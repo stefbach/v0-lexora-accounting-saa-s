@@ -118,6 +118,9 @@ function NouvelleFactureContent() {
   const [typeDocument, setTypeDocument] = useState<"facture" | "avoir" | "note_debit" | "devis">("facture")
   const [factureReferenceId, setFactureReferenceId] = useState("")
   const [existingFactures, setExistingFactures] = useState<Array<{ id: string; numero_facture: string; tiers: string; montant_ttc: number; devise: string }>>([])
+  // Factures récentes réutilisables comme modèle (mois précédents).
+  const [modeles, setModeles] = useState<Array<{ id: string; numero_facture: string; tiers: string; date_facture: string; montant_ttc: number; devise: string }>>([])
+  const [modeleApplied, setModeleApplied] = useState(false)
   const [numeroFacture, setNumeroFacture] = useState("")
   const [dateFacture, setDateFacture] = useState(today())
   const [dateEcheance, setDateEcheance] = useState("")
@@ -245,6 +248,77 @@ function NouvelleFactureContent() {
       })
       .catch(() => setError(t('cfac.invoice_load_error', locale)))
   }, [editingId, editingLoaded])
+
+  // Factures réutilisables comme modèle — les factures (type_document=facture)
+  // des ~3 derniers mois pour la société active, hors brouillon, plus récentes
+  // d'abord. Permet de repartir d'une facture déjà émise le mois précédent.
+  useEffect(() => {
+    if (!societeId || editingId) return
+    const d = new Date(); d.setMonth(d.getMonth() - 3)
+    const debut = d.toISOString().slice(0, 10)
+    fetch(`/api/client/factures?societe_id=${societeId}&type_document=facture&date_debut=${debut}&limit=60`)
+      .then(r => r.json())
+      .then(d => {
+        const facs = (d.factures || []).filter((f: { statut?: string }) => f.statut !== 'brouillon')
+        setModeles(facs.map((f: { id: string; numero_facture: string; tiers: string; date_facture: string; montant_ttc: number; devise: string }) => ({
+          id: f.id, numero_facture: f.numero_facture, tiers: f.tiers, date_facture: f.date_facture, montant_ttc: f.montant_ttc, devise: f.devise,
+        })))
+      })
+      .catch(() => {})
+  }, [societeId, editingId])
+
+  // Applique une facture existante comme MODÈLE pour une NOUVELLE facture :
+  // on copie client, lignes, conditions, notes/présentation — mais on garde le
+  // numéro auto-généré, la date du jour et on n'écrase pas l'existante (pas
+  // d'editingId → enregistrement = création).
+  const applyModele = useCallback((id: string) => {
+    if (!id) return
+    fetch(`/api/client/factures?id=${id}`)
+      .then(r => r.json())
+      .then(d => {
+        const f = d.factures?.[0]
+        if (!f) { setError(t('inv.nf.reuse_load_error', locale)); return }
+        // Client + conditions
+        setClientNom(f.tiers || '')
+        setClientOffshore(!!f.client_offshore)
+        setSelectedClientId(f.contact_id || '')
+        setDevise(f.devise || 'MUR')
+        setTauxChange(Number(f.taux_change) || 1)
+        setModePaiement(f.mode_paiement || 'Virement')
+        setEcheancePreset(Number(f.conditions_paiement) || 30)
+        setDescriptif(f.description || '')
+        setNotesVisibles(f.notes_visibles || f.notes || '')
+        // Lignes
+        if (Array.isArray(f.lignes) && f.lignes.length > 0) {
+          setLignes(f.lignes.map((l: any) => ({
+            id: crypto.randomUUID(),
+            description: l.description || '',
+            unite: l.unite || 'Forfait',
+            quantite: Number(l.quantite) || 0,
+            prix_unitaire: Number(l.prix_unitaire) || 0,
+            taux_tva: Number(l.taux_tva) || 0,
+            montant_ht: Number(l.montant_ht) || (Number(l.quantite) || 0) * (Number(l.prix_unitaire) || 0),
+          })))
+        }
+        // Remise
+        if (Number(f.remise_pct) > 0) { setRemiseType('pct'); setRemiseValue(Number(f.remise_pct)) }
+        else if (Number(f.remise_montant) > 0) { setRemiseType('fixe'); setRemiseValue(Number(f.remise_montant)) }
+        else { setRemiseType('pct'); setRemiseValue(0) }
+        // Présentation
+        if (f.accent_color) setAccentColor(f.accent_color)
+        if (f.template_id) setTemplateId(f.template_id)
+        // Repart en NEUF : type facture, date du jour, pas de référence d'avoir,
+        // pas de récurrence. Le numéro reste celui auto-généré pour la nouvelle.
+        setTypeDocument('facture')
+        setFactureReferenceId('')
+        setReference('')
+        setDateFacture(today())
+        setDateEcheance(addDays(today(), Number(f.conditions_paiement) || 30))
+        setModeleApplied(true)
+        setError(null)
+      })
+      .catch(() => setError(t('inv.nf.reuse_load_error', locale)))
+  }, [locale])
 
   // Templates IA — chargés par société (POST action=list).
   // La route /api/client/facture-template n'a PAS de GET ; un GET nu
@@ -626,6 +700,23 @@ function NouvelleFactureContent() {
               </div>
             </button>
           </div>
+          {!editingId && typeDocument === "facture" && modeles.length > 0 && (
+            <div className="mt-4">
+              <Field label={t('inv.nf.reuse_title', locale)}>
+                <Sel value="" onValueChange={applyModele} placeholder={t('inv.nf.reuse_select_ph', locale)}>
+                  {modeles.map(m => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.numero_facture} — {m.tiers} · {m.date_facture} · {m.montant_ttc?.toLocaleString(locale === 'en' ? 'en-GB' : 'fr-FR', { minimumFractionDigits: 2 })} {m.devise}
+                    </SelectItem>
+                  ))}
+                </Sel>
+              </Field>
+              <p className="text-xs text-gray-400 mt-1">{t('inv.nf.reuse_hint', locale)}</p>
+              {modeleApplied && (
+                <p className="text-xs text-emerald-600 mt-1 font-medium">{t('inv.nf.reuse_applied', locale)}</p>
+              )}
+            </div>
+          )}
           {typeDocument === "avoir" && (
             <div className="mt-4 space-y-3">
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
