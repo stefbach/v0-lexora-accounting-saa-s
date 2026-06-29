@@ -2624,10 +2624,17 @@ export async function POST(request: Request) {
     if (action === 'verrouiller') {
       const sid = body.societe_id
       if (!sid) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+      // BUG (juin 2026) — filtre is_archived=false OBLIGATOIRE. Sans ça, le
+      // verrouillage verrouille ET comptabilise TOUTES les versions de la
+      // période, y compris les bulletins archivés des simulations précédentes.
+      // Résultat observé : 2067 écritures pour 176 bulletins archivés alors
+      // qu'il n'y a que 15 employés (DDS). Seuls les bulletins ACTIFS doivent
+      // être verrouillés/comptabilisés.
       const { data: buls } = await supabase.from('bulletins_paie')
         .select('id, statut, verrouille, comptabilise')
         .eq('societe_id', sid)
         .gte('periode', `${periodeStr}-01`).lte('periode', lastDayOfMonth(periodeStr))
+        .or('is_archived.is.null,is_archived.eq.false')
       const nonValides = (buls || []).filter(b => b.statut !== 'valide' && !b.verrouille)
       if (nonValides.length > 0) {
         return NextResponse.json({ error: `${nonValides.length} bulletin(s) non validé(s). Validez tous les bulletins avant de verrouiller.` }, { status: 400 })
