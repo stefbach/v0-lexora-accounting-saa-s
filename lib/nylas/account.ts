@@ -13,13 +13,15 @@ export type NylasAccount = {
 }
 
 /**
- * Renvoie le compte Nylas actif de l'utilisateur (priorité au compte de la
- * société active si fournie), avec le grant_id déchiffré. null si aucun.
+ * Renvoie un compte Nylas actif de l'utilisateur, avec le grant_id déchiffré.
+ * Priorité : accountId explicite > compte de la société active > premier compte.
+ * null si aucun.
  */
 export async function resolveNylasAccount(
   admin: SupabaseClient,
   userId: string,
   societeId?: string | null,
+  accountId?: string | null,
 ): Promise<NylasAccount | null> {
   const { data: accounts } = await admin
     .from('user_oauth_accounts')
@@ -30,7 +32,9 @@ export async function resolveNylasAccount(
   if (!accounts || accounts.length === 0) return null
 
   const list = accounts as Array<{ id: string; account_email: string; access_token_enc: string | null; societe_id: string | null }>
-  const chosen = (societeId && list.find((a) => a.societe_id === societeId)) || list[0]
+  const chosen = (accountId && list.find((a) => a.id === accountId))
+    || (societeId && list.find((a) => a.societe_id === societeId))
+    || list[0]
   if (!chosen?.access_token_enc) return null
 
   try {

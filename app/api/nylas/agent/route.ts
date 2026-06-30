@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { callClaude } from '@/lib/claude'
+import { getAgentSettings, settingsPromptBlock, type AgentSettings } from '@/lib/nylas/agent-settings'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -15,6 +17,7 @@ interface Body {
   instruction?: string // pour 'reply' : ce que l'utilisateur veut dire
   ton?: string
   langue?: 'fr' | 'en'
+  societe_id?: string | null
 }
 
 /** Retire les balises HTML pour alléger le contexte envoyé au modèle. */
@@ -32,25 +35,27 @@ function stripHtml(html: string): string {
 
 const LANG: Record<string, string> = { fr: 'en français', en: 'in English' }
 
-function buildPrompt(b: Body): { system: string; user: string } {
+function buildPrompt(b: Body, settings: AgentSettings): { system: string; user: string } {
   const lang = LANG[b.langue || 'fr'] || LANG.fr
   const corps = stripHtml(b.body || '')
   const meta = `Objet : ${b.subject || '(sans objet)'}\nExpéditeur : ${b.from || '(inconnu)'}\n\nContenu :\n"""\n${corps}\n"""`
+  const block = settingsPromptBlock(settings)
+  const tone = b.ton || settings.tone || 'professionnel et courtois'
 
-  const system = `Tu es un agent email professionnel pour une entreprise à Maurice. Tu réponds ${lang}, de façon concise, factuelle et exploitable. N'invente aucune information absente de l'email.`
+  const system = `Tu es l'assistant de direction email d'une entreprise à Maurice. Tu réponds ${lang}, de façon concise, factuelle et exploitable. N'invente aucune information absente de l'email.${block ? `\n\n${block}` : ''}`
 
   switch (b.action) {
     case 'summarize':
       return { system, user: `Résume cet email en 2-4 puces : qui écrit, pourquoi, ce qui est attendu, et l'échéance éventuelle.\n\n${meta}` }
     case 'classify':
-      return { system, user: `Classe cet email. Réponds avec : une catégorie (Client, Fournisseur, Administratif/Fiscal, RH, Banque, Commercial/Prospect, Spam, Autre), une priorité (Haute / Moyenne / Basse), et si une réponse est nécessaire (Oui/Non) — chacun sur une ligne « Champ : valeur ».\n\n${meta}` }
+      return { system, user: `Classe cet email. Réponds avec : une catégorie, une priorité (Haute / Moyenne / Basse), et si une réponse est nécessaire (Oui/Non) — chacun sur une ligne « Champ : valeur ».\n\n${meta}` }
     case 'actions':
       return { system, user: `Extrais la liste des actions concrètes à réaliser suite à cet email (puces, à l'impératif). S'il n'y en a aucune, indique « Aucune action requise ».\n\n${meta}` }
     case 'reply':
     default:
       return {
         system,
-        user: `Rédige une réponse à cet email, ${lang}, ton ${b.ton || 'professionnel et courtois'}. Réponds UNIQUEMENT avec le corps de l'email (salutation → formule de politesse), prêt à envoyer, sans ligne « Objet ».${b.instruction ? `\n\nIntention de l'utilisateur (à exprimer proprement) :\n"""\n${b.instruction}\n"""` : ''}\n\nEmail reçu :\n${meta}`,
+        user: `Rédige une réponse à cet email, ${lang}, ton ${tone}. Réponds UNIQUEMENT avec le corps de l'email (salutation → formule de politesse), prêt à envoyer, sans ligne « Objet ».${b.instruction ? `\n\nIntention de l'utilisateur (à exprimer proprement) :\n"""\n${b.instruction}\n"""` : ''}${settings.signature ? `\n\nTermine par cette signature exacte :\n"""\n${settings.signature}\n"""` : ''}\n\nEmail reçu :\n${meta}`,
       }
   }
 }
@@ -66,7 +71,8 @@ export async function POST(req: NextRequest) {
   if (!b.body?.trim() && !b.subject?.trim()) return NextResponse.json({ error: 'email vide' }, { status: 400 })
 
   try {
-    const { system, user: userPrompt } = buildPrompt(b)
+    const settings = await getAgentSettings(getAdminClient(), user.id, b.societe_id)
+    const { system, user: userPrompt } = buildPrompt(b, settings)
     const result = await callClaude(system, userPrompt, b.action === 'reply' ? 2048 : 1024)
     return NextResponse.json({ result: result.trim() })
   } catch (e) {

@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic'
 
 interface Body {
   societe_id?: string | null
+  account_id?: string | null
   to: string[]
   cc?: string[]
   subject: string
@@ -28,6 +29,7 @@ export async function POST(req: NextRequest) {
   const r = await trySendViaNylas(admin, {
     user_id: user.id,
     societe_id: b.societe_id ?? null,
+    account_id: b.account_id ?? null,
     msg: { to: b.to, cc: b.cc, subject: b.subject, html: b.html, reply_to: b.reply_to },
   })
   if (!r) return NextResponse.json({ error: 'Aucune boîte Nylas connectée' }, { status: 404 })

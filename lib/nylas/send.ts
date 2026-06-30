@@ -10,7 +10,7 @@ export type NylasSendResult = { ok: boolean; message_id?: string; provider: 'nyl
 
 export async function trySendViaNylas(
   admin: SupabaseClient,
-  args: { user_id: string; societe_id?: string | null; msg: NylasEmailMessage },
+  args: { user_id: string; societe_id?: string | null; account_id?: string | null; msg: NylasEmailMessage },
 ): Promise<NylasSendResult | null> {
   if (!isNylasConfigured()) return null
 
@@ -23,7 +23,9 @@ export async function trySendViaNylas(
   if (!accounts || accounts.length === 0) return null
 
   const list = accounts as Array<{ id: string; account_email: string; access_token_enc: string | null; societe_id: string | null }>
-  const chosen = (args.societe_id && list.find((a) => a.societe_id === args.societe_id)) || list[0]
+  const chosen = (args.account_id && list.find((a) => a.id === args.account_id))
+    || (args.societe_id && list.find((a) => a.societe_id === args.societe_id))
+    || list[0]
   if (!chosen?.access_token_enc) return null
 
   try {

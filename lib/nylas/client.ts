@@ -166,11 +166,13 @@ function normalizeMessage(m: NylasRawMessage): MailMessage {
 }
 
 /** Liste des messages (boîte interne), normalisés. */
-export async function listNylasMessages(grantId: string, opts: { limit?: number; pageToken?: string; q?: string } = {}): Promise<{ data: MailMessage[]; nextCursor?: string }> {
+export async function listNylasMessages(grantId: string, opts: { limit?: number; pageToken?: string; q?: string; folderId?: string; unread?: boolean } = {}): Promise<{ data: MailMessage[]; nextCursor?: string }> {
   const p = new URLSearchParams()
   p.set('limit', String(opts.limit || 25))
   if (opts.pageToken) p.set('page_token', opts.pageToken)
   if (opts.q) p.set('search_query_native', opts.q)
+  if (opts.folderId) p.set('in', opts.folderId)
+  if (opts.unread !== undefined) p.set('unread', String(opts.unread))
   const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/messages?${p.toString()}`, {
     headers: authHeaders(),
   })
@@ -187,4 +189,33 @@ export async function getNylasMessage(grantId: string, messageId: string): Promi
   if (!res.ok) throw new Error(`Nylas get message ${res.status}`)
   const d = await res.json() as { data?: NylasRawMessage }
   return normalizeMessage(d.data || {})
+}
+
+/** Modifie un message (lu/non-lu, étoile, dossiers). */
+export async function updateNylasMessage(
+  grantId: string,
+  messageId: string,
+  patch: { unread?: boolean; starred?: boolean; folders?: string[] },
+): Promise<void> {
+  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/messages/${encodeURIComponent(messageId)}`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    throw new Error(`Nylas update message ${res.status}: ${txt.slice(0, 200)}`)
+  }
+}
+
+export type MailFolder = { id: string; name: string; attributes?: string[]; totalCount?: number; unreadCount?: number }
+
+/** Liste les dossiers/labels de la boîte. */
+export async function listNylasFolders(grantId: string): Promise<MailFolder[]> {
+  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/folders`, { headers: authHeaders() })
+  if (!res.ok) throw new Error(`Nylas list folders ${res.status}`)
+  const d = await res.json() as { data?: Array<{ id?: string; name?: string; attributes?: string[]; total_count?: number; unread_count?: number }> }
+  return (d.data || []).map((f) => ({
+    id: f.id || '', name: f.name || '', attributes: f.attributes || [], totalCount: f.total_count, unreadCount: f.unread_count,
+  }))
 }
