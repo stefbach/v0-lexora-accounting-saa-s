@@ -216,7 +216,7 @@ export default function EmailAccountsPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
         <h1 className="text-2xl font-bold flex items-center gap-2"><Mail className="h-6 w-6 text-blue-600" /> {t('acct.email.page_title', locale)}</h1>
-        <p className="text-sm text-slate-500">{t('acct.email.page_desc', locale)}</p>
+        <p className="text-sm text-slate-500">{locale === 'en' ? 'Connect your mailboxes (Gmail, Outlook, Apple…) to send, read and let the AI assistant manage your emails.' : "Connecte tes boîtes (Gmail, Outlook, Apple…) pour envoyer, lire et laisser l'assistant IA gérer tes emails."}</p>
         </div>
         <PageHelp />
       </div>
@@ -252,7 +252,7 @@ export default function EmailAccountsPage() {
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{locale === 'en' ? 'Connected mailboxes' : 'Boîtes connectées'}</div>
                 {nylasAccounts.map((a) => (
                   <div key={a.id} className="flex items-center justify-between text-sm bg-slate-50 rounded px-3 py-2">
-                    <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> {a.label || a.account_email}</span>
+                    <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> {a.account_email}</span>
                     <button onClick={() => disconnectNylas(a.id)} className="text-xs text-red-600 hover:underline">{locale === 'en' ? 'Disconnect' : 'Déconnecter'}</button>
                   </div>
                 ))}
@@ -310,14 +310,7 @@ export default function EmailAccountsPage() {
       </Card>
       )}
 
-      <div className="flex justify-between items-center">
-        <div className="text-sm text-slate-600">{accounts.length} {t('acct.email.count', locale)}</div>
-        <Button onClick={() => { resetForm(); setShowForm(s => !s) }} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-          <Plus className="h-4 w-4 mr-1" /> {showForm ? t('acct.email.cancel', locale) : t('acct.email.add_btn', locale)}
-        </Button>
-      </div>
-
-      {showForm && (
+      {false && (
         <Card>
           <CardHeader><CardTitle className="text-base">{t('acct.email.new_account_title', locale)}</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -422,98 +415,6 @@ export default function EmailAccountsPage() {
         </Card>
       )}
 
-      {/* Company accounts */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">{t('acct.email.societe_accounts_title', locale)} ({societeAccounts.length})</CardTitle></CardHeader>
-        <CardContent>
-          {societeAccounts.length === 0 ? (
-            <div className="text-sm text-slate-500 p-4 text-center">{t('acct.email.societe_empty', locale)}</div>
-          ) : (
-            <div className="space-y-2">
-              {societeAccounts.map(acc => (
-                <div key={acc.id} className="flex items-start justify-between border rounded p-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <div className="font-medium">{acc.label}</div>
-                      <Badge className={acc.provider === 'smtp' ? 'bg-blue-100 text-blue-700 border-blue-300 text-xs' : 'bg-purple-100 text-purple-700 border-purple-300 text-xs'}>{acc.provider}</Badge>
-                      {acc.is_default_for_societe && <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 text-xs">{t('acct.email.badge_default_societe', locale)}</Badge>}
-                      {!acc.active && <Badge className="bg-slate-100 text-slate-600 border-slate-300 text-xs">{t('acct.email.badge_inactive', locale)}</Badge>}
-                    </div>
-                    <div className="text-xs text-slate-600 mt-1">
-                      {acc.from_name ? `${acc.from_name} <${acc.from_email}>` : acc.from_email}
-                    </div>
-                    {acc.provider === 'smtp' && <div className="text-[10px] text-slate-500 mt-0.5">SMTP {acc.smtp_host}:{acc.smtp_port}</div>}
-                    {acc.provider === 'resend' && <div className="text-[10px] text-slate-500 mt-0.5">Resend · {locale === 'en' ? 'domain' : 'domaine'} {acc.resend_domain}</div>}
-                    {acc.last_test_at && (
-                      <div className={`text-[10px] mt-1 ${acc.last_test_status === 'success' ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {t('acct.email.last_test', locale)} {new Date(acc.last_test_at).toLocaleString(locale === 'en' ? 'en-GB' : 'fr-FR')} · {acc.last_test_status}
-                        {acc.last_test_error && ` : ${acc.last_test_error.slice(0, 80)}`}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button onClick={() => testAccount(acc.id)} disabled={testingId === acc.id} variant="outline" size="sm">
-                      {testingId === acc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3 mr-1" />} {t('acct.email.test_btn', locale)}
-                    </Button>
-                    <Button onClick={() => toggleDefault(acc)} variant="outline" size="sm">
-                      {acc.is_default_for_societe ? <StarOff className="h-3 w-3" /> : <Star className="h-3 w-3" />}
-                    </Button>
-                    <Button onClick={() => deleteAccount(acc)} variant="outline" size="sm" className="text-red-700 border-red-200 hover:bg-red-50">
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Personal accounts */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">{t('acct.email.personal_accounts_title', locale)} ({personalAccounts.length})</CardTitle></CardHeader>
-        <CardContent>
-          {personalAccounts.length === 0 ? (
-            <div className="text-sm text-slate-500 p-4 text-center">{t('acct.email.personal_empty', locale)}</div>
-          ) : (
-            <div className="space-y-2">
-              {personalAccounts.map(acc => (
-                <div key={acc.id} className="flex items-start justify-between border rounded p-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <div className="font-medium">{acc.label}</div>
-                      <Badge className={acc.provider === 'smtp' ? 'bg-blue-100 text-blue-700 border-blue-300 text-xs' : 'bg-purple-100 text-purple-700 border-purple-300 text-xs'}>{acc.provider}</Badge>
-                      {acc.is_default_for_user && <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 text-xs">{t('acct.email.badge_default_user', locale)}</Badge>}
-                      {!acc.active && <Badge className="bg-slate-100 text-slate-600 border-slate-300 text-xs">{t('acct.email.badge_inactive', locale)}</Badge>}
-                    </div>
-                    <div className="text-xs text-slate-600 mt-1">
-                      {acc.from_name ? `${acc.from_name} <${acc.from_email}>` : acc.from_email}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button onClick={() => testAccount(acc.id)} disabled={testingId === acc.id} variant="outline" size="sm">
-                      {testingId === acc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3 mr-1" />} {t('acct.email.test_btn', locale)}
-                    </Button>
-                    <Button onClick={() => toggleDefault(acc)} variant="outline" size="sm">
-                      {acc.is_default_for_user ? <StarOff className="h-3 w-3" /> : <Star className="h-3 w-3" />}
-                    </Button>
-                    <Button onClick={() => deleteAccount(acc)} variant="outline" size="sm" className="text-red-700 border-red-200 hover:bg-red-50">
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="text-xs text-slate-500 flex items-start gap-2 p-3 rounded bg-slate-50 border border-slate-200">
-        <Mail className="h-4 w-4 mt-0.5" />
-        <div>
-          <strong>{t('acct.email.routing_title', locale)}</strong> {t('acct.email.routing_desc', locale)}
-        </div>
-      </div>
     </div>
   )
 }
