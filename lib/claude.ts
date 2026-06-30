@@ -56,6 +56,36 @@ export async function callClaudeJSON<T = unknown>(
 }
 
 /**
+ * Appel Claude avec une image (OCR / vision) — retourne un objet JSON parsé.
+ * `image` = base64 brut ; `mediaType` ex. 'image/jpeg' | 'image/png'.
+ */
+export async function callClaudeVisionJSON<T = unknown>(
+  systemPrompt: string,
+  userPrompt: string,
+  image: string,
+  mediaType: string,
+  maxTokens: number = 1024,
+): Promise<T> {
+  const message = await getAnthropic().messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: maxTokens,
+    temperature: 0,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'text', text: `${systemPrompt}\n\n${userPrompt}` },
+        { type: 'image', source: { type: 'base64', media_type: mediaType as 'image/jpeg', data: image } },
+      ],
+    }],
+  })
+  const content = message.content[0]
+  if (content.type !== 'text') throw new Error('Réponse Claude inattendue (pas de texte)')
+  const clean = content.text.replace(/```json|```/g, '').trim()
+  const m = clean.match(/\{[\s\S]*\}/)
+  return JSON.parse(m ? m[0] : clean) as T
+}
+
+/**
  * Vérifie le secret Vercel Cron dans l'Authorization header
  */
 export function verifyCronSecret(request: Request): boolean {

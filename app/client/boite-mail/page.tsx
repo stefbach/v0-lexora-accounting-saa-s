@@ -215,11 +215,12 @@ export default function BoiteMailPage() {
     try {
       const res = await fetch('/api/nylas/extract-contact', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ societe_id: societeId, subject: m.subject, from_name: m.from?.name, from_email: m.from?.email, body: m.body || m.snippet }),
+        body: JSON.stringify({ societe_id: societeId, message_id: m.id, account_id: activeAccountId, subject: m.subject, from_name: m.from?.name, from_email: m.from?.email, body: m.body || m.snippet }),
       })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Échec')
-      setSent(`Contact ${d.updated ? 'mis à jour' : 'enregistré'} : ${d.contact?.nom || d.contact?.email || ''}`)
+      const src = Array.isArray(d.sources) && d.sources.length ? ` (${d.sources.join(', ')})` : ''
+      setSent(`Contact ${d.updated ? 'mis à jour' : 'enregistré'} : ${d.contact?.nom || d.contact?.email || ''}${src}`)
     } catch (e) { setError(e instanceof Error ? e.message : 'Échec enregistrement contact') }
     finally { setSavingContact(false) }
   }
