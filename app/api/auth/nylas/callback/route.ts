@@ -15,10 +15,22 @@ function errorRedirect(req: NextRequest, message: string) {
   return NextResponse.redirect(url)
 }
 
+async function debugLog(stage: string, req: NextRequest, note?: string) {
+  try {
+    await getAdminClient().from('nylas_auth_debug').insert({
+      stage,
+      inbound_url: req.nextUrl.toString().slice(0, 1000),
+      query_keys: Array.from(req.nextUrl.searchParams.keys()).join(','),
+      note: note?.slice(0, 500) || null,
+    })
+  } catch { /* diagnostic best-effort */ }
+}
+
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams
   const code = sp.get('code')
   const stateRaw = sp.get('state')
+  await debugLog('callback_hit', req)
   // Diagnostic : si Nylas renvoie une erreur OAuth ou un retour incomplet, on
   // remonte tout ce qui a été reçu pour qu'aucune cause ne reste invisible.
   const nylasErr = sp.get('error') || sp.get('error_description')
@@ -40,6 +52,7 @@ export async function GET(req: NextRequest) {
     const base = (process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).replace(/\/+$/, '')
     const redirectUri = `${base}/api/auth/nylas/callback`
     const { grantId, email } = await exchangeNylasCode(code, redirectUri)
+    await debugLog('exchange_ok', req, `email=${email} grant=${grantId ? 'oui' : 'NON'}`)
 
     const admin = getAdminClient()
     const { data: existing } = await admin
@@ -71,6 +84,7 @@ export async function GET(req: NextRequest) {
     url.searchParams.set('nylas_connected', email || '1')
     return NextResponse.redirect(url)
   } catch (e) {
+    await debugLog('exchange_error', req, e instanceof Error ? e.message : 'unknown')
     return errorRedirect(req, e instanceof Error ? e.message : 'Échec de la connexion Nylas')
   }
 }
