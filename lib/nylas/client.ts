@@ -30,7 +30,8 @@ export function isNylasConfigured(): boolean {
 // Si on passe `scope`, il remplace les défauts → inclure TOUT le nécessaire.
 const PROVIDER_SCOPES: Record<string, string> = {
   google: [
-    'openid', 'email', 'profile',
+    'https://www.googleapis.com/auth/userinfo.email',
+    'https://www.googleapis.com/auth/userinfo.profile',
     'https://www.googleapis.com/auth/gmail.modify',
     'https://www.googleapis.com/auth/calendar',
     'https://www.googleapis.com/auth/contacts',
