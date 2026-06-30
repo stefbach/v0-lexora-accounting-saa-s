@@ -91,6 +91,7 @@ export default function BoiteMailPage() {
   const [showSettings, setShowSettings] = useState(false)
   const [showCompose, setShowCompose] = useState(false)
   const [showBriefing, setShowBriefing] = useState(false)
+  const [showContacts, setShowContacts] = useState(false)
 
   const [accountsList, setAccountsList] = useState<Array<{ id: string; account_email: string; label: string }>>([])
   const [activeAccountId, setActiveAccountId] = useState<string | null>(null)
@@ -297,6 +298,7 @@ export default function BoiteMailPage() {
             {triaging ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Wand2 className="h-4 w-4 mr-1.5" />} Trier
           </Button>
           <Button size="sm" variant="outline" onClick={() => setShowBriefing(true)}><Sparkles className="h-4 w-4 mr-1.5" /> Briefing</Button>
+          <Button size="sm" variant="outline" onClick={() => setShowContacts(true)}><Users className="h-4 w-4 mr-1.5" /> Contacts</Button>
           <button onClick={() => setShowCompose(true)} className="inline-flex items-center h-9 px-4 rounded-md text-sm font-semibold" style={{ background: NAVY, color: GOLD }}><PenLine className="h-4 w-4 mr-1.5" /> Composer</button>
           <Button variant="outline" size="sm" onClick={() => setShowSettings(true)}><Settings2 className="h-4 w-4" /></Button>
         </div>
@@ -448,6 +450,7 @@ export default function BoiteMailPage() {
 
       {showSettings && settings && <SettingsModal settings={settings} societeId={societeId} onClose={() => setShowSettings(false)} onSaved={(s) => { setSettings(s); setShowSettings(false) }} />}
       {showCompose && <FullComposer societeId={societeId} accountId={activeAccountId} onClose={() => setShowCompose(false)} />}
+      {showContacts && <ContactsModal societeId={societeId} accountId={activeAccountId} accountEmail={accountEmail} onClose={() => setShowContacts(false)} />}
       {showBriefing && (
         <BriefingModal
           societeId={societeId} accountId={activeAccountId}
@@ -579,6 +582,84 @@ function ReplyItem({ m, societeId, accountId }: { m: MailMessage; societeId: str
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+type SavedContact = { id: string; name: string | null; company: string | null; email: string | null; telephone: string | null; mobile: string | null; adresse: string | null; ville: string | null; pays: string | null; vat_number: string | null; site_web: string | null }
+
+/** Carnet de contacts de la boîte active (cartes de visite récupérées). */
+function ContactsModal({ societeId, accountId, accountEmail, onClose }: { societeId: string | null; accountId: string | null; accountEmail: string | null; onClose: () => void }) {
+  const [contacts, setContacts] = useState<SavedContact[]>([])
+  const [loading, setLoading] = useState(true)
+  const [q, setQ] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const p = new URLSearchParams()
+      if (societeId) p.set('societe_id', societeId)
+      if (accountId) p.set('account_id', accountId)
+      const res = await fetch(`/api/nylas/saved-contacts?${p.toString()}`)
+      const d = await res.json()
+      setContacts(d.contacts || [])
+    } finally { setLoading(false) }
+  }, [societeId, accountId])
+  useEffect(() => { load() }, [load])
+
+  const del = async (id: string) => {
+    if (!confirm('Supprimer ce contact ?')) return
+    await fetch(`/api/nylas/saved-contacts?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+    setContacts((prev) => prev.filter((c) => c.id !== id))
+  }
+
+  const ql = q.trim().toLowerCase()
+  const filtered = ql ? contacts.filter((c) => [c.name, c.company, c.email].some((v) => (v || '').toLowerCase().includes(ql))) : contacts
+
+  return (
+    <div className="fixed inset-0 z-50 bg-gray-50 overflow-y-auto" onClick={onClose}>
+      <div className="max-w-3xl mx-auto p-4 md:p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: NAVY }}><Users className="w-5 h-5" style={{ color: GOLD }} /></div>
+          <div className="flex-1">
+            <h1 className="text-xl font-bold" style={{ color: NAVY }}>Contacts</h1>
+            <p className="text-xs text-gray-500">Carnet de la boîte {accountEmail || 'active'} — cartes de visite récupérées dans tes emails.</p>
+          </div>
+          <button onClick={onClose} aria-label="Fermer" className="w-9 h-9 rounded-xl flex items-center justify-center border border-gray-200 bg-white text-gray-600 hover:text-[#0B0F2E] shrink-0"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="mb-3">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un contact…" className="w-full text-sm border rounded-md px-3 py-2 bg-white" />
+        </div>
+
+        {loading ? (
+          <div className="text-center text-muted-foreground py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-6 text-center text-sm text-muted-foreground">
+            Aucun contact enregistré pour cette boîte.<br />
+            <span className="text-xs">Ouvre un email avec une carte de visite (signature, .vcf ou image) puis clique <strong>« Enregistrer le contact »</strong> dans le volet de lecture.</span>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filtered.map((c) => (
+              <div key={c.id} className="rounded-xl bg-white border border-gray-100 shadow-sm p-3 flex items-start justify-between gap-3">
+                <div className="min-w-0 text-sm">
+                  <div className="font-medium" style={{ color: NAVY }}>{c.name || c.email}</div>
+                  {c.company && <div className="text-xs text-gray-500">{c.company}</div>}
+                  <div className="text-xs text-gray-500 flex flex-wrap gap-x-3 mt-0.5">
+                    {c.email && <span>{c.email}</span>}
+                    {c.telephone && <span>{c.telephone}</span>}
+                    {c.mobile && <span>{c.mobile}</span>}
+                    {c.site_web && <span>{c.site_web}</span>}
+                  </div>
+                  {(c.adresse || c.ville) && <div className="text-xs text-gray-400 mt-0.5">{[c.adresse, c.ville, c.pays].filter(Boolean).join(', ')}</div>}
+                </div>
+                <Button size="sm" variant="ghost" className="text-red-600 shrink-0" onClick={() => del(c.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
