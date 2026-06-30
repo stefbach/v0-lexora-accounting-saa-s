@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import {
   Loader2, Mail, RefreshCw, Search, Sparkles, ListChecks, Tag, Reply, Send, AlertCircle,
   CheckCircle2, Inbox, Settings2, Wand2, Circle, X, Trash2, Paperclip, Download, Send as SendIcon,
-  PenLine,
+  PenLine, Users,
 } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
@@ -180,6 +180,21 @@ export default function BoiteMailPage() {
       setSent(`Réponse envoyée à ${target}`); setReplyMode(false); setReplyDraft('')
     } catch (e) { setError(e instanceof Error ? e.message : 'Échec envoi') }
     finally { setSending(false) }
+  }
+
+  const [savingContact, setSavingContact] = useState(false)
+  const saveContact = async (m: MailMessage) => {
+    setSavingContact(true); setError(null)
+    try {
+      const res = await fetch('/api/nylas/extract-contact', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ societe_id: societeId, subject: m.subject, from_name: m.from?.name, from_email: m.from?.email, body: m.body || m.snippet }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Échec')
+      setSent(`Contact ${d.updated ? 'mis à jour' : 'enregistré'} : ${d.contact?.nom || d.contact?.email || ''}`)
+    } catch (e) { setError(e instanceof Error ? e.message : 'Échec enregistrement contact') }
+    finally { setSavingContact(false) }
   }
 
   const deleteMessage = async (m: MailMessage) => {
@@ -355,6 +370,7 @@ export default function BoiteMailPage() {
                   <Button size="sm" variant="outline" onClick={() => runAgent('classify')} disabled={!!agentBusy}>{agentBusy === 'classify' ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Tag className="h-3.5 w-3.5 mr-1.5" />} Classer</Button>
                   <Button size="sm" variant="outline" onClick={() => runAgent('actions')} disabled={!!agentBusy}>{agentBusy === 'actions' ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ListChecks className="h-3.5 w-3.5 mr-1.5" />} Actions</Button>
                   <Button size="sm" onClick={() => { setReplyMode(true); setAgentOut(null) }} disabled={!!agentBusy}><Reply className="h-3.5 w-3.5 mr-1.5" /> Répondre</Button>
+                  <Button size="sm" variant="outline" onClick={() => saveContact(selected)} disabled={savingContact} title="Extraire la carte de visite et enregistrer le contact">{savingContact ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Users className="h-3.5 w-3.5 mr-1.5" />} Enregistrer le contact</Button>
                   <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={() => deleteMessage(selected)} disabled={deleting}>{deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}</Button>
                 </div>
               </CardHeader>
