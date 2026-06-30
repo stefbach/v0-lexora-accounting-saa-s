@@ -10,6 +10,7 @@ import {
   PenLine, Users,
 } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 type Participant = { name?: string; email?: string }
 type MailAttachment = { id: string; filename: string; contentType: string; size: number; isInline: boolean }
@@ -233,10 +234,11 @@ export default function BoiteMailPage() {
   )
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-xl font-semibold flex items-center gap-2">
-          <Inbox className="h-5 w-5" /> Boîte de réception
+        <h1 className="text-xl font-semibold flex items-center gap-2 text-[#0B0F2E]">
+          <Inbox className="h-5 w-5 text-primary" /> Boîte de réception
           {accountsList.length > 1 ? (
             <select
               value={activeAccountId || ''}
@@ -395,6 +397,7 @@ export default function BoiteMailPage() {
       {showSettings && settings && <SettingsModal settings={settings} societeId={societeId} onClose={() => setShowSettings(false)} onSaved={(s) => { setSettings(s); setShowSettings(false) }} />}
       {showCompose && <ComposeModal societeId={societeId} accountId={activeAccountId} onClose={() => setShowCompose(false)} onSent={(to) => { setShowCompose(false); setSent(`Email envoyé à ${to}`) }} />}
     </div>
+    </ClientPageShell>
   )
 }
 

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, Mail, Plus, Trash2, Star, StarOff, Send, AlertCircle, CheckCircle2, Eye, EyeOff } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { PageHelp } from "@/components/help/PageHelp"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { t, getLocale } from "@/lib/i18n"
 
 type EmailAccount = {
@@ -212,24 +213,22 @@ export default function EmailAccountsPage() {
   const personalAccounts = accounts.filter(a => a.user_id)
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2"><Mail className="h-6 w-6 text-blue-600" /> {t('acct.email.page_title', locale)}</h1>
-        <p className="text-sm text-slate-500">{locale === 'en' ? 'Connect your mailboxes (Gmail, Outlook, Apple…) to send, read and let the AI assistant manage your emails.' : "Connecte tes boîtes (Gmail, Outlook, Apple…) pour envoyer, lire et laisser l'assistant IA gérer tes emails."}</p>
-        </div>
-        <PageHelp />
-      </div>
-
+    <ClientPageShell
+      kicker="Communication"
+      title={t('acct.email.page_title', locale)}
+      subtitle={locale === 'en' ? 'Connect your mailboxes (Gmail, Outlook, Apple…) to send, read and let the AI assistant manage your emails.' : "Connecte tes boîtes (Gmail, Outlook, Apple…) pour envoyer, lire et laisser l'assistant IA gérer tes emails."}
+      actions={<PageHelp />}
+    >
+      <div className="space-y-6">
       {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-start gap-2"><AlertCircle className="h-4 w-4 mt-0.5" />{error}</div>}
       {success && <div className="rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 flex items-start gap-2"><CheckCircle2 className="h-4 w-4 mt-0.5" />{success}</div>}
 
       {/* Connexion unifiée Nylas (email + lecture + agent IA) */}
       {nylasConfigured && (
-        <Card className="border-emerald-200">
+        <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Mail className="h-5 w-5 text-emerald-600" />
+              <Mail className="h-5 w-5 text-primary" />
               {locale === 'en' ? 'Connect a mailbox (Gmail, Outlook, Apple…)' : 'Connecter une boîte (Gmail, Outlook, Apple…)'}
             </CardTitle>
           </CardHeader>
@@ -242,8 +241,8 @@ export default function EmailAccountsPage() {
             <div className="flex flex-wrap gap-2">
               {([['google', 'Gmail / Google'], ['microsoft', 'Outlook / Microsoft'], ['icloud', 'Apple iCloud'], ['imap', 'IMAP / autre']] as const).map(([prov, lbl]) => (
                 <button key={prov} onClick={() => connectNylas(prov)}
-                  className="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-slate-300 hover:border-emerald-400 hover:bg-emerald-50 font-medium">
-                  <Mail className="h-4 w-4 text-emerald-500" /> {lbl}
+                  className="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-slate-300 hover:border-primary hover:bg-primary/5 font-medium transition-colors">
+                  <Mail className="h-4 w-4 text-primary" /> {lbl}
                 </button>
               ))}
             </div>
@@ -415,6 +414,7 @@ export default function EmailAccountsPage() {
         </Card>
       )}
 
-    </div>
+      </div>
+    </ClientPageShell>
   )
 }
