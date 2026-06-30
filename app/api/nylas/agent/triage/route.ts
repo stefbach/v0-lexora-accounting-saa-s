@@ -127,8 +127,13 @@ Réponds STRICTEMENT avec un objet JSON {"analyses": [ ... ]} couvrant tous les 
     const lines = urgents.map((x) => `- [${x.a.priority}${x.a.needs_reply ? ', à répondre' : ''}] ${who(x.m)} — ${x.m.subject} : ${x.a.summary}`).join('\n')
     try {
       digest = await callClaude(
-        `Tu es l'assistant de direction. Tu produis une synthèse d'attention du jour, ${settings.instructions ? 'en respectant les consignes de la direction' : 'concise et actionnable'}, en français, en 3 à 6 puces priorisées. Pas de blabla.`,
-        `Voici les emails prioritaires/à répondre :\n${lines}\n\nProduis la synthèse d'attention du jour (qui demande quoi, quoi faire en premier).`,
+        `Tu es l'assistant de direction. Tu produis une synthèse d'attention du jour, ${settings.instructions ? 'en respectant les consignes de la direction' : 'concise et actionnable'}, en français.
+
+Format STRICT (markdown léger, sans titre d'introduction) :
+- une puce « - » par sujet, regroupée par priorité (urgents d'abord)
+- commence chaque puce par **un libellé en gras** suivi de « : » puis l'action concrète attendue
+- ne mets PAS d'emoji, PAS de titre « ## », maximum 6 puces, va à l'essentiel`,
+        `Voici les emails prioritaires/à répondre :\n${lines}\n\nProduis la synthèse d'attention du jour (qui fait quoi, quoi traiter en premier).`,
         800,
       )
     } catch { digest = `${urgents.length} email(s) prioritaire(s) ou à répondre.` }

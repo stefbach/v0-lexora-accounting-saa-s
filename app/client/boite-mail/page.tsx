@@ -23,7 +23,34 @@ type MailMessage = {
 type Analysis = { message_id: string; category: string; priority: 'haute' | 'moyenne' | 'basse'; needs_reply: boolean; summary: string; suggested_action: string }
 type AgentSettings = { instructions: string; categories: string[]; signature: string; tone: string; auto_triage: boolean }
 type AgentAction = 'summarize' | 'classify' | 'actions' | 'reply'
-type Filter = { kind: 'all' | 'unread' | 'reply' | 'high' | 'category'; value?: string }
+type Filter = { kind: 'all' | 'unread' | 'reply' | 'high' | 'medium' | 'low' | 'category'; value?: string }
+
+/** Rendu markdown léger (titres ##, puces -, gras **) → HTML propre. */
+function mdToHtml(src: string): string {
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const bold = (s: string) => esc(s).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+  const lines = src.split('\n')
+  const out: string[] = []
+  let inList = false
+  for (let raw of lines) {
+    const line = raw.trim()
+    if (!line) { if (inList) { out.push('</ul>'); inList = false } continue }
+    const h = line.match(/^#{1,4}\s*(.+)$/)
+    if (h) { if (inList) { out.push('</ul>'); inList = false } out.push(`<div class="font-bold text-[15px] mt-1 mb-2" style="color:#0B0F2E">${bold(h[1])}</div>`); continue }
+    const b = line.match(/^[-*]\s+(.+)$/)
+    if (b) { if (!inList) { out.push('<ul class="space-y-1.5 list-none pl-0">'); inList = true } out.push(`<li class="pl-3 border-l-2 border-gray-200">${bold(b[1])}</li>`); continue }
+    if (inList) { out.push('</ul>'); inList = false }
+    out.push(`<p class="mb-1.5">${bold(line)}</p>`)
+  }
+  if (inList) out.push('</ul>')
+  return out.join('')
+}
+
+/** Texte de réponse (gras markdown) → HTML email propre. */
+function replyToHtml(text: string): string {
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1a1a1a;line-height:1.6">${esc(text).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')}</div>`
+}
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -173,7 +200,7 @@ export default function BoiteMailPage() {
       const subject = selected.subject.startsWith('Re:') ? selected.subject : `Re: ${selected.subject}`
       const res = await fetch('/api/nylas/send', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ societe_id: societeId || null, account_id: activeAccountId, to: [target], subject, html: replyDraft.replace(/\n/g, '<br>') }),
+        body: JSON.stringify({ societe_id: societeId || null, account_id: activeAccountId, to: [target], subject, html: replyToHtml(replyDraft) }),
       })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Échec envoi')
@@ -223,6 +250,8 @@ export default function BoiteMailPage() {
         case 'unread': return m.unread
         case 'reply': return a?.needs_reply
         case 'high': return a?.priority === 'haute'
+        case 'medium': return a?.priority === 'moyenne'
+        case 'low': return a?.priority === 'basse'
         case 'category': return a?.category === filter.value
         default: return true
       }
@@ -306,7 +335,7 @@ export default function BoiteMailPage() {
         <Card className="border-violet-200 bg-violet-50/50">
           <CardContent className="p-4">
             <div className="flex items-center gap-1.5 text-violet-700 font-medium mb-1.5 text-xs uppercase tracking-wide"><Sparkles className="h-3.5 w-3.5" /> Attention du jour</div>
-            <div className="text-sm whitespace-pre-wrap">{digest}</div>
+            <div className="text-sm leading-relaxed text-gray-800" dangerouslySetInnerHTML={{ __html: mdToHtml(digest) }} />
           </CardContent>
         </Card>
       )}
@@ -424,6 +453,7 @@ export default function BoiteMailPage() {
           digest={digest} counts={counts}
           toReply={messages.map((m) => ({ m, a: analyses[m.id] })).filter((x) => x.a?.needs_reply).map((x) => x.m)}
           triaging={triaging} onTriage={() => runTriage(false)}
+          onFilter={(f) => { setFilter(f); setShowBriefing(false) }}
           onClose={() => setShowBriefing(false)}
         />
       )}
@@ -434,10 +464,10 @@ export default function BoiteMailPage() {
 
 /** Briefing du jour : synthèse quotidienne + emails à répondre avec
  *  propositions de réponse générées à la demande. */
-function BriefingModal({ societeId, accountId, digest, counts, toReply, triaging, onTriage, onClose }: {
+function BriefingModal({ societeId, accountId, digest, counts, toReply, triaging, onTriage, onFilter, onClose }: {
   societeId: string | null; accountId: string | null; digest: string | null
   counts: { haute: number; moyenne: number; basse: number; a_repondre: number } | null
-  toReply: MailMessage[]; triaging: boolean; onTriage: () => void; onClose: () => void
+  toReply: MailMessage[]; triaging: boolean; onTriage: () => void; onFilter: (f: Filter) => void; onClose: () => void
 }) {
   return (
     <div className="fixed inset-0 z-50 bg-gray-50 overflow-y-auto" onClick={onClose}>
@@ -458,15 +488,16 @@ function BriefingModal({ societeId, accountId, digest, counts, toReply, triaging
           {triaging && !digest ? (
             <div className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Analyse en cours…</div>
           ) : digest ? (
-            <div className="text-sm whitespace-pre-wrap text-gray-800">{digest}</div>
+            <div className="text-sm leading-relaxed text-gray-800" dangerouslySetInnerHTML={{ __html: mdToHtml(digest) }} />
           ) : (
             <div className="text-sm text-muted-foreground">Aucune synthèse encore. <button onClick={onTriage} className="underline text-primary">Lancer le tri</button> pour la générer.</div>
           )}
           {counts && (
             <div className="flex gap-2 mt-3 flex-wrap text-xs">
-              <span className="px-2 py-0.5 rounded border bg-red-50 text-red-700 border-red-200">{counts.haute} prioritaire(s)</span>
-              <span className="px-2 py-0.5 rounded border bg-blue-50 text-blue-700 border-blue-200">{counts.a_repondre} à répondre</span>
-              <span className="px-2 py-0.5 rounded border bg-slate-50 text-slate-600 border-slate-200">{counts.moyenne} moyen · {counts.basse} bas</span>
+              <button onClick={() => onFilter({ kind: 'high' })} className="px-2 py-1 rounded-full border bg-red-50 text-red-700 border-red-200 hover:bg-red-100 font-medium">● {counts.haute} prioritaire(s)</button>
+              <button onClick={() => onFilter({ kind: 'reply' })} className="px-2 py-1 rounded-full border bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 font-medium">↩ {counts.a_repondre} à répondre</button>
+              <button onClick={() => onFilter({ kind: 'medium' })} className="px-2 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 font-medium">● {counts.moyenne} moyen</button>
+              <button onClick={() => onFilter({ kind: 'low' })} className="px-2 py-1 rounded-full border bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 font-medium">● {counts.basse} bas</button>
             </div>
           )}
         </div>
@@ -515,7 +546,7 @@ function ReplyItem({ m, societeId, accountId }: { m: MailMessage; societeId: str
       const subject = m.subject.startsWith('Re:') ? m.subject : `Re: ${m.subject}`
       const res = await fetch('/api/nylas/send', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ societe_id: societeId || null, account_id: accountId, to: [to], subject, html: draft.replace(/\n/g, '<br>') }),
+        body: JSON.stringify({ societe_id: societeId || null, account_id: accountId, to: [to], subject, html: replyToHtml(draft) }),
       })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Échec envoi')
