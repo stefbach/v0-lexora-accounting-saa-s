@@ -34,7 +34,6 @@ export function buildNylasAuthUrl(args: { redirectUri: string; state: string; pr
     client_id: cid,
     redirect_uri: args.redirectUri,
     response_type: 'code',
-    access_type: 'offline', // refresh token → jeton durable
   })
   if (args.provider) p.set('provider', args.provider)
   if (args.state) p.set('state', args.state)
