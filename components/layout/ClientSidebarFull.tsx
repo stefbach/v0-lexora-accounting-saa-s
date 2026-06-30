@@ -225,8 +225,8 @@ const MENU: MenuSection[] = [
       { href: "/client/email-accounts", label: "Connexions emails", labelKey: "account.email_connections", icon: Mail },
       { href: "/client/boite-mail", label: "Boîte de réception", labelKey: "account.inbox", icon: Inbox },
       { href: "/client/agenda", label: "Agenda", labelKey: "account.agenda", icon: CalendarDays },
-      { href: "/client/direction/mra-credentials", label: "Accès MRA (Direction)", labelKey: "account.mra_credentials", icon: KeyRound, visibleForRoles: ["direction","client_admin","admin","super_admin"] },
-      { href: "/client/direction/bank-credentials", label: "Accès Bancaires (Direction)", labelKey: "account.bank_credentials", icon: Banknote, visibleForRoles: ["direction","client_admin","admin","super_admin"] },
+      { href: "/client/direction/mra-credentials", label: "Connexion MRA", labelKey: "account.mra_connection", icon: KeyRound, visibleForRoles: ["direction","client_admin","admin","super_admin"] },
+      { href: "/client/direction/bank-credentials", label: "Connexion banque", labelKey: "account.bank_connection", icon: Banknote, visibleForRoles: ["direction","client_admin","admin","super_admin"] },
       { href: "/client/direction/mcp-setup", label: "Connecter à Claude Desktop", labelKey: "clay.connect_claude_desktop", icon: Sparkles, visibleForRoles: ["direction","client_admin","admin","super_admin"] },
     ]
   },

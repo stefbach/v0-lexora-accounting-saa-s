@@ -124,6 +124,8 @@ const baseTranslations = {
     'account.inbox': 'Boîte de réception',
     'account.agenda': 'Agenda',
     'account.email_connections': 'Connexions emails',
+    'account.mra_connection': 'Connexion MRA',
+    'account.bank_connection': 'Connexion banque',
 
     // Common
     'common.loading': 'Chargement...',
@@ -427,6 +429,8 @@ const baseTranslations = {
     'account.inbox': 'Inbox',
     'account.agenda': 'Calendar',
     'account.email_connections': 'Email connections',
+    'account.mra_connection': 'MRA connection',
+    'account.bank_connection': 'Bank connection',
 
     // Common
     'common.loading': 'Loading...',
