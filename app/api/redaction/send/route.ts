@@ -4,6 +4,7 @@ import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
 import { selectEmailAccount, sendEmail, sendEmailFallbackResend } from '@/lib/email/router'
 import { trySendViaAurinko } from '@/lib/aurinko/send'
+import { trySendViaNylas } from '@/lib/nylas/send'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { CourrierPdf, type CourrierPdfData } from '@/lib/redaction/courrier-pdf'
 
@@ -91,8 +92,14 @@ export async function POST(req: NextRequest) {
 
     const msg = { to: [to], cc, subject, html, text, reply_to, attachments }
 
-    // Provider prioritaire : Aurinko (Gmail/Outlook/iCloud/IMAP unifié) si un
-    // compte est connecté. Remplace Resend pour les comptes connectés.
+    // Provider prioritaire : Nylas (boîte connectée — email/agenda/agent IA),
+    // puis Aurinko, sinon compte email / Resend.
+    const nylas = await trySendViaNylas(admin, { user_id: user.id, societe_id, msg })
+    if (nylas) {
+      if (!nylas.ok) return NextResponse.json({ error: nylas.error || 'Envoi Nylas échoué' }, { status: 502 })
+      return NextResponse.json({ ok: true, message_id: nylas.message_id, provider: 'nylas', from: nylas.account_email })
+    }
+
     const aurinko = await trySendViaAurinko(admin, { user_id: user.id, societe_id, msg })
     if (aurinko) {
       if (!aurinko.ok) return NextResponse.json({ error: aurinko.error || 'Envoi Aurinko échoué' }, { status: 502 })
