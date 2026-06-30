@@ -26,6 +26,21 @@ export function isNylasConfigured(): boolean {
   return !!(apiKey() && clientId())
 }
 
+// Scopes demandés par provider : email + agenda + CONTACTS (carnet d'adresses).
+// Si on passe `scope`, il remplace les défauts → inclure TOUT le nécessaire.
+const PROVIDER_SCOPES: Record<string, string> = {
+  google: [
+    'openid', 'email', 'profile',
+    'https://www.googleapis.com/auth/gmail.modify',
+    'https://www.googleapis.com/auth/calendar',
+    'https://www.googleapis.com/auth/contacts',
+  ].join(' '),
+  microsoft: [
+    'openid', 'profile', 'email', 'offline_access', 'User.Read',
+    'Mail.ReadWrite', 'Mail.Send', 'Calendars.ReadWrite', 'Contacts.ReadWrite',
+  ].join(' '),
+}
+
 /** URL d'auth hébergée Nylas (redirection navigateur). */
 export function buildNylasAuthUrl(args: { redirectUri: string; state: string; provider?: string; loginHint?: string }): string {
   const cid = clientId()
@@ -35,7 +50,11 @@ export function buildNylasAuthUrl(args: { redirectUri: string; state: string; pr
     redirect_uri: args.redirectUri,
     response_type: 'code',
   })
-  if (args.provider) p.set('provider', args.provider)
+  if (args.provider) {
+    p.set('provider', args.provider)
+    const scope = PROVIDER_SCOPES[args.provider]
+    if (scope) p.set('scope', scope)
+  }
   if (args.state) p.set('state', args.state)
   if (args.loginHint) p.set('login_hint', args.loginHint)
   return `${apiBase()}/v3/connect/auth?${p.toString()}`
