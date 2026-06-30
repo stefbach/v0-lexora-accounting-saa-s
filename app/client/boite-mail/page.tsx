@@ -234,38 +234,31 @@ export default function BoiteMailPage() {
   )
 
   return (
-    <ClientPageShell hideHero disableParticles>
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-xl font-semibold flex items-center gap-2 text-[#0B0F2E]">
-          <Inbox className="h-5 w-5 text-primary" /> Boîte de réception
-          {accountsList.length > 1 ? (
-            <select
-              value={activeAccountId || ''}
-              onChange={(e) => switchAccount(e.target.value)}
-              className="text-sm font-normal border rounded-md px-2 py-1 bg-background max-w-[220px]"
-            >
-              {accountsList.map((a) => <option key={a.id} value={a.id}>{a.account_email}</option>)}
-            </select>
-          ) : accountEmail && <Badge variant="secondary" className="font-normal">{accountEmail}</Badge>}
-          <Link href="/client/email-accounts" className="text-xs text-muted-foreground underline">+ boîte</Link>
-        </h1>
+    <ClientPageShell
+      kicker="Communication"
+      title="Boîte de réception"
+      subtitle="Lis, trie et réponds à tes emails avec l'assistant IA — et compose de nouveaux messages."
+      actions={
         <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') load(q) }} placeholder="Rechercher…" className="pl-8 pr-3 py-1.5 text-sm border rounded-md bg-background w-44" />
-          </div>
-          <Button variant="outline" size="sm" onClick={() => load(q)} disabled={loading}>{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}</Button>
           <Button size="sm" variant="outline" onClick={() => runTriage(false)} disabled={triaging}>
             {triaging ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Wand2 className="h-4 w-4 mr-1.5" />} Trier ma boîte
           </Button>
           <Button size="sm" onClick={() => setShowCompose(true)}><PenLine className="h-4 w-4 mr-1.5" /> Composer</Button>
           <Button variant="outline" size="sm" onClick={() => setShowSettings(true)}><Settings2 className="h-4 w-4" /></Button>
         </div>
-      </div>
+      }
+    >
+    <div className="space-y-4">
+      {/* Barre d'outils : boîte active, recherche, vue, période */}
+      <div className="flex items-center gap-2 flex-wrap rounded-xl border bg-card px-3 py-2 shadow-sm">
+        {accountsList.length > 1 ? (
+          <select value={activeAccountId || ''} onChange={(e) => switchAccount(e.target.value)} className="text-sm border rounded-md px-2 py-1.5 bg-background max-w-[220px]">
+            {accountsList.map((a) => <option key={a.id} value={a.id}>{a.account_email}</option>)}
+          </select>
+        ) : accountEmail && <Badge variant="secondary" className="font-normal">{accountEmail}</Badge>}
+        <Link href="/client/email-accounts" className="text-xs text-muted-foreground hover:text-primary underline">+ boîte</Link>
 
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="inline-flex rounded-md border overflow-hidden text-sm">
+        <div className="inline-flex rounded-md border overflow-hidden text-sm ml-auto">
           <button onClick={() => { setBox('inbox'); setSelected(null) }} className={`px-3 py-1.5 flex items-center gap-1.5 ${box === 'inbox' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}><Inbox className="h-3.5 w-3.5" /> Reçus</button>
           <button onClick={() => { setBox('sent'); setSelected(null) }} className={`px-3 py-1.5 flex items-center gap-1.5 ${box === 'sent' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}><SendIcon className="h-3.5 w-3.5" /> Envoyés</button>
         </div>
@@ -276,6 +269,11 @@ export default function BoiteMailPage() {
           <option value={7}>7 derniers jours</option>
           <option value={30}>30 derniers jours</option>
         </select>
+        <div className="relative">
+          <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') load(q) }} placeholder="Rechercher…" className="pl-8 pr-3 py-1.5 text-sm border rounded-md bg-background w-44" />
+        </div>
+        <Button variant="outline" size="sm" onClick={() => load(q)} disabled={loading}>{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}</Button>
       </div>
 
       {error && <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3"><AlertCircle className="h-4 w-4" /> {error}</div>}

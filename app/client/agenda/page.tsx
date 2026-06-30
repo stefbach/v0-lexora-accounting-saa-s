@@ -8,6 +8,7 @@ import {
   Loader2, CalendarDays, Plus, RefreshCw, Video, MapPin, Users, Trash2, X, AlertCircle, CheckCircle2, Mail,
 } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 type CalEvent = {
   id: string; title: string; description: string; location: string
@@ -84,9 +85,11 @@ export default function AgendaPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-xl font-semibold flex items-center gap-2"><CalendarDays className="h-5 w-5" /> Agenda</h1>
+    <ClientPageShell
+      kicker="Communication"
+      title="Agenda"
+      subtitle="Tes événements et rendez-vous, avec visio Meet/Zoom — synchronisés à ta boîte connectée."
+      actions={
         <div className="flex items-center gap-2">
           {calendars.length > 1 && (
             <select value={calendarId} onChange={(e) => setCalendarId(e.target.value)} className="text-sm border rounded-md px-2 py-1.5 bg-background max-w-[200px]">
@@ -96,8 +99,9 @@ export default function AgendaPage() {
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}</Button>
           <Button size="sm" onClick={() => setShowCreate(true)}><Plus className="h-4 w-4 mr-1.5" /> Nouvel événement</Button>
         </div>
-      </div>
-
+      }
+    >
+    <div className="space-y-4">
       {error && <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3"><AlertCircle className="h-4 w-4" /> {error}</div>}
       {success && <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-md p-3"><CheckCircle2 className="h-4 w-4" /> {success}</div>}
 
@@ -139,6 +143,7 @@ export default function AgendaPage() {
         />
       )}
     </div>
+    </ClientPageShell>
   )
 }
 
