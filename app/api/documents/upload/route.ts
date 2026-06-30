@@ -1965,6 +1965,8 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
     }
 
     // Handle bank statement: auto-detect société + create/update bank account + store statement
+    // Garde-fou anti-chevauchement relevé : info remontée à l'UI.
+    let releveImportInfo: { absorbed: unknown[]; overlaps: unknown[]; message?: string } | null = null
     if (typeDocument === 'releve_bancaire') {
       // Do NOT set banque from detectedSociete — it's the account holder, not the bank
       // F2/F3 — resolve currency with strict priority (extraction → IBAN whitelist → block).
@@ -2502,8 +2504,14 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               { uploaded_by: user?.id ?? null, source: 'web' },
             )
             console.warn(
-              `[upload] releve_bancaire ${upsertResult.replaced ? 'REPLACED' : 'created'}: v${upsertResult.version}, ${normalizedTransactions.length} transactions, societe=${bankSocieteId}, previous=${upsertResult.previous_id || 'none'}`,
+              `[upload] releve_bancaire ${upsertResult.replaced ? 'REPLACED' : 'created'}: v${upsertResult.version}, ${normalizedTransactions.length} transactions, societe=${bankSocieteId}, previous=${upsertResult.previous_id || 'none'}, absorbed=${upsertResult.absorbed.length}, overlaps=${upsertResult.overlaps.length}`,
             )
+            if (upsertResult.absorbed.length > 0 || upsertResult.overlaps.length > 0) {
+              const parts: string[] = []
+              if (upsertResult.absorbed.length > 0) parts.push(`${upsertResult.absorbed.length} relevé(s) plus court(s) déjà enregistré(s) ont été absorbés par ce relevé (pas de doublon).`)
+              if (upsertResult.overlaps.length > 0) parts.push(`${upsertResult.overlaps.length} chevauchement(s) à vérifier (plage partiellement couverte ou déjà incluse dans un relevé plus large).`)
+              releveImportInfo = { absorbed: upsertResult.absorbed, overlaps: upsertResult.overlaps, message: parts.join(' ') }
+            }
           } catch (e: any) {
             console.error('[upload] upsertReleveBancaire FAILED:', e?.message || String(e))
           }
@@ -2530,7 +2538,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
       })
     }
 
-    return NextResponse.json({ document: finalDoc || doc, message: `Classé: ${typeDocument}` })
+    return NextResponse.json({ document: finalDoc || doc, message: `Classé: ${typeDocument}`, releve_import: releveImportInfo })
 
   } catch (e: any) {
     const errMsg = e?.message || String(e)
