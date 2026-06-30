@@ -21,6 +21,7 @@ export default function BookingSettingsPage() {
   const locale = getLocale()
   const [settings, setSettings] = useState<Settings | null>(null)
   const [googleAccounts, setGoogleAccounts] = useState<any[]>([])
+  const [nylasAccounts, setNylasAccounts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [banner, setBanner] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null)
@@ -42,9 +43,11 @@ export default function BookingSettingsPage() {
     Promise.all([
       fetch('/api/rdv/settings?admin=1').then(r => r.json()),
       fetch('/api/google-accounts/list').then(r => r.json()),
-    ]).then(([s, g]) => {
+      fetch('/api/auth/nylas/accounts').then(r => r.json()).catch(() => ({ accounts: [] })),
+    ]).then(([s, g, n]) => {
       setSettings(s?.settings || defaultSettings())
       setGoogleAccounts(g?.accounts || [])
+      setNylasAccounts(n?.accounts || [])
     }).finally(() => setLoading(false))
   }, [])
 
@@ -77,7 +80,8 @@ export default function BookingSettingsPage() {
   }
 
   async function save() {
-    if (!settings?.google_account_email) {
+    // Une boîte Nylas suffit (agenda prioritaire) ; sinon un compte Google.
+    if (nylasAccounts.length === 0 && !settings?.google_account_email) {
       setBanner({ kind: 'error', msg: t('scp.bk_choose_google', locale) })
       return
     }
@@ -121,12 +125,17 @@ export default function BookingSettingsPage() {
         </div>
       )}
 
-      {/* Compte Google */}
+      {/* Agenda (Nylas prioritaire, Google en repli) */}
       <Card>
-        <CardHeader><CardTitle className="text-base">{t('scp.bk_google_account', locale)}</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">Agenda</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          {googleAccounts.length === 0 ? (
-            <p className="text-sm text-amber-600">{t('scp.no_google_account', locale)} {t('scp.bk_connect_one', locale)} <a href="/client/settings/google-accounts" className="underline">{t('scp.bk_settings_google_link', locale)}</a>.</p>
+          {nylasAccounts.length > 0 ? (
+            <div className="text-sm rounded border border-green-200 bg-green-50 p-3">
+              <p className="text-green-800 font-medium">Agenda géré via ta boîte connectée : {nylasAccounts[0].account_email}</p>
+              <p className="text-xs text-muted-foreground mt-1">Les RDV (créneaux, événements, visio Meet) et les emails de confirmation passent par cette boîte. Rien d'autre à configurer.</p>
+            </div>
+          ) : googleAccounts.length === 0 ? (
+            <p className="text-sm text-amber-600">Connecte une boîte via <a href="/client/email-accounts" className="underline">/client/email-accounts</a> pour gérer l'agenda et les confirmations.</p>
           ) : (
             <div>
               <Label>{t('scp.bk_account_to_use', locale)}</Label>

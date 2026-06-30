@@ -359,6 +359,28 @@ export async function nylasFreeBusy(grantId: string, email: string, startEpoch: 
     .map((s) => ({ start: s.start_time as number, end: s.end_time as number }))
 }
 
+export async function updateNylasEvent(
+  grantId: string, eventId: string, calendarId: string,
+  patch: { title?: string; description?: string; location?: string; startEpoch?: number; endEpoch?: number; participants?: string[] },
+): Promise<CalEvent> {
+  const body: Record<string, unknown> = {}
+  if (patch.title !== undefined) body.title = patch.title
+  if (patch.description !== undefined) body.description = patch.description
+  if (patch.location !== undefined) body.location = patch.location
+  if (patch.startEpoch && patch.endEpoch) body.when = { start_time: patch.startEpoch, end_time: patch.endEpoch }
+  if (patch.participants) body.participants = patch.participants.map((email) => ({ email }))
+  const p = new URLSearchParams({ calendar_id: calendarId })
+  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/events/${encodeURIComponent(eventId)}?${p.toString()}`, {
+    method: 'PUT', headers: authHeaders(), body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    throw new Error(`Nylas update event ${res.status}: ${txt.slice(0, 200)}`)
+  }
+  const d = await res.json() as { data?: RawEvent }
+  return normalizeEvent(d.data || {})
+}
+
 export async function deleteNylasEvent(grantId: string, eventId: string, calendarId: string): Promise<void> {
   const p = new URLSearchParams({ calendar_id: calendarId })
   const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/events/${encodeURIComponent(eventId)}?${p.toString()}`, {

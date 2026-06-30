@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { googleCalendarFetch } from '@/lib/google/calendar-client'
+import { nylasOwnerCalendar } from '@/lib/nylas/agent-bridge'
+import { nylasFreeBusy } from '@/lib/nylas/client'
 import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
@@ -69,6 +71,19 @@ export async function POST(req: NextRequest) {
     // On agrège tous les busy intervals.
     const busyAll: Busy[] = []
 
+    // Nylas en priorité : free/busy du owner + des participants demandés.
+    const nylasCal = await nylasOwnerCalendar(ctx.user_id).catch(() => null)
+    if (nylasCal) {
+      const startE = Math.floor(Date.parse(timeMin) / 1000)
+      const endE = Math.floor(Date.parse(timeMax) / 1000)
+      const emails = [nylasCal.email, ...attendeeEmails]
+      for (const em of emails) {
+        try {
+          const slots = await nylasFreeBusy(nylasCal.grantId, em, startE, endE)
+          for (const s of slots) busyAll.push({ start: s.start * 1000, end: s.end * 1000 })
+        } catch { /* un compte qui échoue ne casse pas tout */ }
+      }
+    } else
     for (const acc of account_emails) {
       try {
         // items = primary du compte + tous les attendees

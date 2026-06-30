@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { googleCalendarFetch, extractMeetUrl } from '@/lib/google/calendar-client'
+import { nylasOwnerCalendar } from '@/lib/nylas/agent-bridge'
+import { updateNylasEvent } from '@/lib/nylas/client'
 import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
@@ -26,6 +28,28 @@ export async function POST(req: NextRequest) {
     }
 
     const patch = body?.patch || {}
+
+    // Nylas en priorité (l'event a été créé via Nylas → ids Nylas).
+    const nylasCal = await nylasOwnerCalendar(ctx.user_id).catch(() => null)
+    if (nylasCal) {
+      try {
+        const sE = patch.start_iso ? Math.floor(new Date(patch.start_iso).getTime() / 1000) : undefined
+        const eE = patch.end_iso ? Math.floor(new Date(patch.end_iso).getTime() / 1000) : undefined
+        if ((sE && !eE) || (!sE && eE)) {
+          return { result: null, status: 'error', error_msg: 'Pour modifier l\'horaire via Nylas, fournis start_iso ET end_iso.' }
+        }
+        const ev = await updateNylasEvent(nylasCal.grantId, event_id, calendar_id || nylasCal.calendarId, {
+          title: patch.summary !== undefined ? String(patch.summary).slice(0, 200) : undefined,
+          description: patch.description !== undefined ? String(patch.description).slice(0, 4000) : undefined,
+          location: patch.location !== undefined ? String(patch.location).slice(0, 500) : undefined,
+          startEpoch: sE, endEpoch: eE,
+          participants: Array.isArray(patch.attendees) ? patch.attendees.map((a: any) => String(a?.email || '').trim()).filter(Boolean) : undefined,
+        })
+        return { result: { event_id: ev.id, calendar_id, html_link: null, meet_url: ev.conferenceUrl, start: ev.start, end: ev.end, summary: ev.title, source: 'nylas' } }
+      } catch (e: any) {
+        return { result: null, status: 'error', error_msg: `Nylas update: ${e?.message || e}` }
+      }
+    }
     const body_patch: any = {}
     if (patch.summary !== undefined) body_patch.summary = String(patch.summary).slice(0, 200)
     if (patch.description !== undefined) body_patch.description = String(patch.description).slice(0, 4000)

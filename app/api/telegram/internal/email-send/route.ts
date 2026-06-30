@@ -3,6 +3,7 @@ import { withTelegramAuth, hasRole } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { selectEmailAccount, sendEmail, sendEmailFallbackResend } from '@/lib/email/router'
 import { ensureGmailEmailAccounts } from '@/lib/email/gmail-backfill'
+import { trySendViaNylas } from '@/lib/nylas/send'
 import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
@@ -198,6 +199,32 @@ export async function POST(req: NextRequest) {
           result: null, status: 'denied',
           error_msg: `Destinataires non autorisés : ${unauthorized.join(', ')}. ` +
             `Ajoute-les comme contact dans Lexora d'abord, ou demande à un compte direction/admin d'envoyer.`,
+        }
+      }
+    }
+
+    // Nylas en priorité : si une boîte Nylas est connectée, on envoie depuis
+    // elle et on court-circuite la chaîne Gmail/Resend.
+    {
+      const adminN = getAdminClient()
+      const nylasRes = await trySendViaNylas(adminN, {
+        user_id: ctx.user_id, societe_id: ctx.societe_id,
+        msg: { to, cc, subject, html, reply_to },
+      })
+      if (nylasRes) {
+        if (!nylasRes.ok) return { result: null, status: 'error', error_msg: nylasRes.error || 'Envoi Nylas échoué' }
+        await adminN.from('notifications').insert({
+          destinataire_id: ctx.user_id, destinataire_type: 'client',
+          societe_id: ctx.societe_id, type: 'telegram_agent_email',
+          titre: subject, message: text?.slice(0, 500) || html.replace(/<[^>]+>/g, '').slice(0, 500),
+          niveau: 'info', envoye_email: true, cron_name: null,
+        }).then(() => {}, () => {})
+        return {
+          result: {
+            message_id: nylasRes.message_id, account_id: null, provider: 'nylas',
+            from: nylasRes.account_email, to, cc, subject,
+            contact_warnings: contactWarnings.length > 0 ? contactWarnings : undefined,
+          },
         }
       }
     }

@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { googleCalendarFetch, extractMeetUrl } from '@/lib/google/calendar-client'
+import { nylasOwnerCalendar } from '@/lib/nylas/agent-bridge'
+import { listNylasEvents } from '@/lib/nylas/client'
 import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
@@ -24,6 +26,24 @@ export async function POST(req: NextRequest) {
 
     const timeMin = new Date().toISOString()
     const timeMax = new Date(Date.now() + days_ahead * 86400_000).toISOString()
+
+    // Nylas en priorité (agenda unifié), sinon Google.
+    const nylasCal = await nylasOwnerCalendar(ctx.user_id).catch(() => null)
+    if (nylasCal) {
+      const now = Math.floor(Date.now() / 1000)
+      const evs = await listNylasEvents(nylasCal.grantId, nylasCal.calendarId, now, now + days_ahead * 86400).catch(() => [])
+      const events = evs
+        .filter((e) => e.start)
+        .sort((a, b) => (a.start || '').localeCompare(b.start || ''))
+        .slice(0, 20)
+        .map((e) => ({
+          id: e.id, calendar_id: nylasCal.calendarId, title: e.title,
+          start: e.start, end: e.end, location: e.location || null,
+          attendees: e.participants.map((p) => ({ email: p.email, name: p.name || null, response: p.status || null })),
+          meet_link: e.conferenceUrl, html_link: null, organizer: null,
+        }))
+      return { result: { count: events.length, events, days_ahead, calendars: [nylasCal.calendarId], errors: [], source: 'nylas' } }
+    }
 
     const allEvents: any[] = []
     for (const cal of calendars) {

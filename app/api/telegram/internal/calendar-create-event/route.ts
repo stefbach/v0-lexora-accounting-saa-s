@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { googleCalendarFetch, extractMeetUrl } from '@/lib/google/calendar-client'
+import { nylasOwnerCalendar } from '@/lib/nylas/agent-bridge'
+import { createNylasEvent } from '@/lib/nylas/client'
 import { randomUUID } from 'crypto'
 import { verifyHmac } from '@/lib/security/hmac-auth'
 
@@ -84,6 +86,27 @@ export async function POST(req: NextRequest) {
       .map((a: any) => ({ email: String(a?.email || '').trim(), displayName: a?.name ? String(a.name) : undefined }))
       .filter((a: any) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.email))
       .slice(0, 25)
+
+    // Nylas en priorité (agenda unifié), sinon Google.
+    const nylasCal = await nylasOwnerCalendar(ctx.user_id).catch(() => null)
+    if (nylasCal) {
+      try {
+        const ev = await createNylasEvent(nylasCal.grantId, {
+          calendarId: nylasCal.calendarId, title: summary, description, location: type === 'meet' ? undefined : location,
+          startEpoch: Math.floor(startDate.getTime() / 1000), endEpoch: Math.floor(endDate.getTime() / 1000),
+          participants: attendees.map((a: any) => a.email), conferencing: type === 'meet' ? 'meet' : null,
+        })
+        return {
+          result: {
+            event_id: ev.id, calendar_id: nylasCal.calendarId, html_link: null, meet_url: ev.conferenceUrl,
+            start: ev.start, end: ev.end, attendees: ev.participants.map((p) => ({ email: p.email, response: p.status })),
+            type, send_invites, source: 'nylas',
+          },
+        }
+      } catch (e: any) {
+        return { result: null, status: 'error', error_msg: `Nylas: ${e?.message || e} | summary="${summary}", type=${type}` }
+      }
+    }
 
     const event: any = {
       summary,

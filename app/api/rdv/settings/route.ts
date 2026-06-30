@@ -88,11 +88,16 @@ export async function POST(req: NextRequest) {
   if (!user) return apiError('not_authenticated', 401)
 
   const body = await req.json().catch(() => ({}))
-  if (!body?.google_account_email) {
-    return NextResponse.json({ error: 'google_account_email requis (choisis un compte Google connecté)' }, { status: 400 })
-  }
 
   const admin = getAdminClient()
+
+  // Agenda : une boîte Nylas suffit (prioritaire). Le compte Google n'est
+  // requis qu'en l'absence de Nylas (mode repli).
+  const { hasNylas } = await import('@/lib/nylas/agent-bridge')
+  const ownerHasNylas = await hasNylas(user.id).catch(() => false)
+  if (!ownerHasNylas && !body?.google_account_email) {
+    return NextResponse.json({ error: 'Connecte une boîte (Nylas) via /client/email-accounts, ou choisis un compte Google.' }, { status: 400 })
+  }
   // Existe déjà ?
   const { data: existing } = await admin
     .from('booking_settings')

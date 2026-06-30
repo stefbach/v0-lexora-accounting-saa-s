@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { googleCalendarFetch } from '@/lib/google/calendar-client'
+import { nylasOwnerCalendar } from '@/lib/nylas/agent-bridge'
+import { deleteNylasEvent } from '@/lib/nylas/client'
 import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
@@ -24,6 +26,19 @@ export async function POST(req: NextRequest) {
       return { result: null, status: 'error', error_msg: 'calendar_id et event_id requis' }
     }
     const send_cancellations = body?.send_cancellations === true
+
+    // Nylas en priorité (l'event a été créé via Nylas → ids Nylas).
+    const nylasCal = await nylasOwnerCalendar(ctx.user_id).catch(() => null)
+    if (nylasCal) {
+      try {
+        await deleteNylasEvent(nylasCal.grantId, event_id, calendar_id || nylasCal.calendarId)
+        return { result: { deleted: true, event_id, calendar_id, notified_attendees: send_cancellations, source: 'nylas' } }
+      } catch (e: any) {
+        const msg = e?.message || String(e)
+        if (/\b(404|410)\b/.test(msg)) return { result: { deleted: true, event_id, calendar_id, notified_attendees: false, already_deleted: true } }
+        return { result: null, status: 'error', error_msg: `Nylas delete: ${msg}` }
+      }
+    }
 
     try {
       await googleCalendarFetch(
