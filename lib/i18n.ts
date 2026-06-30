@@ -123,6 +123,7 @@ const baseTranslations = {
     'account.telegram_permissions': 'Permissions Bot',
     'account.inbox': 'Boîte de réception',
     'account.agenda': 'Agenda',
+    'account.email_connections': 'Connexions emails',
 
     // Common
     'common.loading': 'Chargement...',
@@ -425,6 +426,7 @@ const baseTranslations = {
     'account.telegram_permissions': 'Bot Permissions',
     'account.inbox': 'Inbox',
     'account.agenda': 'Calendar',
+    'account.email_connections': 'Email connections',
 
     // Common
     'common.loading': 'Loading...',
