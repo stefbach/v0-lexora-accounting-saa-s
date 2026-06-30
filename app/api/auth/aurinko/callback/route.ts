@@ -11,7 +11,7 @@ import { exchangeAurinkoCode, getAurinkoAccount } from '@/lib/aurinko/client'
  * compte (chiffré) dans user_oauth_accounts (provider='aurinko').
  */
 function errorRedirect(req: NextRequest, message: string) {
-  const url = new URL('/client/settings/email-accounts', req.nextUrl.origin)
+  const url = new URL('/client/email-accounts', req.nextUrl.origin)
   url.searchParams.set('aurinko_error', message.slice(0, 200))
   return NextResponse.redirect(url)
 }
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
   let meta: { s?: string; r?: string; t?: string } = {}
   try { meta = JSON.parse(state.return_to || '{}') } catch { /* noop */ }
   const societeId = meta.s || null
-  const returnTo = meta.r || '/client/settings/email-accounts'
+  const returnTo = meta.r || '/client/email-accounts'
 
   try {
     const { accountId, accessToken } = await exchangeAurinkoCode(code)
