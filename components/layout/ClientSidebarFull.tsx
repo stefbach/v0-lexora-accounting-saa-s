@@ -222,7 +222,6 @@ const MENU: MenuSection[] = [
       { href: "/client/profil", label: "Mon Profil", labelKey: "account.my_profile", icon: Settings },
       { href: "/client/telegram-config", label: "Telegram Bot", labelKey: "account.telegram_bot", icon: MessageCircle },
       { href: "/client/telegram-permissions", label: "Permissions Bot", labelKey: "account.telegram_permissions", icon: MessageCircle, visibleForRoles: ["direction","client_admin","client_assistant","admin","super_admin","rh"] },
-      { href: "/client/settings/google-accounts", label: "Comptes Google (Agenda)", labelKey: "account.google_accounts", icon: Calendar },
       { href: "/client/email-accounts", label: "Comptes Email", labelKey: "account.email_accounts", icon: Mail },
       { href: "/client/boite-mail", label: "Boîte de réception", labelKey: "account.inbox", icon: Inbox },
       { href: "/client/direction/mra-credentials", label: "Accès MRA (Direction)", labelKey: "account.mra_credentials", icon: KeyRound, visibleForRoles: ["direction","client_admin","admin","super_admin"] },

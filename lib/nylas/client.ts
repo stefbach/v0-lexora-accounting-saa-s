@@ -113,6 +113,8 @@ export async function sendNylasEmail(grantId: string, msg: NylasEmailMessage): P
 /** Participant Nylas (from/to/cc). */
 type NylasParticipant = { name?: string; email?: string }
 
+type NylasRawAttachment = { id?: string; filename?: string; content_type?: string; size?: number; is_inline?: boolean; content_id?: string }
+
 /** Message Nylas brut (champs utilisés). */
 type NylasRawMessage = {
   id?: string
@@ -128,7 +130,10 @@ type NylasRawMessage = {
   unread?: boolean
   starred?: boolean
   folders?: string[]
+  attachments?: NylasRawAttachment[]
 }
+
+export type MailAttachment = { id: string; filename: string; contentType: string; size: number; isInline: boolean }
 
 /** Message normalisé pour l'UI / l'agent IA. */
 export type MailMessage = {
@@ -145,6 +150,7 @@ export type MailMessage = {
   unread: boolean
   starred: boolean
   folders: string[]
+  attachments: MailAttachment[]
 }
 
 function normalizeMessage(m: NylasRawMessage): MailMessage {
@@ -162,17 +168,21 @@ function normalizeMessage(m: NylasRawMessage): MailMessage {
     unread: !!m.unread,
     starred: !!m.starred,
     folders: m.folders || [],
+    attachments: (m.attachments || [])
+      .filter((a) => a.id && !a.is_inline)
+      .map((a) => ({ id: a.id || '', filename: a.filename || 'piece-jointe', contentType: a.content_type || 'application/octet-stream', size: a.size || 0, isInline: !!a.is_inline })),
   }
 }
 
 /** Liste des messages (boîte interne), normalisés. */
-export async function listNylasMessages(grantId: string, opts: { limit?: number; pageToken?: string; q?: string; folderId?: string; unread?: boolean } = {}): Promise<{ data: MailMessage[]; nextCursor?: string }> {
+export async function listNylasMessages(grantId: string, opts: { limit?: number; pageToken?: string; q?: string; folderId?: string; unread?: boolean; receivedAfter?: number } = {}): Promise<{ data: MailMessage[]; nextCursor?: string }> {
   const p = new URLSearchParams()
   p.set('limit', String(opts.limit || 25))
   if (opts.pageToken) p.set('page_token', opts.pageToken)
   if (opts.q) p.set('search_query_native', opts.q)
   if (opts.folderId) p.set('in', opts.folderId)
   if (opts.unread !== undefined) p.set('unread', String(opts.unread))
+  if (opts.receivedAfter) p.set('received_after', String(opts.receivedAfter))
   const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/messages?${p.toString()}`, {
     headers: authHeaders(),
   })
@@ -206,6 +216,26 @@ export async function updateNylasMessage(
     const txt = await res.text().catch(() => '')
     throw new Error(`Nylas update message ${res.status}: ${txt.slice(0, 200)}`)
   }
+}
+
+/** Supprime un message (corbeille / suppression selon le provider). */
+export async function deleteNylasMessage(grantId: string, messageId: string): Promise<void> {
+  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/messages/${encodeURIComponent(messageId)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  if (!res.ok && res.status !== 404) {
+    const txt = await res.text().catch(() => '')
+    throw new Error(`Nylas delete message ${res.status}: ${txt.slice(0, 200)}`)
+  }
+}
+
+/** Télécharge une pièce jointe (renvoie le binaire + le content-type). */
+export async function downloadNylasAttachment(grantId: string, attachmentId: string, messageId: string): Promise<{ buffer: ArrayBuffer; contentType: string }> {
+  const url = `${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/attachments/${encodeURIComponent(attachmentId)}/download?message_id=${encodeURIComponent(messageId)}`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${apiKey()}` } })
+  if (!res.ok) throw new Error(`Nylas download attachment ${res.status}`)
+  return { buffer: await res.arrayBuffer(), contentType: res.headers.get('content-type') || 'application/octet-stream' }
 }
 
 export type MailFolder = { id: string; name: string; attributes?: string[]; totalCount?: number; unreadCount?: number }

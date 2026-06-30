@@ -6,15 +6,16 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
   Loader2, Mail, RefreshCw, Search, Sparkles, ListChecks, Tag, Reply, Send, AlertCircle,
-  CheckCircle2, Inbox, Settings2, Wand2, Circle, X,
+  CheckCircle2, Inbox, Settings2, Wand2, Circle, X, Trash2, Paperclip, Download, Send as SendIcon,
 } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 type Participant = { name?: string; email?: string }
+type MailAttachment = { id: string; filename: string; contentType: string; size: number; isInline: boolean }
 type MailMessage = {
   id: string; threadId: string | null; subject: string; snippet: string; body: string
   from: Participant | null; to: Participant[]; cc: Participant[]; replyTo: Participant[]
-  date: string | null; unread: boolean; starred: boolean; folders: string[]
+  date: string | null; unread: boolean; starred: boolean; folders: string[]; attachments: MailAttachment[]
 }
 type Analysis = { message_id: string; category: string; priority: 'haute' | 'moyenne' | 'basse'; needs_reply: boolean; summary: string; suggested_action: string }
 type AgentSettings = { instructions: string; categories: string[]; signature: string; tone: string; auto_triage: boolean }
@@ -35,6 +36,9 @@ export default function BoiteMailPage() {
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<Filter>({ kind: 'all' })
+  const [box, setBox] = useState<'inbox' | 'sent'>('inbox')
+  const [days, setDays] = useState(0) // 0 = tout, sinon nb de jours
+  const [deleting, setDeleting] = useState(false)
 
   const [selected, setSelected] = useState<MailMessage | null>(null)
   const [loadingMsg, setLoadingMsg] = useState(false)
@@ -67,14 +71,17 @@ export default function BoiteMailPage() {
   const load = useCallback(async (search?: string) => {
     setLoading(true); setError(null)
     try {
-      const res = await fetch(`/api/nylas/messages?${sp({ folders: '0', ...(search ? { q: search } : {}) })}`)
+      const extra: Record<string, string> = { box }
+      if (days > 0) extra.days = String(days)
+      if (search) extra.q = search
+      const res = await fetch(`/api/nylas/messages?${sp(extra)}`)
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Erreur de chargement')
       if (!d.account) { setNoAccount(true); setMessages([]) }
       else { setNoAccount(false); setAccountEmail(d.account.email); if (d.account.id) setActiveAccountId((prev) => prev || d.account.id); setMessages(d.messages || []); setAnalyses(d.analyses || {}) }
     } catch (e) { setError(e instanceof Error ? e.message : 'Erreur') }
     finally { setLoading(false) }
-  }, [societeId, activeAccountId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [societeId, activeAccountId, box, days]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadSettings = useCallback(async () => {
     try {
@@ -168,6 +175,19 @@ export default function BoiteMailPage() {
     finally { setSending(false) }
   }
 
+  const deleteMessage = async (m: MailMessage) => {
+    if (!confirm(`Supprimer cet email de « ${who(m.from)} » ?`)) return
+    setDeleting(true); setError(null)
+    try {
+      const res = await fetch(`/api/nylas/messages/${encodeURIComponent(m.id)}?${sp()}`, { method: 'DELETE' })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Échec suppression')
+      setMessages((prev) => prev.filter((x) => x.id !== m.id))
+      if (selected?.id === m.id) setSelected(null)
+    } catch (e) { setError(e instanceof Error ? e.message : 'Échec suppression') }
+    finally { setDeleting(false) }
+  }
+
   const categories = useMemo(() => {
     const set = new Set<string>()
     Object.values(analyses).forEach((a) => a.category && set.add(a.category))
@@ -237,6 +257,20 @@ export default function BoiteMailPage() {
           </Button>
           <Button variant="outline" size="sm" onClick={() => setShowSettings(true)}><Settings2 className="h-4 w-4" /></Button>
         </div>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="inline-flex rounded-md border overflow-hidden text-sm">
+          <button onClick={() => { setBox('inbox'); setSelected(null) }} className={`px-3 py-1.5 flex items-center gap-1.5 ${box === 'inbox' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}><Inbox className="h-3.5 w-3.5" /> Reçus</button>
+          <button onClick={() => { setBox('sent'); setSelected(null) }} className={`px-3 py-1.5 flex items-center gap-1.5 ${box === 'sent' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}><SendIcon className="h-3.5 w-3.5" /> Envoyés</button>
+        </div>
+        <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="text-sm border rounded-md px-2 py-1.5 bg-background">
+          <option value={0}>Toute la période</option>
+          <option value={1}>Dernier jour</option>
+          <option value={2}>2 derniers jours</option>
+          <option value={7}>7 derniers jours</option>
+          <option value={30}>30 derniers jours</option>
+        </select>
       </div>
 
       {error && <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3"><AlertCircle className="h-4 w-4" /> {error}</div>}
@@ -310,6 +344,7 @@ export default function BoiteMailPage() {
                   <Button size="sm" variant="outline" onClick={() => runAgent('classify')} disabled={!!agentBusy}>{agentBusy === 'classify' ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Tag className="h-3.5 w-3.5 mr-1.5" />} Classer</Button>
                   <Button size="sm" variant="outline" onClick={() => runAgent('actions')} disabled={!!agentBusy}>{agentBusy === 'actions' ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ListChecks className="h-3.5 w-3.5 mr-1.5" />} Actions</Button>
                   <Button size="sm" onClick={() => { setReplyMode(true); setAgentOut(null) }} disabled={!!agentBusy}><Reply className="h-3.5 w-3.5 mr-1.5" /> Répondre</Button>
+                  <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={() => deleteMessage(selected)} disabled={deleting}>{deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}</Button>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4 pt-4">
@@ -329,6 +364,18 @@ export default function BoiteMailPage() {
                         <div className="flex justify-end"><Button size="sm" onClick={sendReply} disabled={sending}>{sending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Send className="h-3.5 w-3.5 mr-1.5" />} Envoyer</Button></div>
                       </>
                     )}
+                  </div>
+                )}
+                {selected.attachments?.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {selected.attachments.map((att) => (
+                      <a key={att.id} href={`/api/nylas/messages/${encodeURIComponent(selected.id)}/attachments/${encodeURIComponent(att.id)}?${sp({ filename: att.filename })}`} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs border rounded-md px-2 py-1 hover:bg-muted">
+                        <Paperclip className="h-3 w-3" /> {att.filename}
+                        {att.size > 0 && <span className="text-muted-foreground">({Math.round(att.size / 1024)} Ko)</span>}
+                        <Download className="h-3 w-3" />
+                      </a>
+                    ))}
                   </div>
                 )}
                 <div className="border-t pt-4">
@@ -355,6 +402,24 @@ function SettingsModal({ settings, societeId, onClose, onSaved }: { settings: Ag
   const [autoTriage, setAutoTriage] = useState(settings.auto_triage)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [brainDesc, setBrainDesc] = useState('')
+  const [generating, setGenerating] = useState(false)
+
+  const generateBrain = async () => {
+    if (!brainDesc.trim()) return
+    setGenerating(true); setErr(null)
+    try {
+      const res = await fetch('/api/nylas/agent/brain', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: brainDesc, current: instructions, categories: categories.split(',').map((c) => c.trim()).filter(Boolean) }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Erreur assistant')
+      if (d.instructions) setInstructions(d.instructions)
+      if (Array.isArray(d.categories) && d.categories.length) setCategories(d.categories.join(', '))
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Erreur assistant') }
+    finally { setGenerating(false) }
+  }
 
   const save = async () => {
     setSaving(true); setErr(null)
@@ -379,6 +444,16 @@ function SettingsModal({ settings, societeId, onClose, onSaved }: { settings: Ag
         </CardHeader>
         <CardContent className="space-y-4">
           {err && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{err}</div>}
+
+          <div className="rounded-md border border-violet-200 bg-violet-50/50 p-3 space-y-2">
+            <div className="flex items-center gap-1.5 text-violet-700 font-medium text-xs uppercase tracking-wide"><Wand2 className="h-3.5 w-3.5" /> Assistant : paramétrer le cerveau</div>
+            <p className="text-xs text-muted-foreground">Décris ton rôle, ton activité et tes préférences en langage courant — l'IA en déduit des consignes structurées + des catégories, que tu pourras ensuite ajuster.</p>
+            <textarea value={brainDesc} onChange={(e) => setBrainDesc(e.target.value)} className="w-full text-sm border rounded-md p-2 min-h-[70px] bg-background" placeholder="Ex : Je dirige un cabinet comptable à Maurice. Mes clients et la MRA sont prioritaires. Je veux repérer vite les échéances fiscales et les factures fournisseurs. Je réponds toujours de façon courtoise mais directe…" />
+            <Button size="sm" variant="outline" onClick={generateBrain} disabled={generating || !brainDesc.trim()}>
+              {generating ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />} Générer mes consignes
+            </Button>
+          </div>
+
           <div>
             <label className="text-sm font-medium">Consignes (le cerveau de l'assistant)</label>
             <p className="text-xs text-muted-foreground mb-1">Décris tes priorités, expéditeurs importants, ce qui doit être signalé, ta façon de travailler. L'agent s'y conforme pour trier, classer et répondre.</p>

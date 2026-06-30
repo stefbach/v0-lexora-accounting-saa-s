@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { resolveNylasAccount } from '@/lib/nylas/account'
-import { listNylasMessages, listNylasFolders, isNylasConfigured } from '@/lib/nylas/client'
+import { listNylasMessages, listNylasFolders, isNylasConfigured, type MailFolder } from '@/lib/nylas/client'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,16 +22,31 @@ export async function GET(req: NextRequest) {
   if (!account) return NextResponse.json({ account: null, messages: [] })
 
   try {
-    const [{ data, nextCursor }, folders] = await Promise.all([
-      listNylasMessages(account.grantId, {
-        limit: Math.min(Number(sp.get('limit')) || 30, 50),
-        pageToken: sp.get('page_token') || undefined,
-        q: sp.get('q') || undefined,
-        folderId: sp.get('folder') || undefined,
-        unread: sp.get('unread') === '1' ? true : undefined,
-      }),
-      sp.get('folders') === '1' ? listNylasFolders(account.grantId).catch(() => []) : Promise.resolve(undefined),
-    ])
+    // Vue Envoyés : on résout le dossier "sent" via ses attributs.
+    let folderId = sp.get('folder') || undefined
+    const box = sp.get('box')
+    let allFolders: MailFolder[] | undefined
+    if (box === 'sent' || sp.get('folders') === '1') {
+      allFolders = await listNylasFolders(account.grantId).catch(() => [])
+      if (box === 'sent') {
+        const sent = allFolders.find((f) => (f.attributes || []).some((a) => /sent/i.test(a)) || /sent|envoy/i.test(f.name))
+        folderId = sent?.id || folderId
+      }
+    }
+
+    // Période : received_after en epoch secondes.
+    const days = Number(sp.get('days')) || 0
+    const receivedAfter = days > 0 ? Math.floor(Date.now() / 1000) - days * 86400 : undefined
+
+    const { data, nextCursor } = await listNylasMessages(account.grantId, {
+      limit: Math.min(Number(sp.get('limit')) || 30, 50),
+      pageToken: sp.get('page_token') || undefined,
+      q: sp.get('q') || undefined,
+      folderId,
+      unread: sp.get('unread') === '1' ? true : undefined,
+      receivedAfter,
+    })
+    const folders = sp.get('folders') === '1' ? allFolders : undefined
 
     // Analyses IA déjà en cache pour ces messages → badges immédiats.
     const ids = data.map((m) => m.id)
