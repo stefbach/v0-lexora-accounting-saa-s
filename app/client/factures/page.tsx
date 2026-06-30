@@ -41,6 +41,7 @@ import {
   Printer,
   Eye,
   Download,
+  Send,
 } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
@@ -614,6 +615,27 @@ function FactureList({
   const locale = getLocale()
   const STATUT_LABELS = getStatutLabels(locale)
   const [validating, setValidating] = useState<string | null>(null)
+  const [sending, setSending] = useState<string | null>(null)
+
+  /** Envoie la facture (PDF joint) au client par email via la boîte connectée. */
+  const envoyerFacture = async (f: Facture) => {
+    const to = prompt(locale === 'en' ? 'Send invoice to (client email):' : 'Envoyer la facture à (email client) :', (f as any).contact_email || '')
+    if (to === null) return
+    setSending(f.id)
+    try {
+      const res = await fetch(`/api/client/factures/${f.id}/send`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: to.trim() || undefined }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Échec envoi')
+      alert(`✓ ${locale === 'en' ? 'Invoice sent to' : 'Facture envoyée à'} ${d.to}`)
+    } catch (e: any) {
+      alert(`❌ ${e?.message || 'Échec envoi'}`)
+    } finally {
+      setSending(null)
+    }
+  }
 
   const validerBrouillon = async (f: Facture) => {
     if (!confirm(t('cfac.validate_confirm', locale).replace('{num}', f.numero_facture || ''))) return
@@ -932,6 +954,18 @@ function FactureList({
                       PDF
                     </Button>
                   </>
+                )}
+                {f.type_facture === 'client' && f.statut !== 'brouillon' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-[11px] border-blue-300 text-blue-700 hover:bg-blue-50"
+                    title={locale === 'en' ? 'Email this invoice to the client (PDF attached)' : 'Envoyer la facture au client par email (PDF joint)'}
+                    disabled={sending === f.id}
+                    onClick={() => envoyerFacture(f)}
+                  >
+                    {sending === f.id ? '…' : <><Send className="h-3 w-3 mr-1" /> {locale === 'en' ? 'Send' : 'Envoyer'}</>}
+                  </Button>
                 )}
               </div>
               {canPay && onEnregistrerPaiement && (
