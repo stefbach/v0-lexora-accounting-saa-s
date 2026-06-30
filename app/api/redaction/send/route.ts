@@ -3,6 +3,7 @@ import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
 import { selectEmailAccount, sendEmail, sendEmailFallbackResend } from '@/lib/email/router'
+import { trySendViaAurinko } from '@/lib/aurinko/send'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { CourrierPdf, type CourrierPdfData } from '@/lib/redaction/courrier-pdf'
 
@@ -89,6 +90,14 @@ export async function POST(req: NextRequest) {
     }
 
     const msg = { to: [to], cc, subject, html, text, reply_to, attachments }
+
+    // Provider prioritaire : Aurinko (Gmail/Outlook/iCloud/IMAP unifié) si un
+    // compte est connecté. Remplace Resend pour les comptes connectés.
+    const aurinko = await trySendViaAurinko(admin, { user_id: user.id, societe_id, msg })
+    if (aurinko) {
+      if (!aurinko.ok) return NextResponse.json({ error: aurinko.error || 'Envoi Aurinko échoué' }, { status: 502 })
+      return NextResponse.json({ ok: true, message_id: aurinko.message_id, provider: 'aurinko', from: aurinko.account_email })
+    }
 
     // Sélection du compte email de la société (ou compte explicite).
     const account = await selectEmailAccount({ societe_id, user_id: user.id, account_id })
