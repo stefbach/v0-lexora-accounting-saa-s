@@ -9,7 +9,12 @@ import { buildAurinkoAuthorizeUrl, isAurinkoConfigured, type AurinkoServiceType 
  * Redirige vers l'écran d'autorisation hébergé Aurinko.
  */
 const SERVICE_TYPES: AurinkoServiceType[] = ['Google', 'Office365', 'Outlook.com', 'MS Exchange', 'iCloud', 'Zoho Mail', 'IMAP']
-const DEFAULT_SCOPES = ['Mail.Read', 'Mail.Send', 'Mail.Drafts', 'Calendar.ReadWrite', 'Contacts.Read']
+// Scopes MINIMAUX (phase 1) : envoi + agenda. On retire volontairement
+// Mail.Read (scope RESTREINT Google → déclenche l'audit CASA). Il sera
+// rajouté à la phase 3 (boîte de réception interne) après décision sur la
+// vérification Google (app Lexora vérifiée vs app Aurinko partagée).
+// Surchargeable via AURINKO_SCOPES (liste séparée par espaces).
+const DEFAULT_SCOPES = (process.env.AURINKO_SCOPES || 'Mail.Send Calendar.ReadWrite').split(/\s+/).filter(Boolean)
 
 export async function GET(req: NextRequest) {
   if (!isAurinkoConfigured()) {
