@@ -27,8 +27,12 @@ export async function GET(req: NextRequest) {
   // On encode user + societe + return_to + serviceType dans le state signé.
   const state = signOAuthState(user.id, JSON.stringify({ s: societeId, r: returnTo, t: serviceType }))
 
-  const origin = req.nextUrl.origin
-  const returnUrl = `${origin}/api/auth/aurinko/callback`
+  // Base STABLE pour la returnUrl : doit correspondre EXACTEMENT à une URL
+  // déclarée dans l'app Aurinko. On privilégie NEXT_PUBLIC_APP_URL (prod fixe)
+  // plutôt que l'origine dynamique (qui varie sur les previews Vercel et
+  // provoque l'erreur "returnurl.invalid").
+  const base = (process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).replace(/\/+$/, '')
+  const returnUrl = `${base}/api/auth/aurinko/callback`
   const url = buildAurinkoAuthorizeUrl({ serviceType, scopes: DEFAULT_SCOPES, returnUrl, state })
   return NextResponse.redirect(url)
 }
