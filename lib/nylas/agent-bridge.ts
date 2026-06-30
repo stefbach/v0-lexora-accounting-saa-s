@@ -27,6 +27,18 @@ async function primaryCalendarId(grantId: string): Promise<string | null> {
   return (cals.find((c) => c.isPrimary && !c.readOnly) || cals.find((c) => !c.readOnly) || cals[0])?.id || null
 }
 
+/**
+ * Compte Nylas + calendrier primaire d'un utilisateur (ex. owner d'une page de
+ * RDV). null si aucune boîte Nylas → le caller retombe sur Google.
+ */
+export async function nylasOwnerCalendar(userId: string): Promise<{ grantId: string; email: string; calendarId: string } | null> {
+  const acc = await grantFor(userId, null)
+  if (!acc) return null
+  const calendarId = await primaryCalendarId(acc.grantId)
+  if (!calendarId) return null
+  return { grantId: acc.grantId, email: acc.account_email, calendarId }
+}
+
 export type NylasAgentEvent = { titre: string; debut: string | null; fin: string | null; lieu: string | null; meet: string | null }
 
 /** Liste les événements à venir. null si pas de Nylas. */

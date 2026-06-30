@@ -12,6 +12,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { googleCalendarFetch, extractMeetUrl } from '@/lib/google/calendar-client'
+import { nylasOwnerCalendar } from '@/lib/nylas/agent-bridge'
+import { createNylasEvent, deleteNylasEvent, sendNylasEmail } from '@/lib/nylas/client'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -101,46 +103,77 @@ export async function POST(req: NextRequest) {
     const eventTitle = applyTemplate(settings.event_title_template, vars).slice(0, 200)
     const eventDescription = applyTemplate(settings.event_description_template, vars).slice(0, 4000)
 
-    // Crée l'event Google Calendar
+    // Agenda du owner : Nylas en priorité (agenda unifié), sinon Google.
+    const isOnline = location_type === 'online'
+    const nylasCal = await nylasOwnerCalendar(settings.owner_user_id).catch(() => null)
     let google_event_id: string | null = null
+    let nylas_event_id: string | null = null
+    let nylas_calendar_id: string | null = null
     let meet_url: string | null = null
-    try {
-      const isOnline = location_type === 'online'
-      const calId = settings.calendar_id || 'primary'
-      const eventBody: any = {
-        summary: eventTitle,
-        description: eventDescription,
-        start: { dateTime: start_iso, timeZone: settings.timezone },
-        end: { dateTime: end_iso, timeZone: settings.timezone },
-        attendees: [{ email: prospect_email, displayName: prospect_name }],
-        reminders: { useDefault: true },
-      }
-      if (isOnline) {
-        eventBody.conferenceData = {
-          createRequest: {
-            requestId: `lexora-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            conferenceSolutionKey: { type: 'hangoutsMeet' },
-          },
-        }
-      } else if (settings.in_person_address) {
-        eventBody.location = settings.in_person_address
-      }
 
-      const created = await googleCalendarFetch(
-        settings.owner_user_id,
-        settings.google_account_email,
-        `/calendars/${encodeURIComponent(calId)}/events?conferenceDataVersion=1&sendUpdates=all`,
-        { method: 'POST', json: eventBody },
-      )
-      google_event_id = created?.id || null
-      meet_url = isOnline ? extractMeetUrl(created) : null
-    } catch (e: any) {
-      // eslint-disable-next-line no-console
-      console.error('[rdv/book] Google event creation failed:', e?.message || e)
-      return NextResponse.json({
-        error: 'Impossible de créer l\'événement dans l\'agenda Google. Réessaie ou contacte-nous.',
-        detail: e?.message?.slice(0, 200),
-      }, { status: 502 })
+    if (nylasCal) {
+      // --- Création via Nylas ---
+      try {
+        const ev = await createNylasEvent(nylasCal.grantId, {
+          calendarId: nylasCal.calendarId,
+          title: eventTitle,
+          description: eventDescription,
+          location: !isOnline && settings.in_person_address ? settings.in_person_address : undefined,
+          startEpoch: Math.floor(startMs / 1000),
+          endEpoch: Math.floor(endMs / 1000),
+          participants: [prospect_email],
+          conferencing: isOnline ? 'meet' : null,
+        })
+        nylas_event_id = ev.id || null
+        nylas_calendar_id = nylasCal.calendarId
+        meet_url = isOnline ? ev.conferenceUrl : null
+      } catch (e: any) {
+        // eslint-disable-next-line no-console
+        console.error('[rdv/book] Nylas event creation failed:', e?.message || e)
+        return NextResponse.json({
+          error: 'Impossible de créer l\'événement dans l\'agenda. Réessaie ou contacte-nous.',
+          detail: e?.message?.slice(0, 200),
+        }, { status: 502 })
+      }
+    } else {
+      // --- Création via Google (fallback) ---
+      try {
+        const calId = settings.calendar_id || 'primary'
+        const eventBody: any = {
+          summary: eventTitle,
+          description: eventDescription,
+          start: { dateTime: start_iso, timeZone: settings.timezone },
+          end: { dateTime: end_iso, timeZone: settings.timezone },
+          attendees: [{ email: prospect_email, displayName: prospect_name }],
+          reminders: { useDefault: true },
+        }
+        if (isOnline) {
+          eventBody.conferenceData = {
+            createRequest: {
+              requestId: `lexora-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              conferenceSolutionKey: { type: 'hangoutsMeet' },
+            },
+          }
+        } else if (settings.in_person_address) {
+          eventBody.location = settings.in_person_address
+        }
+
+        const created = await googleCalendarFetch(
+          settings.owner_user_id,
+          settings.google_account_email,
+          `/calendars/${encodeURIComponent(calId)}/events?conferenceDataVersion=1&sendUpdates=all`,
+          { method: 'POST', json: eventBody },
+        )
+        google_event_id = created?.id || null
+        meet_url = isOnline ? extractMeetUrl(created) : null
+      } catch (e: any) {
+        // eslint-disable-next-line no-console
+        console.error('[rdv/book] Google event creation failed:', e?.message || e)
+        return NextResponse.json({
+          error: 'Impossible de créer l\'événement dans l\'agenda Google. Réessaie ou contacte-nous.',
+          detail: e?.message?.slice(0, 200),
+        }, { status: 502 })
+      }
     }
 
     // Insère le booking
@@ -156,14 +189,18 @@ export async function POST(req: NextRequest) {
         in_person_address: location_type === 'in_person' ? settings.in_person_address : null,
         meet_url,
         google_event_id,
-        google_calendar_id: settings.calendar_id || 'primary',
+        google_calendar_id: nylasCal ? null : (settings.calendar_id || 'primary'),
+        nylas_event_id,
+        nylas_calendar_id,
       })
       .select('id, cancellation_token')
       .single()
 
     if (insErr) {
-      // Rollback : supprime l'event Google créé
-      if (google_event_id) {
+      // Rollback : supprime l'event créé (Nylas ou Google selon le cas).
+      if (nylasCal && nylas_event_id && nylas_calendar_id) {
+        await deleteNylasEvent(nylasCal.grantId, nylas_event_id, nylas_calendar_id).catch(() => {})
+      } else if (google_event_id) {
         await googleCalendarFetch(
           settings.owner_user_id,
           settings.google_account_email,
@@ -180,6 +217,19 @@ export async function POST(req: NextRequest) {
       const { sendGmail } = await import('@/lib/google/gmail-client')
       const base_url = req.nextUrl.origin
 
+      // Envoi via Nylas si le owner a une boîte Nylas, sinon Gmail.
+      const sendMail = async (to: string, subject: string, html: string, text?: string) => {
+        if (nylasCal) {
+          const r = await sendNylasEmail(nylasCal.grantId, { to: [to], subject, html })
+          if (!r.ok) throw new Error(r.error || 'Échec envoi Nylas')
+        } else {
+          await sendGmail(settings.owner_user_id, {
+            from_email: settings.google_account_email, from_name: 'Lexora',
+            to: [to], subject, html, text,
+          })
+        }
+      }
+
       // 1. Email de CONFIRMATION au prospect (HTML pro avec logo Lexora)
       try {
         const conf = buildConfirmationEmail({
@@ -191,12 +241,7 @@ export async function POST(req: NextRequest) {
           cancel_token: booking.cancellation_token,
           base_url,
         })
-        await sendGmail(settings.owner_user_id, {
-          from_email: settings.google_account_email,
-          from_name: 'Lexora',
-          to: [prospect_email],
-          subject: conf.subject, html: conf.html, text: conf.text,
-        })
+        await sendMail(prospect_email, conf.subject, conf.html, conf.text)
       } catch (e: any) {
         // eslint-disable-next-line no-console
         console.error('[rdv/book] confirmation email fail:', e?.message || e)
@@ -215,12 +260,7 @@ export async function POST(req: NextRequest) {
             cancel_token: booking.cancellation_token,
             base_url,
           })
-          await sendGmail(settings.owner_user_id, {
-            from_email: settings.google_account_email,
-            from_name: 'Lexora',
-            to: [notifEmail],
-            subject: ownerMail.subject, html: ownerMail.html, text: ownerMail.text,
-          })
+          await sendMail(notifEmail, ownerMail.subject, ownerMail.html, ownerMail.text)
         } catch { /* noop */ }
       }
 

@@ -9,6 +9,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { generateCandidateSlots, filterBusySlots, filterByNotice, type BookingSettings } from '@/lib/booking/slots'
 import { googleCalendarFetch } from '@/lib/google/calendar-client'
+import { nylasOwnerCalendar } from '@/lib/nylas/agent-bridge'
+import { nylasFreeBusy } from '@/lib/nylas/client'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,33 +62,47 @@ export async function GET(req: NextRequest) {
     // tous les créneaux libres alors que ton agenda est plein).
     const busy: Array<{ start_iso: string; end_iso: string; source?: string }> = []
     let freebusyError: string | null = null
-    try {
-      const targetCal = settings.calendar_id || 'primary'
-      const fb = await googleCalendarFetch(
-        settings.owner_user_id,
-        settings.google_account_email,
-        '/freeBusy',
-        {
-          method: 'POST',
-          json: {
-            timeMin: dayStart,
-            timeMax: dayEnd,
-            timeZone: settings.timezone,
-            items: [{ id: targetCal }],
+
+    // Agenda du owner : Nylas en priorité, sinon Google.
+    const nylasCal = await nylasOwnerCalendar(settings.owner_user_id).catch(() => null)
+    if (nylasCal) {
+      try {
+        const slots = await nylasFreeBusy(
+          nylasCal.grantId, nylasCal.email,
+          Math.floor(Date.parse(dayStart) / 1000), Math.floor(Date.parse(dayEnd) / 1000),
+        )
+        for (const s of slots) {
+          busy.push({ start_iso: new Date(s.start * 1000).toISOString(), end_iso: new Date(s.end * 1000).toISOString(), source: 'nylas' })
+        }
+      } catch (e: any) {
+        freebusyError = e?.message || 'Échec free/busy Nylas'
+        // eslint-disable-next-line no-console
+        console.error('[rdv/slots] nylas freeBusy fail:', freebusyError)
+      }
+    } else {
+      try {
+        const targetCal = settings.calendar_id || 'primary'
+        const fb = await googleCalendarFetch(
+          settings.owner_user_id,
+          settings.google_account_email,
+          '/freeBusy',
+          {
+            method: 'POST',
+            json: { timeMin: dayStart, timeMax: dayEnd, timeZone: settings.timezone, items: [{ id: targetCal }] },
           },
-        },
-      )
-      const cal = fb?.calendars?.[targetCal]
-      if (cal?.errors && cal.errors.length > 0) {
-        freebusyError = `Google a refusé d'accéder au calendar « ${targetCal} » : ${JSON.stringify(cal.errors)}`
+        )
+        const cal = fb?.calendars?.[targetCal]
+        if (cal?.errors && cal.errors.length > 0) {
+          freebusyError = `Google a refusé d'accéder au calendar « ${targetCal} » : ${JSON.stringify(cal.errors)}`
+        }
+        for (const b of cal?.busy || []) {
+          if (b.start && b.end) busy.push({ start_iso: b.start, end_iso: b.end, source: 'google' })
+        }
+      } catch (e: any) {
+        freebusyError = e?.message || 'Échec freeBusy Google'
+        // eslint-disable-next-line no-console
+        console.error('[rdv/slots] freeBusy fail:', freebusyError)
       }
-      for (const b of cal?.busy || []) {
-        if (b.start && b.end) busy.push({ start_iso: b.start, end_iso: b.end, source: 'google' })
-      }
-    } catch (e: any) {
-      freebusyError = e?.message || 'Échec freeBusy Google'
-      // eslint-disable-next-line no-console
-      console.error('[rdv/slots] freeBusy fail:', freebusyError)
     }
 
     if (freebusyError) {
@@ -95,7 +111,7 @@ export async function GET(req: NextRequest) {
         slots: [],
         duration_minutes: sCfg.duration_minutes,
         timezone: sCfg.timezone,
-        error: `Impossible de lire ton agenda Google : ${freebusyError}. Reconnecte le compte Google ou vérifie l'id du calendrier dans /client/settings/booking.`,
+        error: `Impossible de lire ton agenda : ${freebusyError}. Vérifie la boîte connectée (/client/email-accounts) ou les paramètres dans /client/settings/booking.`,
       }, { status: 502 })
     }
 

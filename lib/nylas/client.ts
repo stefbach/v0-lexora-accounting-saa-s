@@ -342,6 +342,23 @@ export async function createNylasEvent(grantId: string, input: CreateEventInput)
   return normalizeEvent(d.data || {})
 }
 
+export type BusySlot = { start: number; end: number } // epoch secondes
+
+/** Périodes occupées d'un compte sur une plage (pour calcul de créneaux). */
+export async function nylasFreeBusy(grantId: string, email: string, startEpoch: number, endEpoch: number): Promise<BusySlot[]> {
+  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/calendars/free-busy`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ start_time: startEpoch, end_time: endEpoch, emails: [email] }),
+  })
+  if (!res.ok) throw new Error(`Nylas free-busy ${res.status}`)
+  const d = await res.json() as { data?: Array<{ time_slots?: Array<{ start_time?: number; end_time?: number; status?: string }> }> }
+  const slots = d.data?.[0]?.time_slots || []
+  return slots
+    .filter((s) => typeof s.start_time === 'number' && typeof s.end_time === 'number')
+    .map((s) => ({ start: s.start_time as number, end: s.end_time as number }))
+}
+
 export async function deleteNylasEvent(grantId: string, eventId: string, calendarId: string): Promise<void> {
   const p = new URLSearchParams({ calendar_id: calendarId })
   const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/events/${encodeURIComponent(eventId)}?${p.toString()}`, {
