@@ -63,6 +63,7 @@ export default function BoiteMailPage() {
   const [settings, setSettings] = useState<AgentSettings | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [showCompose, setShowCompose] = useState(false)
+  const [showBriefing, setShowBriefing] = useState(false)
 
   const [accountsList, setAccountsList] = useState<Array<{ id: string; account_email: string; label: string }>>([])
   const [activeAccountId, setActiveAccountId] = useState<string | null>(null)
@@ -250,6 +251,7 @@ export default function BoiteMailPage() {
           <Button size="sm" variant="outline" onClick={() => runTriage(false)} disabled={triaging}>
             {triaging ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Wand2 className="h-4 w-4 mr-1.5" />} Trier
           </Button>
+          <Button size="sm" variant="outline" onClick={() => setShowBriefing(true)}><Sparkles className="h-4 w-4 mr-1.5" /> Briefing</Button>
           <button onClick={() => setShowCompose(true)} className="inline-flex items-center h-9 px-4 rounded-md text-sm font-semibold" style={{ background: NAVY, color: GOLD }}><PenLine className="h-4 w-4 mr-1.5" /> Composer</button>
           <Button variant="outline" size="sm" onClick={() => setShowSettings(true)}><Settings2 className="h-4 w-4" /></Button>
         </div>
@@ -400,8 +402,136 @@ export default function BoiteMailPage() {
 
       {showSettings && settings && <SettingsModal settings={settings} societeId={societeId} onClose={() => setShowSettings(false)} onSaved={(s) => { setSettings(s); setShowSettings(false) }} />}
       {showCompose && <FullComposer societeId={societeId} accountId={activeAccountId} onClose={() => setShowCompose(false)} />}
+      {showBriefing && (
+        <BriefingModal
+          societeId={societeId} accountId={activeAccountId}
+          digest={digest} counts={counts}
+          toReply={messages.map((m) => ({ m, a: analyses[m.id] })).filter((x) => x.a?.needs_reply).map((x) => x.m)}
+          triaging={triaging} onTriage={() => runTriage(false)}
+          onClose={() => setShowBriefing(false)}
+        />
+      )}
     </div>
     </ClientPageShell>
+  )
+}
+
+/** Briefing du jour : synthèse quotidienne + emails à répondre avec
+ *  propositions de réponse générées à la demande. */
+function BriefingModal({ societeId, accountId, digest, counts, toReply, triaging, onTriage, onClose }: {
+  societeId: string | null; accountId: string | null; digest: string | null
+  counts: { haute: number; moyenne: number; basse: number; a_repondre: number } | null
+  toReply: MailMessage[]; triaging: boolean; onTriage: () => void; onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-gray-50 overflow-y-auto" onClick={onClose}>
+      <div className="max-w-3xl mx-auto p-4 md:p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: NAVY }}><Sparkles className="w-5 h-5" style={{ color: GOLD }} /></div>
+          <div className="flex-1">
+            <h1 className="text-xl font-bold" style={{ color: NAVY }}>Briefing du jour</h1>
+            <p className="text-xs text-gray-500">Synthèse de ta boîte et propositions de réponse, par l'agent.</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={onTriage} disabled={triaging}>{triaging ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Wand2 className="h-4 w-4 mr-1.5" />} Rafraîchir</Button>
+          <button onClick={onClose} aria-label="Fermer" className="w-9 h-9 rounded-xl flex items-center justify-center border border-gray-200 bg-white text-gray-600 hover:text-[#0B0F2E] shrink-0"><X className="w-5 h-5" /></button>
+        </div>
+
+        {/* Synthèse quotidienne */}
+        <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5 mb-4">
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-2"><Sparkles className="w-3.5 h-3.5" style={{ color: GOLD }} /> Synthèse</div>
+          {triaging && !digest ? (
+            <div className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Analyse en cours…</div>
+          ) : digest ? (
+            <div className="text-sm whitespace-pre-wrap text-gray-800">{digest}</div>
+          ) : (
+            <div className="text-sm text-muted-foreground">Aucune synthèse encore. <button onClick={onTriage} className="underline text-primary">Lancer le tri</button> pour la générer.</div>
+          )}
+          {counts && (
+            <div className="flex gap-2 mt-3 flex-wrap text-xs">
+              <span className="px-2 py-0.5 rounded border bg-red-50 text-red-700 border-red-200">{counts.haute} prioritaire(s)</span>
+              <span className="px-2 py-0.5 rounded border bg-blue-50 text-blue-700 border-blue-200">{counts.a_repondre} à répondre</span>
+              <span className="px-2 py-0.5 rounded border bg-slate-50 text-slate-600 border-slate-200">{counts.moyenne} moyen · {counts.basse} bas</span>
+            </div>
+          )}
+        </div>
+
+        {/* À répondre + propositions */}
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-2 px-1"><Reply className="w-3.5 h-3.5" style={{ color: GOLD }} /> À répondre ({toReply.length})</div>
+        {toReply.length === 0 ? (
+          <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-6 text-center text-sm text-muted-foreground">Rien à répondre dans ce périmètre. ✅</div>
+        ) : (
+          <div className="space-y-3">
+            {toReply.map((m) => <ReplyItem key={m.id} m={m} societeId={societeId} accountId={accountId} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Un email à répondre avec proposition de réponse générée à la demande. */
+function ReplyItem({ m, societeId, accountId }: { m: MailMessage; societeId: string | null; accountId: string | null }) {
+  const [draft, setDraft] = useState('')
+  const [gen, setGen] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const propose = async () => {
+    setGen(true); setErr(null)
+    try {
+      const res = await fetch('/api/nylas/agent', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reply', societe_id: societeId, subject: m.subject, from: who(m.from), body: m.body || m.snippet }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Erreur')
+      setDraft(d.result || '')
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Erreur') }
+    finally { setGen(false) }
+  }
+
+  const send = async () => {
+    const to = m.replyTo?.[0]?.email || m.from?.email
+    if (!to || !draft.trim()) return
+    setSending(true); setErr(null)
+    try {
+      const subject = m.subject.startsWith('Re:') ? m.subject : `Re: ${m.subject}`
+      const res = await fetch('/api/nylas/send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ societe_id: societeId || null, account_id: accountId, to: [to], subject, html: draft.replace(/\n/g, '<br>') }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Échec envoi')
+      setSent(true)
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Échec envoi') }
+    finally { setSending(false) }
+  }
+
+  return (
+    <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-4 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-medium truncate" style={{ color: NAVY }}>{who(m.from)}</div>
+          <div className="text-sm truncate">{m.subject}</div>
+        </div>
+        <span className="text-[11px] text-muted-foreground shrink-0">{fmtDate(m.date)}</span>
+      </div>
+      {err && <div className="text-xs text-red-600">{err}</div>}
+      {sent ? (
+        <div className="text-sm text-emerald-600 flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4" /> Réponse envoyée.</div>
+      ) : !draft ? (
+        <Button size="sm" variant="outline" onClick={propose} disabled={gen}>{gen ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />} Proposer une réponse</Button>
+      ) : (
+        <>
+          <textarea value={draft} onChange={(e) => setDraft(e.target.value)} className="w-full text-sm border rounded-md p-2 bg-white min-h-[130px]" />
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="outline" onClick={propose} disabled={gen}>{gen ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Régénérer'}</Button>
+            <button onClick={send} disabled={sending} className="inline-flex items-center h-8 px-3 rounded-md text-sm font-semibold disabled:opacity-50" style={{ background: NAVY, color: GOLD }}>{sending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <SendIcon className="h-3.5 w-3.5 mr-1.5" />} Envoyer</button>
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 

@@ -62,7 +62,6 @@ export async function POST(req: NextRequest) {
 
   if (toAnalyze.length > 0) {
     const block = settingsPromptBlock(settings)
-    const items = toAnalyze.map((m, i) => `[${i}] id=${m.id}\nDe: ${who(m)}\nObjet: ${m.subject}\nAperçu: ${(m.snippet || '').slice(0, 400)}`).join('\n\n')
     const system = `Tu es l'assistant de direction email d'une entreprise à Maurice. Tu tries la boîte de réception avec rigueur et sans inventer.
 
 ${block}
@@ -76,27 +75,36 @@ Pour CHAQUE email, renvoie un objet JSON avec :
 - "suggested_action" : action concrète recommandée (max 100 caractères), "" si aucune
 
 Réponds STRICTEMENT avec un objet JSON {"analyses": [ ... ]} couvrant tous les emails fournis, sans texte autour.`
-    try {
-      const out = await callClaudeJSON<{ analyses: Array<Partial<Analysis> & { id?: string }> }>(system, items, 4096)
-      const byId = new Map(toAnalyze.map((m) => [m.id, m]))
-      const rows: Array<Analysis & { user_id: string; analyzed_at: string }> = []
-      for (const a of out.analyses || []) {
-        if (!a.id || !byId.has(a.id)) continue
-        const norm: Analysis = {
-          message_id: a.id,
-          category: String(a.category || 'Autre').slice(0, 60),
-          priority: (['haute', 'moyenne', 'basse'].includes(String(a.priority)) ? a.priority : 'moyenne') as Analysis['priority'],
-          needs_reply: !!a.needs_reply,
-          summary: String(a.summary || '').slice(0, 200),
-          suggested_action: String(a.suggested_action || '').slice(0, 120),
+
+    // On découpe en petits lots : un seul gros appel dépassait la limite de
+    // tokens en sortie → JSON tronqué (502 "Unterminated string").
+    const CHUNK = 10
+    const rows: Array<Analysis & { user_id: string; analyzed_at: string }> = []
+    const byId = new Map(toAnalyze.map((m) => [m.id, m]))
+    for (let i = 0; i < toAnalyze.length; i += CHUNK) {
+      const slice = toAnalyze.slice(i, i + CHUNK)
+      const items = slice.map((m, j) => `[${j}] id=${m.id}\nDe: ${who(m)}\nObjet: ${m.subject}\nAperçu: ${(m.snippet || '').slice(0, 350)}`).join('\n\n')
+      try {
+        const out = await callClaudeJSON<{ analyses: Array<Partial<Analysis> & { id?: string }> }>(system, items, 4096)
+        for (const a of out.analyses || []) {
+          if (!a.id || !byId.has(a.id)) continue
+          const norm: Analysis = {
+            message_id: a.id,
+            category: String(a.category || 'Autre').slice(0, 60),
+            priority: (['haute', 'moyenne', 'basse'].includes(String(a.priority)) ? a.priority : 'moyenne') as Analysis['priority'],
+            needs_reply: !!a.needs_reply,
+            summary: String(a.summary || '').slice(0, 200),
+            suggested_action: String(a.suggested_action || '').slice(0, 120),
+          }
+          cacheMap.set(norm.message_id, norm)
+          rows.push({ ...norm, user_id: user.id, analyzed_at: new Date().toISOString() })
         }
-        cacheMap.set(norm.message_id, norm)
-        rows.push({ ...norm, user_id: user.id, analyzed_at: new Date().toISOString() })
+      } catch {
+        // Un lot qui échoue ne casse pas tout le tri ; on continue.
+        continue
       }
-      if (rows.length) await admin.from('nylas_message_analysis').upsert(rows, { onConflict: 'user_id,message_id' })
-    } catch (e) {
-      return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur analyse IA' }, { status: 502 })
     }
+    if (rows.length) await admin.from('nylas_message_analysis').upsert(rows, { onConflict: 'user_id,message_id' })
   }
 
   // Agrégat + digest
