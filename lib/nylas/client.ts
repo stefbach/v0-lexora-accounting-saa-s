@@ -110,16 +110,81 @@ export async function sendNylasEmail(grantId: string, msg: NylasEmailMessage): P
   return { ok: true, message_id: d.data?.id }
 }
 
-/** Liste des messages (boîte interne). */
-export async function listNylasMessages(grantId: string, opts: { limit?: number; pageToken?: string; q?: string } = {}): Promise<{ data: unknown[]; nextCursor?: string }> {
+/** Participant Nylas (from/to/cc). */
+type NylasParticipant = { name?: string; email?: string }
+
+/** Message Nylas brut (champs utilisés). */
+type NylasRawMessage = {
+  id?: string
+  thread_id?: string
+  subject?: string
+  snippet?: string
+  body?: string
+  from?: NylasParticipant[]
+  to?: NylasParticipant[]
+  cc?: NylasParticipant[]
+  reply_to?: NylasParticipant[]
+  date?: number // epoch seconds
+  unread?: boolean
+  starred?: boolean
+  folders?: string[]
+}
+
+/** Message normalisé pour l'UI / l'agent IA. */
+export type MailMessage = {
+  id: string
+  threadId: string | null
+  subject: string
+  snippet: string
+  body: string
+  from: NylasParticipant | null
+  to: NylasParticipant[]
+  cc: NylasParticipant[]
+  replyTo: NylasParticipant[]
+  date: string | null // ISO
+  unread: boolean
+  starred: boolean
+  folders: string[]
+}
+
+function normalizeMessage(m: NylasRawMessage): MailMessage {
+  return {
+    id: m.id || '',
+    threadId: m.thread_id || null,
+    subject: m.subject || '(sans objet)',
+    snippet: m.snippet || '',
+    body: m.body || '',
+    from: m.from?.[0] || null,
+    to: m.to || [],
+    cc: m.cc || [],
+    replyTo: m.reply_to || [],
+    date: typeof m.date === 'number' ? new Date(m.date * 1000).toISOString() : null,
+    unread: !!m.unread,
+    starred: !!m.starred,
+    folders: m.folders || [],
+  }
+}
+
+/** Liste des messages (boîte interne), normalisés. */
+export async function listNylasMessages(grantId: string, opts: { limit?: number; pageToken?: string; q?: string } = {}): Promise<{ data: MailMessage[]; nextCursor?: string }> {
   const p = new URLSearchParams()
-  if (opts.limit) p.set('limit', String(opts.limit))
+  p.set('limit', String(opts.limit || 25))
   if (opts.pageToken) p.set('page_token', opts.pageToken)
   if (opts.q) p.set('search_query_native', opts.q)
   const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/messages?${p.toString()}`, {
     headers: authHeaders(),
   })
   if (!res.ok) throw new Error(`Nylas list messages ${res.status}`)
-  const d = await res.json() as { data?: unknown[]; next_cursor?: string }
-  return { data: d.data || [], nextCursor: d.next_cursor }
+  const d = await res.json() as { data?: NylasRawMessage[]; next_cursor?: string }
+  return { data: (d.data || []).map(normalizeMessage), nextCursor: d.next_cursor }
+}
+
+/** Récupère un message complet (corps inclus). */
+export async function getNylasMessage(grantId: string, messageId: string): Promise<MailMessage> {
+  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/messages/${encodeURIComponent(messageId)}`, {
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error(`Nylas get message ${res.status}`)
+  const d = await res.json() as { data?: NylasRawMessage }
+  return normalizeMessage(d.data || {})
 }

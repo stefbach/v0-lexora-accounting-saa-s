@@ -121,6 +121,7 @@ const baseTranslations = {
     'account.my_profile': 'Mon Profil',
     'account.telegram_bot': 'Telegram Bot',
     'account.telegram_permissions': 'Permissions Bot',
+    'account.inbox': 'Boîte de réception',
 
     // Common
     'common.loading': 'Chargement...',
@@ -421,6 +422,7 @@ const baseTranslations = {
     'account.my_profile': 'My Profile',
     'account.telegram_bot': 'Telegram Bot',
     'account.telegram_permissions': 'Bot Permissions',
+    'account.inbox': 'Inbox',
 
     // Common
     'common.loading': 'Loading...',
