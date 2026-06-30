@@ -16,6 +16,7 @@ import { enregistrerPaiement } from '@/lib/accounting/paiements-factures'
 import { checkPeriodLock } from '@/lib/accounting/period-lock'
 import { sendGmail } from '@/lib/google/gmail-client'
 import { getGoogleAccount, listGoogleAccounts, googleCalendarFetch, extractMeetUrl } from '@/lib/google/calendar-client'
+import { nylasListEvents, nylasCreateEvent, nylasSend } from '@/lib/nylas/agent-bridge'
 
 /**
  * Clé déterministe courte pour l'idempotence de creer_ecriture : un même
@@ -746,6 +747,12 @@ export async function execReadTool(name: string, input: any, ctx: ExecCtx): Prom
 
     case 'list_evenements_calendar': {
       try {
+        const jours = Math.min(90, Math.max(1, Number(input?.jours) || 7))
+        const max = Math.min(25, Math.max(1, Number(input?.max) || 10))
+        // Priorité Nylas (agenda unifié) ; fallback Google si pas de boîte Nylas.
+        const viaNylas = await nylasListEvents(ctx.userId, ctx.societeId, jours, max)
+        if (viaNylas) return { ok: true, source: 'nylas', compte: viaNylas.compte, nb: viaNylas.evenements.length, evenements: viaNylas.evenements }
+
         const compteEmail = String(input?.compte || '').trim() || undefined
         const accounts = await listGoogleAccounts(ctx.userId)
         if (accounts.length === 0) return { ok: false, error: 'Aucun compte Google lié. Connecte-le via /client/settings/google-accounts.' }
@@ -754,8 +761,6 @@ export async function execReadTool(name: string, input: any, ctx: ExecCtx): Prom
         }
         const account = compteEmail ? accounts.find(a => a.account_email === compteEmail) ?? null : accounts[0]
         if (!account) return { ok: false, error: `Compte Google "${compteEmail}" introuvable.` }
-        const jours = Math.min(90, Math.max(1, Number(input?.jours) || 7))
-        const max = Math.min(25, Math.max(1, Number(input?.max) || 10))
         const timeMin = new Date().toISOString()
         const timeMax = new Date(Date.now() + jours * 86_400_000).toISOString()
         const data = await googleCalendarFetch(ctx.userId, account.account_email, '/calendars/primary/events', {
@@ -1063,6 +1068,11 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
         const subject = String(input?.subject || '').trim()
         const html = String(input?.html || '').trim()
         if (!subject || !html) return { ok: false, error: 'subject et html requis' }
+        const cc0 = Array.isArray(input?.cc) ? input.cc.map((x: any) => String(x || '').trim()).filter(Boolean) : undefined
+
+        // Priorité Nylas ; fallback Gmail si pas de boîte Nylas.
+        const viaNylas = await nylasSend(ctx.userId, ctx.societeId, { to, cc: cc0, subject, html })
+        if (viaNylas) return { ok: true, source: 'nylas', message_id: viaNylas.message_id, from: viaNylas.from, to, subject }
 
         let from_email = String(input?.from_email || '').trim()
         if (!from_email) {
@@ -1073,8 +1083,7 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
           }
           from_email = accounts[0].account_email
         }
-        const cc = Array.isArray(input?.cc) ? input.cc.map((x: any) => String(x || '').trim()).filter(Boolean) : undefined
-        const res = await sendGmail(ctx.userId, { from_email, to, cc, subject, html })
+        const res = await sendGmail(ctx.userId, { from_email, to, cc: cc0, subject, html })
         return { ok: true, message_id: res.message_id, from: from_email, to, subject }
       } catch (e: any) {
         return { ok: false, error: e?.message || 'Erreur envoyer_email' }
@@ -1083,6 +1092,22 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
 
     case 'creer_evenement_calendar': {
       try {
+        const titre = String(input?.titre || '').trim()
+        const debut = String(input?.debut || '').trim()
+        if (!titre || !debut) return { ok: false, error: 'titre et debut (ISO 8601) requis' }
+        const debutMs = Date.parse(debut)
+        if (Number.isNaN(debutMs)) return { ok: false, error: `Date de début invalide: "${debut}" (attendu ISO 8601)` }
+        const fin = String(input?.fin || '').trim() || new Date(debutMs + 3_600_000).toISOString()
+        const finMs = Date.parse(fin)
+        const invites = Array.isArray(input?.invites) ? input.invites.map((e: any) => String(e || '').trim()).filter(Boolean) : undefined
+
+        // Priorité Nylas ; fallback Google si pas de boîte Nylas.
+        const viaNylas = await nylasCreateEvent(ctx.userId, ctx.societeId, {
+          titre, debutMs, finMs, description: input?.description ? String(input.description) : undefined,
+          invites, avecMeet: !!input?.avec_meet,
+        })
+        if (viaNylas) return { ok: true, source: 'nylas', event_id: viaNylas.event_id, titre: viaNylas.titre, debut: viaNylas.debut, fin: viaNylas.fin, meet: viaNylas.meet, compte: viaNylas.compte }
+
         const compteEmail = String(input?.compte || '').trim() || undefined
         const accounts = await listGoogleAccounts(ctx.userId)
         if (accounts.length === 0) return { ok: false, error: 'Aucun compte Google lié. Connecte-le via /client/settings/google-accounts.' }
@@ -1091,12 +1116,6 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
         }
         const account = compteEmail ? accounts.find(a => a.account_email === compteEmail) ?? null : accounts[0]
         if (!account) return { ok: false, error: `Compte Google "${compteEmail}" introuvable.` }
-        const titre = String(input?.titre || '').trim()
-        const debut = String(input?.debut || '').trim()
-        if (!titre || !debut) return { ok: false, error: 'titre et debut (ISO 8601) requis' }
-        const debutMs = Date.parse(debut)
-        if (Number.isNaN(debutMs)) return { ok: false, error: `Date de début invalide: "${debut}" (attendu ISO 8601)` }
-        const fin = String(input?.fin || '').trim() || new Date(debutMs + 3_600_000).toISOString()
 
         const body: any = {
           summary: titre,
