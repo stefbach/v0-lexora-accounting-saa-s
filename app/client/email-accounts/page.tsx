@@ -41,6 +41,33 @@ export default function EmailAccountsPage() {
   const [showPwd, setShowPwd] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  // Aurinko (connexion unifiée Gmail/Outlook/iCloud/IMAP)
+  const [aurinkoConfigured, setAurinkoConfigured] = useState(false)
+  const [aurinkoAccounts, setAurinkoAccounts] = useState<Array<{ id: string; account_email: string; label: string }>>([])
+  const loadAurinko = async () => {
+    try {
+      const r = await fetch('/api/auth/aurinko/accounts', { cache: 'no-store' })
+      const j = await r.json()
+      setAurinkoConfigured(!!j.configured)
+      setAurinkoAccounts(Array.isArray(j.accounts) ? j.accounts : [])
+    } catch { /* noop */ }
+  }
+  useEffect(() => {
+    loadAurinko()
+    const sp = new URLSearchParams(window.location.search)
+    if (sp.get('aurinko_connected')) setSuccess(`${locale === 'en' ? 'Mailbox connected' : 'Boîte connectée'} : ${sp.get('aurinko_connected')}`)
+    if (sp.get('aurinko_error')) setError(`Aurinko : ${sp.get('aurinko_error')}`)
+  }, [])
+  const connectAurinko = (serviceType: string) => {
+    const u = `/api/auth/aurinko/init?serviceType=${encodeURIComponent(serviceType)}${societeId ? `&societe_id=${societeId}` : ''}&return_to=${encodeURIComponent('/client/email-accounts')}`
+    window.location.href = u
+  }
+  const disconnectAurinko = async (id: string) => {
+    if (!confirm(locale === 'en' ? 'Disconnect this mailbox?' : 'Déconnecter cette boîte ?')) return
+    await fetch(`/api/auth/aurinko/accounts?id=${id}`, { method: 'DELETE' })
+    loadAurinko()
+  }
+
   // Form state
   const [provider, setProvider] = useState<'smtp' | 'resend'>('smtp')
   const [personal, setPersonal] = useState(false)
@@ -169,6 +196,52 @@ export default function EmailAccountsPage() {
 
       {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-start gap-2"><AlertCircle className="h-4 w-4 mt-0.5" />{error}</div>}
       {success && <div className="rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 flex items-start gap-2"><CheckCircle2 className="h-4 w-4 mt-0.5" />{success}</div>}
+
+      {/* Connexion unifiée Aurinko (Gmail / Outlook / Apple / IMAP) */}
+      <Card className="border-indigo-200">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Mail className="h-5 w-5 text-indigo-600" />
+            {locale === 'en' ? 'Connect a mailbox (Gmail, Outlook, Apple…)' : 'Connecter une boîte (Gmail, Outlook, Apple…)'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!aurinkoConfigured ? (
+            <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-3">
+              {locale === 'en'
+                ? 'Aurinko is not configured yet (AURINKO_CLIENT_ID / SECRET missing in the environment).'
+                : "Aurinko n'est pas encore configuré (AURINKO_CLIENT_ID / SECRET manquants dans l'environnement)."}
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-slate-600">
+                {locale === 'en'
+                  ? 'Connect your mailbox once to send and (soon) receive emails from any provider.'
+                  : 'Connecte ta boîte une fois pour envoyer et (bientôt) recevoir tes emails, quel que soit le fournisseur.'}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {([['Google', 'Gmail / Google'], ['Office365', 'Outlook / Office 365'], ['iCloud', 'Apple iCloud'], ['IMAP', 'IMAP / autre']] as const).map(([svc, lbl]) => (
+                  <button key={svc} onClick={() => connectAurinko(svc)}
+                    className="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-slate-300 hover:border-indigo-400 hover:bg-indigo-50 font-medium">
+                    <Mail className="h-4 w-4 text-indigo-500" /> {lbl}
+                  </button>
+                ))}
+              </div>
+              {aurinkoAccounts.length > 0 && (
+                <div className="border-t pt-3 space-y-1.5">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{locale === 'en' ? 'Connected mailboxes' : 'Boîtes connectées'}</div>
+                  {aurinkoAccounts.map((a) => (
+                    <div key={a.id} className="flex items-center justify-between text-sm bg-slate-50 rounded px-3 py-2">
+                      <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> {a.label || a.account_email}</span>
+                      <button onClick={() => disconnectAurinko(a.id)} className="text-xs text-red-600 hover:underline">{locale === 'en' ? 'Disconnect' : 'Déconnecter'}</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="flex justify-between items-center">
         <div className="text-sm text-slate-600">{accounts.length} {t('acct.email.count', locale)}</div>
