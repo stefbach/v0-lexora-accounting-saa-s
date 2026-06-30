@@ -213,13 +213,17 @@ export default function EmailAccountsPage() {
   const personalAccounts = accounts.filter(a => a.user_id)
 
   return (
-    <ClientPageShell
-      kicker="Communication"
-      title={t('acct.email.page_title', locale)}
-      subtitle={locale === 'en' ? 'Connect your mailboxes (Gmail, Outlook, Apple…) to send, read and let the AI assistant manage your emails.' : "Connecte tes boîtes (Gmail, Outlook, Apple…) pour envoyer, lire et laisser l'assistant IA gérer tes emails."}
-      actions={<PageHelp />}
-    >
+    <ClientPageShell hideHero disableParticles>
       <div className="space-y-6">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: '#0B0F2E' }}><Mail className="w-5 h-5" style={{ color: '#D4AF37' }} /></div>
+        <div className="flex-1 min-w-[180px]">
+          <h1 className="text-xl font-bold" style={{ color: '#0B0F2E' }}>{locale === 'en' ? 'Email connections' : 'Connexions emails'}</h1>
+          <p className="text-xs text-gray-500">{locale === 'en' ? 'Connect your mailboxes (Gmail, Outlook, Apple…) to send, read and let the AI assistant manage your emails.' : "Connecte tes boîtes (Gmail, Outlook, Apple…) pour envoyer, lire et laisser l'assistant IA gérer tes emails."}</p>
+        </div>
+        <PageHelp />
+      </div>
+
       {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-start gap-2"><AlertCircle className="h-4 w-4 mt-0.5" />{error}</div>}
       {success && <div className="rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 flex items-start gap-2"><CheckCircle2 className="h-4 w-4 mt-0.5" />{success}</div>}
 

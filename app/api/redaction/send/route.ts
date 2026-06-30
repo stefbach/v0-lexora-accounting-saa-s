@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
     const subject = String(b.subject || '').trim()
     const body = String(b.body || '')
     const account_id = b.account_id ? String(b.account_id) : null
+    const nylas_account_id = b.nylas_account_id ? String(b.nylas_account_id) : null
     const cc = Array.isArray(b.cc) ? b.cc.filter((x: unknown) => typeof x === 'string') : undefined
     const reply_to = b.reply_to ? String(b.reply_to) : undefined
 
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
 
     // Provider prioritaire : Nylas (boîte connectée — email/agenda/agent IA),
     // puis Aurinko, sinon compte email / Resend.
-    const nylas = await trySendViaNylas(admin, { user_id: user.id, societe_id, msg })
+    const nylas = await trySendViaNylas(admin, { user_id: user.id, societe_id, account_id: nylas_account_id, msg })
     if (nylas) {
       if (!nylas.ok) return NextResponse.json({ error: nylas.error || 'Envoi Nylas échoué' }, { status: 502 })
       return NextResponse.json({ ok: true, message_id: nylas.message_id, provider: 'nylas', from: nylas.account_email })

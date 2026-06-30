@@ -18,6 +18,8 @@ type CalEvent = {
 }
 type Calendar = { id: string; name: string; isPrimary: boolean; readOnly: boolean }
 
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }) : '')
 const dayKey = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Sans date')
 
@@ -85,23 +87,25 @@ export default function AgendaPage() {
   }
 
   return (
-    <ClientPageShell
-      kicker="Communication"
-      title="Agenda"
-      subtitle="Tes événements et rendez-vous, avec visio Meet/Zoom — synchronisés à ta boîte connectée."
-      actions={
-        <div className="flex items-center gap-2">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: NAVY }}><CalendarDays className="w-5 h-5" style={{ color: GOLD }} /></div>
+        <div className="flex-1 min-w-[180px]">
+          <h1 className="text-xl font-bold" style={{ color: NAVY }}>Agenda</h1>
+          <p className="text-xs text-gray-500">Tes événements et rendez-vous, avec visio Meet/Zoom — synchronisés à ta boîte connectée.</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
           {calendars.length > 1 && (
             <select value={calendarId} onChange={(e) => setCalendarId(e.target.value)} className="text-sm border rounded-md px-2 py-1.5 bg-background max-w-[200px]">
               {calendars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           )}
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}</Button>
-          <Button size="sm" onClick={() => setShowCreate(true)}><Plus className="h-4 w-4 mr-1.5" /> Nouvel événement</Button>
+          <button onClick={() => setShowCreate(true)} className="inline-flex items-center h-9 px-4 rounded-md text-sm font-semibold" style={{ background: NAVY, color: GOLD }}><Plus className="h-4 w-4 mr-1.5" /> Nouvel événement</button>
         </div>
-      }
-    >
-    <div className="space-y-4">
+      </div>
+
       {error && <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3"><AlertCircle className="h-4 w-4" /> {error}</div>}
       {success && <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-md p-3"><CheckCircle2 className="h-4 w-4" /> {success}</div>}
 

@@ -25,6 +25,8 @@ type AgentSettings = { instructions: string; categories: string[]; signature: st
 type AgentAction = 'summarize' | 'classify' | 'actions' | 'reply'
 type Filter = { kind: 'all' | 'unread' | 'reply' | 'high' | 'category'; value?: string }
 
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
 const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }) : '')
 const who = (p: Participant | null) => (p ? p.name || p.email || '?' : '?')
 const prioColor: Record<string, string> = { haute: 'bg-red-100 text-red-700 border-red-200', moyenne: 'bg-amber-100 text-amber-700 border-amber-200', basse: 'bg-slate-100 text-slate-600 border-slate-200' }
@@ -235,21 +237,24 @@ export default function BoiteMailPage() {
   )
 
   return (
-    <ClientPageShell
-      kicker="Communication"
-      title="Boîte de réception"
-      subtitle="Lis, trie et réponds à tes emails avec l'assistant IA — et compose de nouveaux messages."
-      actions={
-        <div className="flex items-center gap-2">
+    <ClientPageShell hideHero disableParticles>
+    <div className="space-y-4">
+      {/* En-tête premium (charte navy/gold) */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: NAVY }}><Inbox className="w-5 h-5" style={{ color: GOLD }} /></div>
+        <div className="flex-1 min-w-[180px]">
+          <h1 className="text-xl font-bold" style={{ color: NAVY }}>Boîte de réception</h1>
+          <p className="text-xs text-gray-500">Lis, trie et réponds à tes emails avec l'assistant IA — et compose de nouveaux messages.</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
           <Button size="sm" variant="outline" onClick={() => runTriage(false)} disabled={triaging}>
-            {triaging ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Wand2 className="h-4 w-4 mr-1.5" />} Trier ma boîte
+            {triaging ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Wand2 className="h-4 w-4 mr-1.5" />} Trier
           </Button>
-          <Button size="sm" onClick={() => setShowCompose(true)}><PenLine className="h-4 w-4 mr-1.5" /> Composer</Button>
+          <button onClick={() => setShowCompose(true)} className="inline-flex items-center h-9 px-4 rounded-md text-sm font-semibold" style={{ background: NAVY, color: GOLD }}><PenLine className="h-4 w-4 mr-1.5" /> Composer</button>
           <Button variant="outline" size="sm" onClick={() => setShowSettings(true)}><Settings2 className="h-4 w-4" /></Button>
         </div>
-      }
-    >
-    <div className="space-y-4">
+      </div>
+
       {/* Barre d'outils : boîte active, recherche, vue, période */}
       <div className="flex items-center gap-2 flex-wrap rounded-xl border bg-card px-3 py-2 shadow-sm">
         {accountsList.length > 1 ? (

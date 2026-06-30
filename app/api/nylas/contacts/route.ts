@@ -6,7 +6,7 @@ import { listNylasContacts, isNylasConfigured } from '@/lib/nylas/client'
 
 export const dynamic = 'force-dynamic'
 
-type Contact = { name: string; email: string; company?: string | null; source: 'lexora' | 'nylas' }
+type Contact = { name: string; email: string; company?: string | null; source: 'lexora' | 'employe' | 'profil' | 'nylas' }
 
 /**
  * GET /api/nylas/contacts?q=&societe_id=&account_id=
@@ -41,7 +41,31 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 2. Carnet d'adresses de la boîte connectée (Nylas).
+  // 2. Employés de la société (ont souvent un email).
+  if (societeId) {
+    let eq = admin.from('employes').select('prenom, nom, email').eq('societe_id', societeId).not('email', 'is', null).limit(50)
+    if (q) eq = eq.or(`prenom.ilike.%${q}%,nom.ilike.%${q}%,email.ilike.%${q}%`)
+    const { data } = await eq
+    for (const e of (data || []) as Array<{ prenom: string | null; nom: string | null; email: string | null }>) {
+      const email = (e.email || '').toLowerCase()
+      if (!email || byEmail.has(email)) continue
+      byEmail.set(email, { name: [e.prenom, e.nom].filter(Boolean).join(' ') || email, email, source: 'employe' })
+    }
+  }
+
+  // 3. Profils Lexora (utilisateurs internes).
+  {
+    let pq = admin.from('profiles').select('full_name, email').not('email', 'is', null).limit(30)
+    if (q) pq = pq.or(`full_name.ilike.%${q}%,email.ilike.%${q}%`)
+    const { data } = await pq
+    for (const p of (data || []) as Array<{ full_name: string | null; email: string | null }>) {
+      const email = (p.email || '').toLowerCase()
+      if (!email || byEmail.has(email)) continue
+      byEmail.set(email, { name: p.full_name || email, email, source: 'profil' })
+    }
+  }
+
+  // 4. Carnet d'adresses de la boîte connectée (Nylas).
   if (isNylasConfigured()) {
     const acc = await resolveNylasAccount(admin, user.id, societeId, sp.get('account_id'))
     if (acc) {
