@@ -13,20 +13,25 @@
  * et rien ne se déclenche.
  */
 
+// Lecture robuste des variables d'env : trim des espaces parasites (copier-
+// coller dans Vercel) qui cassaient l'URL ('...com /v3') et le client_id ('+').
+function env(name: string): string { return (process.env[name] || '').trim() }
 function apiBase(): string {
-  return (process.env.NYLAS_API_URI || 'https://api.us.nylas.com').replace(/\/+$/, '')
+  return (env('NYLAS_API_URI') || 'https://api.us.nylas.com').replace(/\/+$/, '')
 }
+function clientId(): string { return env('NYLAS_CLIENT_ID') }
+function apiKey(): string { return env('NYLAS_API_KEY') }
 
 export function isNylasConfigured(): boolean {
-  return !!(process.env.NYLAS_API_KEY && process.env.NYLAS_CLIENT_ID)
+  return !!(apiKey() && clientId())
 }
 
 /** URL d'auth hébergée Nylas (redirection navigateur). */
 export function buildNylasAuthUrl(args: { redirectUri: string; state: string; provider?: string; loginHint?: string }): string {
-  const clientId = process.env.NYLAS_CLIENT_ID
-  if (!clientId) throw new Error('NYLAS_CLIENT_ID manquant')
+  const cid = clientId()
+  if (!cid) throw new Error('NYLAS_CLIENT_ID manquant')
   const p = new URLSearchParams({
-    client_id: clientId,
+    client_id: cid,
     redirect_uri: args.redirectUri,
     response_type: 'code',
     access_type: 'offline', // refresh token → jeton durable
@@ -39,15 +44,15 @@ export function buildNylasAuthUrl(args: { redirectUri: string; state: string; pr
 
 /** Échange le code contre un grant (compte connecté). */
 export async function exchangeNylasCode(code: string, redirectUri: string): Promise<{ grantId: string; email: string }> {
-  const clientId = process.env.NYLAS_CLIENT_ID
-  const apiKey = process.env.NYLAS_API_KEY
-  if (!clientId || !apiKey) throw new Error('NYLAS_CLIENT_ID / NYLAS_API_KEY manquants')
+  const cid = clientId()
+  const key = apiKey()
+  if (!cid || !key) throw new Error('NYLAS_CLIENT_ID / NYLAS_API_KEY manquants')
   const res = await fetch(`${apiBase()}/v3/connect/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      client_id: clientId,
-      client_secret: apiKey,
+      client_id: cid,
+      client_secret: key,
       grant_type: 'authorization_code',
       code,
       redirect_uri: redirectUri,
@@ -63,7 +68,7 @@ export async function exchangeNylasCode(code: string, redirectUri: string): Prom
 }
 
 function authHeaders(): Record<string, string> {
-  return { Authorization: `Bearer ${process.env.NYLAS_API_KEY}`, 'Content-Type': 'application/json' }
+  return { Authorization: `Bearer ${apiKey()}`, 'Content-Type': 'application/json' }
 }
 
 export type NylasEmailMessage = {
