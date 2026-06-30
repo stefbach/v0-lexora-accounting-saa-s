@@ -69,10 +69,14 @@ export async function POST(req: NextRequest) {
   let bodyText = b.body || ''
   const sourcesUsed: string[] = []
 
+  // Carnet PAR BOÎTE : on doit résoudre la boîte connectée (account).
+  if (!isNylasConfigured()) return NextResponse.json({ error: 'Nylas non configuré' }, { status: 503 })
+  const acc = await resolveNylasAccount(admin, user.id, b.societe_id, b.account_id)
+  if (!acc) return NextResponse.json({ error: 'Aucune boîte connectée pour enregistrer le contact.' }, { status: 404 })
+
   // 1. Récupère l'email d'origine + ses pièces jointes (carte de visite).
-  if (b.message_id && isNylasConfigured()) {
-    const acc = await resolveNylasAccount(admin, user.id, b.societe_id, b.account_id)
-    if (acc) {
+  if (b.message_id) {
+    {
       try {
         const msg = await getNylasMessage(acc.grantId, b.message_id)
         fromName = msg.from?.name || fromName
@@ -120,22 +124,23 @@ export async function POST(req: NextRequest) {
   const nom = (ext.nom || fromName || '').trim()
   if (!email && !nom) return NextResponse.json({ error: 'Aucune coordonnée exploitable trouvée.' }, { status: 422 })
 
+  // Enregistrement dans le carnet PROPRE à cette boîte (dédup par email).
+  const now = new Date().toISOString()
   if (email) {
-    const { data: existing } = await admin.from('factures_contacts').select('id').eq('societe_id', b.societe_id).eq('email', email).maybeSingle()
+    const { data: existing } = await admin.from('nylas_account_contacts').select('id').eq('account_id', acc.id).eq('email', email).maybeSingle()
     if (existing?.id) {
-      const upd = { nom: nom || undefined, entreprise: ext.entreprise || undefined, telephone: ext.telephone || undefined, mobile: ext.mobile || undefined, adresse: ext.adresse || undefined, ville: ext.ville || undefined, pays: ext.pays || undefined, vat_number: ext.vat_number || undefined, site_web: ext.site_web || undefined }
-      await admin.from('factures_contacts').update(upd).eq('id', (existing as any).id)
+      const upd = { name: nom || undefined, company: ext.entreprise || undefined, telephone: ext.telephone || undefined, mobile: ext.mobile || undefined, adresse: ext.adresse || undefined, ville: ext.ville || undefined, pays: ext.pays || undefined, vat_number: ext.vat_number || undefined, site_web: ext.site_web || undefined, updated_at: now }
+      await admin.from('nylas_account_contacts').update(upd).eq('id', (existing as any).id)
       return NextResponse.json({ ok: true, updated: true, sources: sourcesUsed, contact: { nom, entreprise: ext.entreprise, email } })
     }
   }
 
   const row = {
-    societe_id: b.societe_id, nom: nom || null, entreprise: ext.entreprise || null, email: email || null,
+    user_id: user.id, account_id: acc.id, name: nom || null, company: ext.entreprise || null, email: email || null,
     telephone: ext.telephone || null, mobile: ext.mobile || null, adresse: ext.adresse || null,
-    ville: ext.ville || null, pays: ext.pays || null, vat_number: ext.vat_number || null,
-    site_web: ext.site_web || null, actif: true,
+    ville: ext.ville || null, pays: ext.pays || null, vat_number: ext.vat_number || null, site_web: ext.site_web || null,
   }
-  const { error } = await admin.from('factures_contacts').insert(row)
+  const { error } = await admin.from('nylas_account_contacts').insert(row)
   if (error) return NextResponse.json({ error: `Enregistrement échoué : ${error.message}` }, { status: 500 })
   return NextResponse.json({ ok: true, created: true, sources: sourcesUsed, contact: { nom, entreprise: ext.entreprise, email } })
 }

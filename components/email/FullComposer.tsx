@@ -57,7 +57,7 @@ function RecipientField({ value, onChange, societeId, accountId, className, plac
             <button key={s.email} type="button" onMouseDown={(e) => { e.preventDefault(); onChange(s.email); setOpen(false) }}
               className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm flex items-center justify-between gap-2">
               <span className="truncate"><span className="font-medium text-[#0B0F2E]">{s.name}</span> <span className="text-gray-400">{s.email}</span></span>
-              <span className="text-[10px] text-gray-400 shrink-0">{s.source === 'lexora' ? 'Client' : s.source === 'employe' ? 'Employé' : s.source === 'profil' ? 'Lexora' : 'Carnet'}</span>
+              <span className="text-[10px] text-gray-400 shrink-0">{s.source === 'carnet' ? 'Carnet' : 'Gmail'}</span>
             </button>
           ))}
         </div>
