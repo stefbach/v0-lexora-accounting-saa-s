@@ -19,7 +19,14 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams
   const code = sp.get('code')
   const stateRaw = sp.get('state')
-  if (!code || !stateRaw) return errorRedirect(req, 'code ou state manquant')
+  // Diagnostic : si Nylas renvoie une erreur OAuth ou un retour incomplet, on
+  // remonte tout ce qui a été reçu pour qu'aucune cause ne reste invisible.
+  const nylasErr = sp.get('error') || sp.get('error_description')
+  if (nylasErr) return errorRedirect(req, `Nylas a refusé : ${nylasErr}`)
+  if (!code || !stateRaw) {
+    const keys = Array.from(sp.keys()).join(',') || 'aucun'
+    return errorRedirect(req, `Retour incomplet (params reçus : ${keys}). code=${code ? 'oui' : 'NON'} state=${stateRaw ? 'oui' : 'NON'}`)
+  }
 
   let state
   try { state = verifyOAuthState(stateRaw) } catch { return errorRedirect(req, 'state invalide ou expiré') }
@@ -55,8 +62,10 @@ export async function GET(req: NextRequest) {
       last_synced_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
-    if (existing?.id) await admin.from('user_oauth_accounts').update(row).eq('id', existing.id)
-    else await admin.from('user_oauth_accounts').insert(row)
+    const { error: dbError } = existing?.id
+      ? await admin.from('user_oauth_accounts').update(row).eq('id', existing.id)
+      : await admin.from('user_oauth_accounts').insert(row)
+    if (dbError) return errorRedirect(req, `Enregistrement échoué : ${dbError.message}`)
 
     const url = new URL(returnTo, req.nextUrl.origin)
     url.searchParams.set('nylas_connected', email || '1')
