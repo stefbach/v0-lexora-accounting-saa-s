@@ -254,6 +254,25 @@ export async function listNylasFolders(grantId: string): Promise<MailFolder[]> {
 // Calendrier (Nylas Calendar v3)
 // ---------------------------------------------------------------------------
 
+export type NylasContact = { name: string; email: string }
+
+/** Carnet d'adresses de la boîte connectée (Gmail/Outlook…). */
+export async function listNylasContacts(grantId: string, opts: { limit?: number; email?: string } = {}): Promise<NylasContact[]> {
+  const p = new URLSearchParams()
+  p.set('limit', String(opts.limit || 100))
+  if (opts.email) p.set('email', opts.email)
+  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/contacts?${p.toString()}`, { headers: authHeaders() })
+  if (!res.ok) throw new Error(`Nylas list contacts ${res.status}`)
+  const d = await res.json() as { data?: Array<{ given_name?: string; surname?: string; display_name?: string; emails?: Array<{ email?: string }> }> }
+  const out: NylasContact[] = []
+  for (const c of d.data || []) {
+    const name = c.display_name || [c.given_name, c.surname].filter(Boolean).join(' ') || ''
+    const email = c.emails?.[0]?.email || ''
+    if (email) out.push({ name, email })
+  }
+  return out
+}
+
 export type NylasCalendar = { id: string; name: string; isPrimary: boolean; readOnly: boolean }
 
 export async function listNylasCalendars(grantId: string): Promise<NylasCalendar[]> {

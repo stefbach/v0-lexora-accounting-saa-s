@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import {
   Loader2, Mail, RefreshCw, Search, Sparkles, ListChecks, Tag, Reply, Send, AlertCircle,
   CheckCircle2, Inbox, Settings2, Wand2, Circle, X, Trash2, Paperclip, Download, Send as SendIcon,
+  PenLine, Users,
 } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
@@ -57,6 +58,7 @@ export default function BoiteMailPage() {
 
   const [settings, setSettings] = useState<AgentSettings | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [showCompose, setShowCompose] = useState(false)
 
   const [accountsList, setAccountsList] = useState<Array<{ id: string; account_email: string; label: string }>>([])
   const [activeAccountId, setActiveAccountId] = useState<string | null>(null)
@@ -252,9 +254,10 @@ export default function BoiteMailPage() {
             <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') load(q) }} placeholder="Rechercher…" className="pl-8 pr-3 py-1.5 text-sm border rounded-md bg-background w-44" />
           </div>
           <Button variant="outline" size="sm" onClick={() => load(q)} disabled={loading}>{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}</Button>
-          <Button size="sm" onClick={() => runTriage(false)} disabled={triaging}>
+          <Button size="sm" variant="outline" onClick={() => runTriage(false)} disabled={triaging}>
             {triaging ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Wand2 className="h-4 w-4 mr-1.5" />} Trier ma boîte
           </Button>
+          <Button size="sm" onClick={() => setShowCompose(true)}><PenLine className="h-4 w-4 mr-1.5" /> Composer</Button>
           <Button variant="outline" size="sm" onClick={() => setShowSettings(true)}><Settings2 className="h-4 w-4" /></Button>
         </div>
       </div>
@@ -390,6 +393,183 @@ export default function BoiteMailPage() {
       </div>
 
       {showSettings && settings && <SettingsModal settings={settings} societeId={societeId} onClose={() => setShowSettings(false)} onSaved={(s) => { setSettings(s); setShowSettings(false) }} />}
+      {showCompose && <ComposeModal societeId={societeId} accountId={activeAccountId} onClose={() => setShowCompose(false)} onSent={(to) => { setShowCompose(false); setSent(`Email envoyé à ${to}`) }} />}
+    </div>
+  )
+}
+
+/** Saisie de destinataire avec autocomplétion contacts (Lexora + carnet Nylas). */
+function ContactInput({ value, onChange, societeId, accountId }: { value: string; onChange: (v: string) => void; societeId: string | null; accountId: string | null }) {
+  const [suggestions, setSuggestions] = useState<Array<{ name: string; email: string; source: string }>>([])
+  const [open, setOpen] = useState(false)
+
+  const search = async (q: string) => {
+    if (q.trim().length < 2) { setSuggestions([]); return }
+    const p = new URLSearchParams({ q })
+    if (societeId) p.set('societe_id', societeId)
+    if (accountId) p.set('account_id', accountId)
+    try {
+      const res = await fetch(`/api/nylas/contacts?${p.toString()}`)
+      const d = await res.json()
+      setSuggestions(d.contacts || []); setOpen(true)
+    } catch { /* noop */ }
+  }
+
+  return (
+    <div className="relative">
+      <input
+        value={value}
+        onChange={(e) => { onChange(e.target.value); search(e.target.value) }}
+        onFocus={() => suggestions.length && setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder="Destinataire (nom ou email)"
+        className="w-full text-sm border rounded-md px-2 py-1.5 bg-background"
+      />
+      {open && suggestions.length > 0 && (
+        <div className="absolute z-10 mt-1 w-full bg-popover border rounded-md shadow-md max-h-52 overflow-y-auto">
+          {suggestions.map((s) => (
+            <button key={s.email} type="button"
+              onMouseDown={(e) => { e.preventDefault(); onChange(s.email); setOpen(false) }}
+              className="w-full text-left px-3 py-1.5 hover:bg-muted text-sm flex items-center justify-between gap-2">
+              <span className="truncate"><span className="font-medium">{s.name}</span> <span className="text-muted-foreground">{s.email}</span></span>
+              <span className="text-[10px] text-muted-foreground shrink-0">{s.source === 'lexora' ? 'Lexora' : 'Carnet'}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const TONS = ['professionnel et courtois', 'cordial', 'ferme', 'commercial', 'amical', 'formel']
+const DOMAINES = [['general', 'Général'], ['juridique', 'Juridique'], ['rh', 'RH'], ['fiscal', 'Fiscal'], ['commercial', 'Commercial'], ['recouvrement', 'Recouvrement']] as const
+
+/**
+ * Composer un email avec l'assistant de rédaction (génération RAG + refine),
+ * destinataires auto-complétés, envoi via Nylas.
+ */
+function ComposeModal({ societeId, accountId, onClose, onSent }: { societeId: string | null; accountId: string | null; onClose: () => void; onSent: (to: string) => void }) {
+  const [to, setTo] = useState('')
+  const [objet, setObjet] = useState('')
+  const [brief, setBrief] = useState('')
+  const [ton, setTon] = useState(TONS[0])
+  const [longueur, setLongueur] = useState('moyen')
+  const [langue, setLangue] = useState('fr')
+  const [domaine, setDomaine] = useState('general')
+  const [body, setBody] = useState('')
+  const [sources, setSources] = useState<Array<{ source?: string; reference?: string }>>([])
+  const [refine, setRefine] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [refining, setRefining] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  // Retire la 1re ligne « Objet : … » du texte généré et la place dans l'objet.
+  const splitObjet = (text: string) => {
+    const m = text.match(/^\s*objet\s*:\s*(.+?)\n+/i)
+    if (m) { if (!objet) setObjet(m[1].trim()); return text.slice(m[0].length).trim() }
+    return text
+  }
+
+  const generate = async () => {
+    if (!brief.trim()) { setErr('Décris ta demande (brief).'); return }
+    setGenerating(true); setErr(null)
+    try {
+      const res = await fetch('/api/redaction', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'email', brief, ton, longueur, langue, objet, domaine }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Erreur génération')
+      setBody(splitObjet(d.text || '')); setSources(d.sources || [])
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Erreur') }
+    finally { setGenerating(false) }
+  }
+
+  const doRefine = async () => {
+    if (!refine.trim() || !body.trim()) return
+    setRefining(true); setErr(null)
+    try {
+      const res = await fetch('/api/redaction/refine', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_text: body, instruction: refine, mode: 'email', langue }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Erreur')
+      setBody(d.text || body); setRefine('')
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Erreur') }
+    finally { setRefining(false) }
+  }
+
+  const send = async () => {
+    if (!to.trim() || !objet.trim() || !body.trim()) { setErr('Destinataire, objet et message requis.'); return }
+    setSending(true); setErr(null)
+    try {
+      const res = await fetch('/api/nylas/send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ societe_id: societeId || null, account_id: accountId, to: [to.trim()], subject: objet, html: body.replace(/\n/g, '<br>') }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Échec envoi')
+      onSent(to.trim())
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Échec envoi') }
+    finally { setSending(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <Card className="w-full max-w-2xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <CardHeader className="flex flex-row items-center justify-between border-b">
+          <CardTitle className="flex items-center gap-2"><PenLine className="h-5 w-5 text-primary" /> Composer un email</CardTitle>
+          <Button variant="ghost" size="sm" onClick={onClose}><X className="h-4 w-4" /></Button>
+        </CardHeader>
+        <CardContent className="space-y-3 pt-4">
+          {err && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2 flex items-center gap-2"><AlertCircle className="h-4 w-4" /> {err}</div>}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-slate-600 flex items-center gap-1"><Users className="h-3 w-3" /> À</label>
+              <div className="mt-1"><ContactInput value={to} onChange={setTo} societeId={societeId} accountId={accountId} /></div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600">Objet</label>
+              <input value={objet} onChange={(e) => setObjet(e.target.value)} className="mt-1 w-full text-sm border rounded-md px-2 py-1.5 bg-background" />
+            </div>
+          </div>
+
+          <div className="rounded-md border border-violet-200 bg-violet-50/50 p-3 space-y-2">
+            <div className="flex items-center gap-1.5 text-violet-700 font-medium text-xs uppercase tracking-wide"><Sparkles className="h-3.5 w-3.5" /> Assistant de rédaction</div>
+            <textarea value={brief} onChange={(e) => setBrief(e.target.value)} placeholder="Décris ta demande en vrac — l'IA rédige un email professionnel (avec sources juridiques/fiscales si pertinent)." className="w-full text-sm border rounded-md p-2 bg-background min-h-[70px]" />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <select value={ton} onChange={(e) => setTon(e.target.value)} className="text-sm border rounded-md px-2 py-1.5 bg-background">{TONS.map((x) => <option key={x} value={x}>{x}</option>)}</select>
+              <select value={longueur} onChange={(e) => setLongueur(e.target.value)} className="text-sm border rounded-md px-2 py-1.5 bg-background"><option value="court">Court</option><option value="moyen">Moyen</option><option value="détaillé">Détaillé</option></select>
+              <select value={langue} onChange={(e) => setLangue(e.target.value)} className="text-sm border rounded-md px-2 py-1.5 bg-background"><option value="fr">Français</option><option value="en">Anglais</option><option value="fr_en">Bilingue</option></select>
+              <select value={domaine} onChange={(e) => setDomaine(e.target.value)} className="text-sm border rounded-md px-2 py-1.5 bg-background">{DOMAINES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+            </div>
+            <Button size="sm" variant="outline" onClick={generate} disabled={generating || !brief.trim()}>
+              {generating ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />} Rédiger avec l'IA
+            </Button>
+          </div>
+
+          {body && (
+            <>
+              <textarea value={body} onChange={(e) => setBody(e.target.value)} className="w-full text-sm border rounded-md p-2 bg-background min-h-[200px]" />
+              {sources.length > 0 && (
+                <div className="text-xs text-muted-foreground">Sources : {sources.map((s, i) => <span key={i} className="mr-2">{[s.source, s.reference].filter(Boolean).join(' ')}</span>)}</div>
+              )}
+              <div className="flex gap-2">
+                <input value={refine} onChange={(e) => setRefine(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') doRefine() }} placeholder="Affiner : « plus court », « ajoute une relance »…" className="flex-1 text-sm border rounded-md px-2 py-1.5 bg-background" />
+                <Button size="sm" variant="outline" onClick={doRefine} disabled={refining || !refine.trim()}>{refining ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}</Button>
+              </div>
+            </>
+          )}
+
+          <div className="flex justify-end gap-2 border-t pt-3">
+            <Button variant="outline" onClick={onClose}>Annuler</Button>
+            <Button onClick={send} disabled={sending}>{sending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <SendIcon className="h-4 w-4 mr-1.5" />} Envoyer</Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
