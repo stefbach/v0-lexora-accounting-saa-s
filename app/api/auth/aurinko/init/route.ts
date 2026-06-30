@@ -34,5 +34,18 @@ export async function GET(req: NextRequest) {
   const base = (process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).replace(/\/+$/, '')
   const returnUrl = `${base}/api/auth/aurinko/callback`
   const url = buildAurinkoAuthorizeUrl({ serviceType, scopes: DEFAULT_SCOPES, returnUrl, state })
+
+  // Mode debug : ?debug=1 → affiche l'URL exacte au lieu de rediriger.
+  // Permet de copier la returnUrl EXACTE à déclarer dans l'app Aurinko.
+  if (sp.get('debug') === '1') {
+    return NextResponse.json({
+      returnUrl_a_declarer_dans_aurinko: returnUrl,
+      base_utilisee: base,
+      NEXT_PUBLIC_APP_URL_definie: !!process.env.NEXT_PUBLIC_APP_URL,
+      origine_requete: req.nextUrl.origin,
+      authorizeUrl: url,
+    })
+  }
+
   return NextResponse.redirect(url)
 }
