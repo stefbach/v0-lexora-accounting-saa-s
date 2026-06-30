@@ -15,8 +15,9 @@ type CalEvent = {
   start: string | null; end: string | null; allDay: boolean
   participants: Array<{ name?: string; email?: string; status?: string }>
   conferenceUrl: string | null; status: string
+  accountId?: string; accountEmail?: string; calendarId?: string
 }
-type Calendar = { id: string; name: string; isPrimary: boolean; readOnly: boolean }
+type Mailbox = { id: string; email: string }
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -26,8 +27,8 @@ const dayKey = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('
 export default function AgendaPage() {
   const { societeId } = useSocieteActive()
   const [events, setEvents] = useState<CalEvent[]>([])
-  const [calendars, setCalendars] = useState<Calendar[]>([])
-  const [calendarId, setCalendarId] = useState('')
+  const [mailboxes, setMailboxes] = useState<Mailbox[]>([])
+  const [activeMailbox, setActiveMailbox] = useState('') // '' = toutes les boîtes
   const [noAccount, setNoAccount] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -43,15 +44,18 @@ export default function AgendaPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const res = await fetch(`/api/nylas/calendar/events?${sp()}`)
+      const extra: Record<string, string> = {}
+      if (activeMailbox) extra.account_id = activeMailbox
+      const res = await fetch(`/api/nylas/calendar/events?${sp(extra)}`)
       const d = await res.json()
       if (res.status === 404) { setNoAccount(true); return }
       if (!res.ok) throw new Error(d.error || 'Erreur agenda')
-      setCalendars(d.calendars || []); setCalendarId(d.calendarId || '')
+      setMailboxes(d.accounts || [])
       setEvents((d.events || []).filter((e: CalEvent) => e.status !== 'cancelled'))
+      if (Array.isArray(d.errors) && d.errors.length) setError(`Certaines boîtes n'ont pas répondu : ${d.errors.join(' · ')}`)
     } catch (e) { setError(e instanceof Error ? e.message : 'Erreur') }
     finally { setLoading(false) }
-  }, [societeId])
+  }, [societeId, activeMailbox]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
 
@@ -59,7 +63,7 @@ export default function AgendaPage() {
     if (!confirm(`Supprimer « ${ev.title} » ?`)) return
     setError(null)
     try {
-      const res = await fetch(`/api/nylas/calendar/events/${encodeURIComponent(ev.id)}?${sp({ calendar_id: calendarId })}`, { method: 'DELETE' })
+      const res = await fetch(`/api/nylas/calendar/events/${encodeURIComponent(ev.id)}?${sp({ calendar_id: ev.calendarId || '', account_id: ev.accountId || '' })}`, { method: 'DELETE' })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Échec suppression')
       setEvents((prev) => prev.filter((x) => x.id !== ev.id))
@@ -96,9 +100,10 @@ export default function AgendaPage() {
           <p className="text-xs text-gray-500">Tes événements et rendez-vous, avec visio Meet/Zoom — synchronisés à ta boîte connectée.</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {calendars.length > 1 && (
-            <select value={calendarId} onChange={(e) => setCalendarId(e.target.value)} className="text-sm border rounded-md px-2 py-1.5 bg-background max-w-[200px]">
-              {calendars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {mailboxes.length > 1 && (
+            <select value={activeMailbox} onChange={(e) => setActiveMailbox(e.target.value)} className="text-sm border rounded-md px-2 py-1.5 bg-background max-w-[220px]">
+              <option value="">Toutes les boîtes</option>
+              {mailboxes.map((mb) => <option key={mb.id} value={mb.id}>{mb.email}</option>)}
             </select>
           )}
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}</Button>
@@ -124,7 +129,8 @@ export default function AgendaPage() {
                     <div className="min-w-0">
                       <div className="font-medium text-sm">{ev.title}</div>
                       <div className="text-xs text-muted-foreground">{ev.allDay ? 'Toute la journée' : `${fmt(ev.start)} → ${ev.end ? new Date(ev.end).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}`}</div>
-                      <div className="flex flex-wrap gap-2 mt-1.5">
+                      <div className="flex flex-wrap gap-2 mt-1.5 items-center">
+                        {!activeMailbox && mailboxes.length > 1 && ev.accountEmail && <span className="text-[10px] px-1.5 py-0.5 rounded border bg-slate-50 text-slate-600">{ev.accountEmail}</span>}
                         {ev.location && <span className="text-xs text-muted-foreground inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {ev.location}</span>}
                         {ev.participants.length > 0 && <span className="text-xs text-muted-foreground inline-flex items-center gap-1"><Users className="h-3 w-3" /> {ev.participants.length}</span>}
                         {ev.conferenceUrl && <a href={ev.conferenceUrl} target="_blank" rel="noopener noreferrer"><Badge className="text-[10px] gap-1 bg-blue-600"><Video className="h-3 w-3" /> Rejoindre</Badge></a>}
@@ -141,7 +147,7 @@ export default function AgendaPage() {
 
       {showCreate && (
         <CreateEventModal
-          societeId={societeId} calendarId={calendarId}
+          societeId={societeId} mailboxes={mailboxes} defaultMailbox={activeMailbox || mailboxes[0]?.id || ''}
           onClose={() => setShowCreate(false)}
           onCreated={(ev) => { setEvents((prev) => [...prev, ev]); setShowCreate(false); setSuccess(`Événement « ${ev.title} » créé${ev.conferenceUrl ? ' avec visio' : ''}.`) }}
         />
@@ -151,7 +157,7 @@ export default function AgendaPage() {
   )
 }
 
-function CreateEventModal({ societeId, calendarId, onClose, onCreated }: { societeId: string | null; calendarId: string; onClose: () => void; onCreated: (ev: CalEvent) => void }) {
+function CreateEventModal({ societeId, mailboxes, defaultMailbox, onClose, onCreated }: { societeId: string | null; mailboxes: Mailbox[]; defaultMailbox: string; onClose: () => void; onCreated: (ev: CalEvent) => void }) {
   const [title, setTitle] = useState('')
   const [date, setDate] = useState('')
   const [startTime, setStartTime] = useState('09:00')
@@ -160,6 +166,7 @@ function CreateEventModal({ societeId, calendarId, onClose, onCreated }: { socie
   const [participants, setParticipants] = useState('')
   const [conferencing, setConferencing] = useState<'' | 'meet' | 'zoom'>('')
   const [description, setDescription] = useState('')
+  const [mailbox, setMailbox] = useState(defaultMailbox)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -172,7 +179,7 @@ function CreateEventModal({ societeId, calendarId, onClose, onCreated }: { socie
       const res = await fetch('/api/nylas/calendar/events', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          societe_id: societeId || null, calendar_id: calendarId || undefined,
+          societe_id: societeId || null, account_id: mailbox || undefined,
           title, description, location, start, end,
           participants: participants.split(',').map((p) => p.trim()).filter(Boolean),
           conferencing: conferencing || null,
@@ -194,6 +201,14 @@ function CreateEventModal({ societeId, calendarId, onClose, onCreated }: { socie
         </CardHeader>
         <CardContent className="space-y-3">
           {err && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{err}</div>}
+          {mailboxes.length > 1 && (
+            <div>
+              <label className="text-xs font-medium text-slate-600">Dans la boîte</label>
+              <select value={mailbox} onChange={(e) => setMailbox(e.target.value)} className="mt-1 w-full text-sm border rounded-md p-2 bg-background">
+                {mailboxes.map((mb) => <option key={mb.id} value={mb.id}>{mb.email}</option>)}
+              </select>
+            </div>
+          )}
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre" className="w-full text-sm border rounded-md p-2 bg-background" />
           <div className="grid grid-cols-3 gap-2">
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="text-sm border rounded-md p-2 bg-background" />

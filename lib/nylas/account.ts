@@ -48,3 +48,19 @@ export async function resolveNylasAccount(
     return null
   }
 }
+
+/** Toutes les boîtes Nylas actives de l'utilisateur (grant_id déchiffré). */
+export async function listNylasAccounts(admin: SupabaseClient, userId: string): Promise<NylasAccount[]> {
+  const { data } = await admin
+    .from('user_oauth_accounts')
+    .select('id, account_email, access_token_enc, societe_id')
+    .eq('user_id', userId)
+    .eq('provider', 'nylas')
+    .eq('active', true)
+  const out: NylasAccount[] = []
+  for (const a of (data || []) as Array<{ id: string; account_email: string; access_token_enc: string | null; societe_id: string | null }>) {
+    if (!a.access_token_enc) continue
+    try { out.push({ id: a.id, account_email: a.account_email, grantId: decryptSecret(a.access_token_enc), societe_id: a.societe_id }) } catch { /* skip */ }
+  }
+  return out
+}
