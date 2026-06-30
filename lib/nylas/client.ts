@@ -249,3 +249,103 @@ export async function listNylasFolders(grantId: string): Promise<MailFolder[]> {
     id: f.id || '', name: f.name || '', attributes: f.attributes || [], totalCount: f.total_count, unreadCount: f.unread_count,
   }))
 }
+
+// ---------------------------------------------------------------------------
+// Calendrier (Nylas Calendar v3)
+// ---------------------------------------------------------------------------
+
+export type NylasCalendar = { id: string; name: string; isPrimary: boolean; readOnly: boolean }
+
+export async function listNylasCalendars(grantId: string): Promise<NylasCalendar[]> {
+  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/calendars?limit=50`, { headers: authHeaders() })
+  if (!res.ok) throw new Error(`Nylas list calendars ${res.status}`)
+  const d = await res.json() as { data?: Array<{ id?: string; name?: string; is_primary?: boolean; read_only?: boolean }> }
+  return (d.data || []).map((c) => ({ id: c.id || '', name: c.name || '', isPrimary: !!c.is_primary, readOnly: !!c.read_only }))
+}
+
+export type CalEvent = {
+  id: string
+  title: string
+  description: string
+  location: string
+  start: string | null // ISO
+  end: string | null   // ISO
+  allDay: boolean
+  participants: Array<{ name?: string; email?: string; status?: string }>
+  conferenceUrl: string | null
+  status: string
+}
+
+type RawEvent = {
+  id?: string; title?: string; description?: string; location?: string; status?: string
+  when?: { object?: string; start_time?: number; end_time?: number; start_date?: string; end_date?: string }
+  participants?: Array<{ name?: string; email?: string; status?: string }>
+  conferencing?: { details?: { url?: string }; url?: string }
+}
+
+function normalizeEvent(e: RawEvent): CalEvent {
+  const w = e.when || {}
+  const allDay = w.object === 'date' || w.object === 'datespan'
+  return {
+    id: e.id || '',
+    title: e.title || '(sans titre)',
+    description: e.description || '',
+    location: e.location || '',
+    start: typeof w.start_time === 'number' ? new Date(w.start_time * 1000).toISOString() : (w.start_date || null),
+    end: typeof w.end_time === 'number' ? new Date(w.end_time * 1000).toISOString() : (w.end_date || null),
+    allDay,
+    participants: e.participants || [],
+    conferenceUrl: e.conferencing?.details?.url || e.conferencing?.url || null,
+    status: e.status || '',
+  }
+}
+
+export async function listNylasEvents(grantId: string, calendarId: string, startEpoch: number, endEpoch: number): Promise<CalEvent[]> {
+  const p = new URLSearchParams({ calendar_id: calendarId, start: String(startEpoch), end: String(endEpoch), limit: '100' })
+  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/events?${p.toString()}`, { headers: authHeaders() })
+  if (!res.ok) throw new Error(`Nylas list events ${res.status}`)
+  const d = await res.json() as { data?: RawEvent[] }
+  return (d.data || []).map(normalizeEvent)
+}
+
+export type CreateEventInput = {
+  calendarId: string
+  title: string
+  description?: string
+  location?: string
+  startEpoch: number
+  endEpoch: number
+  participants?: string[]
+  conferencing?: 'meet' | 'zoom' | null
+}
+
+export async function createNylasEvent(grantId: string, input: CreateEventInput): Promise<CalEvent> {
+  const body: Record<string, unknown> = {
+    title: input.title,
+    when: { start_time: input.startEpoch, end_time: input.endEpoch },
+  }
+  if (input.description) body.description = input.description
+  if (input.location) body.location = input.location
+  if (input.participants?.length) body.participants = input.participants.map((email) => ({ email }))
+  if (input.conferencing) {
+    body.conferencing = { provider: input.conferencing === 'zoom' ? 'Zoom Meeting' : 'Google Meet', autocreate: {} }
+  }
+  const p = new URLSearchParams({ calendar_id: input.calendarId })
+  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/events?${p.toString()}`, {
+    method: 'POST', headers: authHeaders(), body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    throw new Error(`Nylas create event ${res.status}: ${txt.slice(0, 300)}`)
+  }
+  const d = await res.json() as { data?: RawEvent }
+  return normalizeEvent(d.data || {})
+}
+
+export async function deleteNylasEvent(grantId: string, eventId: string, calendarId: string): Promise<void> {
+  const p = new URLSearchParams({ calendar_id: calendarId })
+  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/events/${encodeURIComponent(eventId)}?${p.toString()}`, {
+    method: 'DELETE', headers: authHeaders(),
+  })
+  if (!res.ok && res.status !== 404) throw new Error(`Nylas delete event ${res.status}`)
+}
