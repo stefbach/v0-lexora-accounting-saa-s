@@ -90,6 +90,20 @@ function authHeaders(): Record<string, string> {
   return { Authorization: `Bearer ${apiKey()}`, 'Content-Type': 'application/json' }
 }
 
+/**
+ * fetch avec retry/backoff sur 429 (rate limit) et 5xx — utile pendant la
+ * synchro initiale d'une nouvelle boîte, ou avec plusieurs boîtes en parallèle.
+ */
+async function nfetch(url: string, init?: RequestInit, retries = 3): Promise<Response> {
+  let res = await fetch(url, init)
+  for (let i = 0; i < retries && (res.status === 429 || res.status >= 500); i++) {
+    const wait = res.status === 429 ? 1200 * (i + 1) : 500 * (i + 1)
+    await new Promise((r) => setTimeout(r, wait))
+    res = await fetch(url, init)
+  }
+  return res
+}
+
 export type NylasEmailMessage = {
   to: string[]
   cc?: string[]
@@ -203,7 +217,7 @@ export async function listNylasMessages(grantId: string, opts: { limit?: number;
   if (opts.folderId) p.set('in', opts.folderId)
   if (opts.unread !== undefined) p.set('unread', String(opts.unread))
   if (opts.receivedAfter) p.set('received_after', String(opts.receivedAfter))
-  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/messages?${p.toString()}`, {
+  const res = await nfetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/messages?${p.toString()}`, {
     headers: authHeaders(),
   })
   if (!res.ok) throw new Error(`Nylas list messages ${res.status}`)
@@ -213,7 +227,7 @@ export async function listNylasMessages(grantId: string, opts: { limit?: number;
 
 /** Récupère un message complet (corps inclus). */
 export async function getNylasMessage(grantId: string, messageId: string): Promise<MailMessage> {
-  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/messages/${encodeURIComponent(messageId)}`, {
+  const res = await nfetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/messages/${encodeURIComponent(messageId)}`, {
     headers: authHeaders(),
   })
   if (!res.ok) throw new Error(`Nylas get message ${res.status}`)
@@ -253,7 +267,7 @@ export async function deleteNylasMessage(grantId: string, messageId: string): Pr
 /** Télécharge une pièce jointe (renvoie le binaire + le content-type). */
 export async function downloadNylasAttachment(grantId: string, attachmentId: string, messageId: string): Promise<{ buffer: ArrayBuffer; contentType: string }> {
   const url = `${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/attachments/${encodeURIComponent(attachmentId)}/download?message_id=${encodeURIComponent(messageId)}`
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${apiKey()}` } })
+  const res = await nfetch(url, { headers: { Authorization: `Bearer ${apiKey()}` } })
   if (!res.ok) throw new Error(`Nylas download attachment ${res.status}`)
   return { buffer: await res.arrayBuffer(), contentType: res.headers.get('content-type') || 'application/octet-stream' }
 }
@@ -262,7 +276,7 @@ export type MailFolder = { id: string; name: string; attributes?: string[]; tota
 
 /** Liste les dossiers/labels de la boîte. */
 export async function listNylasFolders(grantId: string): Promise<MailFolder[]> {
-  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/folders`, { headers: authHeaders() })
+  const res = await nfetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/folders`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Nylas list folders ${res.status}`)
   const d = await res.json() as { data?: Array<{ id?: string; name?: string; attributes?: string[]; total_count?: number; unread_count?: number }> }
   return (d.data || []).map((f) => ({
@@ -281,7 +295,7 @@ export async function listNylasContacts(grantId: string, opts: { limit?: number;
   const p = new URLSearchParams()
   p.set('limit', String(opts.limit || 100))
   if (opts.email) p.set('email', opts.email)
-  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/contacts?${p.toString()}`, { headers: authHeaders() })
+  const res = await nfetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/contacts?${p.toString()}`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Nylas list contacts ${res.status}`)
   const d = await res.json() as { data?: Array<{ given_name?: string; surname?: string; display_name?: string; emails?: Array<{ email?: string }> }> }
   const out: NylasContact[] = []
@@ -296,7 +310,7 @@ export async function listNylasContacts(grantId: string, opts: { limit?: number;
 export type NylasCalendar = { id: string; name: string; isPrimary: boolean; readOnly: boolean }
 
 export async function listNylasCalendars(grantId: string): Promise<NylasCalendar[]> {
-  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/calendars?limit=50`, { headers: authHeaders() })
+  const res = await nfetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/calendars?limit=50`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Nylas list calendars ${res.status}`)
   const d = await res.json() as { data?: Array<{ id?: string; name?: string; is_primary?: boolean; read_only?: boolean }> }
   return (d.data || []).map((c) => ({ id: c.id || '', name: c.name || '', isPrimary: !!c.is_primary, readOnly: !!c.read_only }))
@@ -341,7 +355,7 @@ function normalizeEvent(e: RawEvent): CalEvent {
 
 export async function listNylasEvents(grantId: string, calendarId: string, startEpoch: number, endEpoch: number): Promise<CalEvent[]> {
   const p = new URLSearchParams({ calendar_id: calendarId, start: String(startEpoch), end: String(endEpoch), limit: '100' })
-  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/events?${p.toString()}`, { headers: authHeaders() })
+  const res = await nfetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/events?${p.toString()}`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Nylas list events ${res.status}`)
   const d = await res.json() as { data?: RawEvent[] }
   return (d.data || []).map(normalizeEvent)
@@ -385,7 +399,7 @@ export type BusySlot = { start: number; end: number } // epoch secondes
 
 /** Périodes occupées d'un compte sur une plage (pour calcul de créneaux). */
 export async function nylasFreeBusy(grantId: string, email: string, startEpoch: number, endEpoch: number): Promise<BusySlot[]> {
-  const res = await fetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/calendars/free-busy`, {
+  const res = await nfetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}/calendars/free-busy`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ start_time: startEpoch, end_time: endEpoch, emails: [email] }),
