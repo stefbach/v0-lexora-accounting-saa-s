@@ -58,6 +58,29 @@ export default function SocietesPage() {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(EMPTY)
   const [editId, setEditId] = useState<string|null>(null)
+  const [scanning, setScanning] = useState(false)
+  const [scanMsg, setScanMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const importRegister = async (file: File) => {
+    setScanning(true); setScanMsg(null)
+    try {
+      const b64 = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(file) })
+      const resp = await fetch('/api/client/societes/import-register', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ societe_id: editId || undefined, pdf_base64: b64 }),
+      })
+      const d = await resp.json()
+      if (!resp.ok) throw new Error(d.error || 'Numérisation échouée')
+      const sf = d.societeFields || {}
+      const merged: Record<string, any> = {}
+      for (const [k, v] of Object.entries(sf)) if (v && k in EMPTY) merged[k] = v
+      setForm((p) => ({ ...p, ...merged }))
+      const nb = Object.keys(merged).length
+      const extra = (d.officersSaved || d.shareholdersSaved) ? ` +${d.officersSaved || 0} dirigeant(s), ${d.shareholdersSaved || 0} actionnaire(s).` : ''
+      setScanMsg({ ok: true, text: (locale === 'en' ? `${nb} field(s) pre-filled. Review and Save.` : `${nb} champ(s) pré-remplis. Vérifie et Enregistre.`) + extra })
+    } catch (e: any) { setScanMsg({ ok: false, text: e?.message || 'Erreur' }) }
+    finally { setScanning(false) }
+  }
 
   const load = async () => {
     setLoading(true)
@@ -124,6 +147,21 @@ export default function SocietesPage() {
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle style={{ fontFamily: FONT, letterSpacing:"-0.01em" }}>{editId ? t('core.soc.edit', locale) : t('core.soc.create', locale)} {t('core.soc.a_company', locale)}</DialogTitle></DialogHeader>
             <div className="space-y-3 pt-2">
+              {/* Numérisation intelligente d'un registre CBRD → pré-remplissage */}
+              <div className="rounded-xl border border-dashed p-3 flex flex-wrap items-center gap-3" style={{ borderColor: '#D4AF37', background: 'rgba(212,175,55,0.06)' }}>
+                <div className="flex-1 min-w-[180px]">
+                  <div className="text-sm font-semibold" style={{ color: '#0B0F2E' }}>{locale === 'en' ? 'Scan a company register (CBRD)' : 'Numériser un registre (CBRD)'}</div>
+                  <div className="text-xs text-gray-500">{locale === 'en' ? 'Upload the PDF — the AI fills in the fields automatically.' : "Dépose le registre PDF — l'IA remplit les champs automatiquement."}</div>
+                </div>
+                <label className="inline-flex items-center h-9 px-3 rounded-md text-sm font-semibold cursor-pointer shrink-0" style={{ background: '#0B0F2E', color: '#D4AF37' }}>
+                  {scanning ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Plus className="w-4 h-4 mr-1.5" />}
+                  {scanning ? (locale === 'en' ? 'Scanning…' : 'Numérisation…') : (locale === 'en' ? 'Upload PDF' : 'Charger le PDF')}
+                  <input type="file" accept="application/pdf" className="hidden" disabled={scanning}
+                    onChange={(e) => { const file = e.target.files?.[0]; if (file) importRegister(file); e.currentTarget.value = '' }} />
+                </label>
+              </div>
+              {scanMsg && <div className={`text-sm rounded-md p-2 border ${scanMsg.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-700'}`}>{scanMsg.text}</div>}
+
               <div><Label>{t('core.soc.company_name', locale)} <span className="text-red-500">*</span></Label><Input value={form.nom} onChange={F("nom")} placeholder="Digital Data Solutions Ltd"/></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>{t('core.soc.brn', locale)}</Label><Input value={form.brn} onChange={F("brn")} placeholder="C20173522"/></div>

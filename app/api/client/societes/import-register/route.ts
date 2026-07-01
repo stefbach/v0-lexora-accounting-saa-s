@@ -37,11 +37,16 @@ export async function POST(req: NextRequest) {
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: 'ANTHROPIC_API_KEY manquant' }, { status: 503 })
 
   const b = await req.json().catch(() => null) as { societe_id?: string; pdf_base64?: string } | null
-  if (!b?.societe_id || !b.pdf_base64) return NextResponse.json({ error: 'societe_id et pdf_base64 requis' }, { status: 400 })
+  if (!b?.pdf_base64) return NextResponse.json({ error: 'pdf_base64 requis' }, { status: 400 })
 
   const admin = getAdminClient()
-  try { await assertSocieteAccess(admin, user.id, b.societe_id) }
-  catch { return NextResponse.json({ error: 'Accès société refusé' }, { status: 403 }) }
+  // societe_id optionnel : présent = mise à jour d'une société existante (on
+  // vérifie l'accès et on sauvegarde dirigeants/actionnaires) ; absent =
+  // simple extraction pour pré-remplir un formulaire de création.
+  if (b.societe_id) {
+    try { await assertSocieteAccess(admin, user.id, b.societe_id) }
+    catch { return NextResponse.json({ error: 'Accès société refusé' }, { status: 403 }) }
+  }
 
   const pdf = b.pdf_base64.includes(',') ? b.pdf_base64.split(',')[1] : b.pdf_base64
 
@@ -67,7 +72,7 @@ Règles : n'invente RIEN, laisse "" ou [] si absent. Le BRN commence souvent par
 
   // Sauvegarde dirigeants + actionnaires (remplace les entrées du registre).
   let officersSaved = 0, shareholdersSaved = 0
-  try {
+  if (b.societe_id) try {
     const officers: Array<Record<string, unknown>> = []
     for (const a of ext.administrateurs || []) {
       if (a?.nom) officers.push({ societe_id: b.societe_id, role: 'director', nom: a.nom, adresse: a.adresse || null, fonction: a.fonction || null, source: 'register' })
