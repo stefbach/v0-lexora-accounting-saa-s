@@ -57,7 +57,7 @@ export default function BankCredentialsPage() {
 
   const load = async () => {
     if (!societeId) return
-    setLoading(true); setError(null)
+    setLoading(true); setError(null); setSuccess(null)
     try {
       const r = await fetch(`/api/client/direction/bank-credentials?societe_id=${societeId}`, { cache: 'no-store' })
       const j = await r.json()
