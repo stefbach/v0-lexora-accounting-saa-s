@@ -135,19 +135,40 @@ export async function loginAndScrapeMcb(
     // Blur pour finaliser la validation du formulaire (Angular « touched »).
     await page.keyboard.press('Tab').catch(() => {})
 
-    // Attendre que le bouton s'active (form valide). Le champ #password chiffré
-    // ne se remplit qu'AU submit (handler Backbase), donc on ne l'exige pas ici.
-    await page.waitForFunction(() => {
-      const btn = document.querySelector('#submitBtn') as HTMLButtonElement | null
-      return !!btn && !btn.disabled
-    }, { timeout: 12000 }).catch(() => {})
+    // La validation Angular du bouton est instable avec la saisie automatisée
+    // (le champ mdp n'est pas toujours enregistré → bouton reste désactivé). On
+    // force Angular à ré-évaluer (dispatch input/change/blur) en boucle jusqu'à
+    // ce que #submitBtn s'active. Le champ #password chiffré ne se remplit qu'au
+    // submit, donc on ne l'exige pas ici.
+    let enabled = false
+    for (let i = 0; i < 12 && !enabled; i++) {
+      enabled = await page.evaluate(() => {
+        for (const id of ['username', 'password-field']) {
+          const el = document.getElementById(id)
+          if (el) {
+            el.dispatchEvent(new Event('input', { bubbles: true }))
+            el.dispatchEvent(new Event('change', { bubbles: true }))
+            el.dispatchEvent(new Event('blur', { bubbles: true }))
+          }
+        }
+        const btn = document.getElementById('submitBtn') as HTMLButtonElement | null
+        return !!btn && !btn.disabled
+      }).catch(() => false)
+      if (!enabled) await page.waitForTimeout(700)
+    }
 
     // Vrai clic sur le bouton précis (#submitBtn) — déclenche le handler Angular
     // qui chiffre le mot de passe et soumet le formulaire OIDC.
     const btn = page.locator('#submitBtn')
     await btn.click({ timeout: 8000 }).catch(async () => {
-      // Repli 1 : clic forcé (au cas où un overlay intercepte).
+      // Repli : clic forcé, puis soumission programmatique du formulaire.
       await btn.click({ force: true, timeout: 4000 }).catch(() => {})
+      await page.evaluate(() => {
+        const b = document.getElementById('submitBtn') as HTMLButtonElement | null
+        const f = b?.closest('form') as HTMLFormElement | null
+        if (b && !b.disabled) b.click()
+        else if (f) (f.requestSubmit ? f.requestSubmit() : f.submit())
+      }).catch(() => {})
     })
 
     // ── 3. Attendre l'issue. Le login OIDC réussi fait disparaître le formulaire
