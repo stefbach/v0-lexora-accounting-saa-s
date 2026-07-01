@@ -7,6 +7,12 @@ import { callClaudeDocumentJSON } from '@/lib/claude'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
 
+function parseNum(v: unknown): number | null {
+  if (v == null) return null
+  const n = Number(String(v).replace(/[^\d.-]/g, ''))
+  return Number.isFinite(n) ? n : null
+}
+
 type Person = { nom?: string; adresse?: string; fonction?: string; parts?: string }
 type Extracted = {
   nom?: string; brn?: string; ern?: string; numero_tva_mra?: string
@@ -59,6 +65,24 @@ Règles : n'invente RIEN, laisse "" ou [] si absent. Le BRN commence souvent par
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Numérisation échouée' }, { status: 502 })
   }
 
+  // Sauvegarde dirigeants + actionnaires (remplace les entrées du registre).
+  let officersSaved = 0, shareholdersSaved = 0
+  try {
+    const officers: Array<Record<string, unknown>> = []
+    for (const a of ext.administrateurs || []) {
+      if (a?.nom) officers.push({ societe_id: b.societe_id, role: 'director', nom: a.nom, adresse: a.adresse || null, fonction: a.fonction || null, source: 'register' })
+    }
+    if (ext.secretaire?.nom) officers.push({ societe_id: b.societe_id, role: 'secretary', nom: ext.secretaire.nom, adresse: ext.secretaire.adresse || null, source: 'register' })
+    const shareholders: Array<Record<string, unknown>> = []
+    for (const s of ext.actionnaires || []) {
+      if (s?.nom) shareholders.push({ societe_id: b.societe_id, nom: s.nom, shares: parseNum(s.parts), source: 'register' })
+    }
+    await admin.from('societe_officers').delete().eq('societe_id', b.societe_id).eq('source', 'register')
+    await admin.from('societe_shareholders').delete().eq('societe_id', b.societe_id).eq('source', 'register')
+    if (officers.length) { const { error } = await admin.from('societe_officers').insert(officers); if (!error) officersSaved = officers.length }
+    if (shareholders.length) { const { error } = await admin.from('societe_shareholders').insert(shareholders); if (!error) shareholdersSaved = shareholders.length }
+  } catch { /* best-effort */ }
+
   // Champs directement applicables à la table societes.
   const societeFields = {
     nom: ext.nom || undefined,
@@ -73,5 +97,5 @@ Règles : n'invente RIEN, laisse "" ou [] si absent. Le BRN commence souvent par
     website: ext.website || undefined,
   }
 
-  return NextResponse.json({ ok: true, societeFields, extracted: ext })
+  return NextResponse.json({ ok: true, societeFields, extracted: ext, officersSaved, shareholdersSaved })
 }

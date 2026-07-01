@@ -32,6 +32,106 @@ function TabButton({ id, label, active, onClick }: { id: Tab; label: string; act
   )
 }
 
+/** Dirigeants, actionnaires et états financiers de la société. */
+function CompanyDataPanel({ societeId, refresh, locale }: { societeId: string; refresh: number; locale: Locale }) {
+  const [officers, setOfficers] = useState<any[]>([])
+  const [shareholders, setShareholders] = useState<any[]>([])
+  const [financials, setFinancials] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [finScanning, setFinScanning] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const r = await fetch(`/api/client/societes/company-data?societe_id=${societeId}`)
+      const d = await r.json()
+      setOfficers(d.officers || []); setShareholders(d.shareholders || []); setFinancials(d.financials || [])
+    } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, [societeId, refresh]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const importFinancials = async (file: File) => {
+    setFinScanning(true); setMsg(null)
+    try {
+      const b64 = await new Promise<string>((res, rej) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result)); rd.onerror = rej; rd.readAsDataURL(file) })
+      const resp = await fetch('/api/client/societes/import-financials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ societe_id: societeId, pdf_base64: b64 }) })
+      const d = await resp.json()
+      if (!resp.ok) throw new Error(d.error || 'Erreur')
+      setMsg(locale === 'en' ? `Financial year ${d.year} imported.` : `Exercice ${d.year} importé.`)
+      load()
+    } catch (e: any) { setMsg(e?.message || 'Erreur') }
+    finally { setFinScanning(false) }
+  }
+
+  const del = async (type: string, id: string) => {
+    await fetch(`/api/client/societes/company-data?type=${type}&id=${id}`, { method: 'DELETE' })
+    load()
+  }
+
+  const fmtMoney = (v: any, cur?: string) => v == null ? '—' : `${Number(v).toLocaleString('fr-FR')} ${cur || 'MUR'}`
+  if (loading && !officers.length && !financials.length) return null
+
+  return (
+    <div className="space-y-4 pt-2">
+      {/* Dirigeants & actionnaires */}
+      {(officers.length > 0 || shareholders.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="rounded-xl border p-3">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">{locale === 'en' ? 'Directors & secretary' : 'Dirigeants & secrétaire'}</div>
+            {officers.length === 0 ? <div className="text-xs text-slate-400">—</div> : officers.map((o) => (
+              <div key={o.id} className="flex items-start justify-between gap-2 text-sm py-1 border-b last:border-0">
+                <div className="min-w-0"><span className="font-medium" style={{ color: NAVY }}>{o.nom}</span> <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{o.role === 'secretary' ? (locale === 'en' ? 'Secretary' : 'Secrétaire') : (locale === 'en' ? 'Director' : 'Administrateur')}</span>{o.adresse && <div className="text-xs text-slate-400 truncate">{o.adresse}</div>}</div>
+                <button onClick={() => del('officer', o.id)} className="text-red-500 text-xs shrink-0">✕</button>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-xl border p-3">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">{locale === 'en' ? 'Shareholders' : 'Actionnaires'}</div>
+            {shareholders.length === 0 ? <div className="text-xs text-slate-400">—</div> : shareholders.map((s) => (
+              <div key={s.id} className="flex items-center justify-between gap-2 text-sm py-1 border-b last:border-0">
+                <div className="min-w-0"><span className="font-medium" style={{ color: NAVY }}>{s.nom}</span>{(s.shares || s.percentage) && <span className="text-xs text-slate-500 ml-2">{s.shares ? `${Number(s.shares).toLocaleString('fr-FR')} parts` : ''}{s.percentage ? ` ${s.percentage}%` : ''}</span>}</div>
+                <button onClick={() => del('shareholder', s.id)} className="text-red-500 text-xs shrink-0">✕</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* États financiers */}
+      <div className="rounded-xl border p-3">
+        <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{locale === 'en' ? 'Financials (prior years)' : 'États financiers (exercices précédents)'}</div>
+          <label className="inline-flex items-center h-8 px-3 rounded-md text-xs font-semibold cursor-pointer" style={{ background: NAVY, color: GOLD }}>
+            {finScanning ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Banknote className="w-3.5 h-3.5 mr-1.5" />}
+            {finScanning ? (locale === 'en' ? 'Scanning…' : 'Numérisation…') : (locale === 'en' ? 'Import statements (PDF)' : 'Importer états financiers (PDF)')}
+            <input type="file" accept="application/pdf" className="hidden" disabled={finScanning} onChange={(e) => { const file = e.target.files?.[0]; if (file) importFinancials(file); e.currentTarget.value = '' }} />
+          </label>
+        </div>
+        {msg && <div className="text-xs text-emerald-700 mb-2">{msg}</div>}
+        {financials.length === 0 ? (
+          <div className="text-xs text-slate-400">{locale === 'en' ? 'No financial year imported yet.' : 'Aucun exercice importé.'}</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {financials.map((fin) => (
+              <div key={fin.id} className="rounded-lg border p-3 text-sm">
+                <div className="flex items-center justify-between mb-1"><span className="font-bold" style={{ color: NAVY }}>{locale === 'en' ? 'FY' : 'Exercice'} {fin.year}</span><button onClick={() => del('financial', fin.id)} className="text-red-500 text-xs">✕</button></div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs">
+                  <span className="text-slate-500">{locale === 'en' ? 'Revenue' : "Chiffre d'affaires"}</span><span className="text-right font-mono">{fmtMoney(fin.revenue, fin.currency)}</span>
+                  <span className="text-slate-500">{locale === 'en' ? 'Net profit' : 'Résultat net'}</span><span className="text-right font-mono">{fmtMoney(fin.net_profit, fin.currency)}</span>
+                  <span className="text-slate-500">{locale === 'en' ? 'Total assets' : 'Total actif'}</span><span className="text-right font-mono">{fmtMoney(fin.total_assets, fin.currency)}</span>
+                  <span className="text-slate-500">{locale === 'en' ? 'Equity' : 'Capitaux propres'}</span><span className="text-right font-mono">{fmtMoney(fin.equity, fin.currency)}</span>
+                  <span className="text-slate-500">{locale === 'en' ? 'Cash' : 'Trésorerie'}</span><span className="text-right font-mono">{fmtMoney(fin.cash, fin.currency)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // Each tab is a separate component with its own state to avoid re-render issues
 function DetailsTab({ data, onSave, locale }: { data: any; onSave: (d: any) => void; locale: Locale }) {
   const [f, setF] = useState({ ...data })
@@ -39,6 +139,7 @@ function DetailsTab({ data, onSave, locale }: { data: any; onSave: (d: any) => v
 
   const [scanning, setScanning] = useState(false)
   const [scanMsg, setScanMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+  const [dataRefresh, setDataRefresh] = useState(0)
 
   const importRegister = async (file: File) => {
     setScanning(true); setScanMsg(null)
@@ -58,8 +159,10 @@ function DetailsTab({ data, onSave, locale }: { data: any; onSave: (d: any) => v
       for (const [k, v] of Object.entries(sf)) if (v) merged[k] = v
       if (ex.date_incorporation && /^\d{4}-\d{2}-\d{2}$/.test(ex.date_incorporation)) merged.date_incorporation = ex.date_incorporation
       setF((p: any) => ({ ...p, ...merged }))
+      setDataRefresh((n) => n + 1)
       const nb = Object.keys(merged).length
-      setScanMsg({ kind: 'ok', text: locale === 'en' ? `${nb} field(s) pre-filled from the register. Review and Save.` : `${nb} champ(s) pré-remplis depuis le registre. Vérifie et Enregistre.` })
+      const extra = (d.officersSaved || d.shareholdersSaved) ? (locale === 'en' ? ` +${d.officersSaved || 0} officer(s), ${d.shareholdersSaved || 0} shareholder(s) saved.` : ` +${d.officersSaved || 0} dirigeant(s), ${d.shareholdersSaved || 0} actionnaire(s) enregistrés.`) : ''
+      setScanMsg({ kind: 'ok', text: (locale === 'en' ? `${nb} field(s) pre-filled from the register. Review and Save.` : `${nb} champ(s) pré-remplis depuis le registre. Vérifie et Enregistre.`) + extra })
     } catch (e: any) {
       setScanMsg({ kind: 'err', text: e?.message || 'Erreur' })
     } finally { setScanning(false) }
@@ -84,6 +187,8 @@ function DetailsTab({ data, onSave, locale }: { data: any; onSave: (d: any) => v
       {scanMsg && (
         <div className={`text-sm rounded-md p-2 border ${scanMsg.kind === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-700'}`}>{scanMsg.text}</div>
       )}
+
+      {f.id && <CompanyDataPanel societeId={f.id} refresh={dataRefresh} locale={locale} />}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-4">
