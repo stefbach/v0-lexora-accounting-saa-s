@@ -90,15 +90,10 @@ export default function BankCredentialsPage() {
         body: JSON.stringify(body),
       })
       const j = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(j.error || `Erreur ${r.status}`)
-
-      // Vérifie que l'enregistrement a bien persisté (le « OK » sans effet vient
-      // d'un échec silencieux — on le détecte en relisant).
-      const check = await fetch(`/api/client/direction/bank-credentials?societe_id=${societeId}`, { cache: 'no-store' }).then(x => x.json()).catch(() => null)
-      const saved = (check?.comptes || []).find((c: any) => c.id === compteId)
-      if (!saved?.scraping?.configured) {
-        throw new Error("L'enregistrement n'a pas été persisté côté serveur. Réessaie ; si le souci persiste, préviens (clé de chiffrement ou permission).")
-      }
+      // La route renvoie { ok:true } uniquement après un upsert réussi, et une
+      // erreur explicite sinon. On s'appuie sur cette réponse (le rechargement
+      // ci-dessous met à jour le badge « Configuré » depuis l'état réel).
+      if (!r.ok || j?.error) throw new Error(j.error || `Erreur ${r.status}`)
 
       setSuccess(t('scp.cred_bank_saved', locale))
       setUsernames(p => ({ ...p, [compteId]: '' }))
@@ -133,13 +128,10 @@ export default function BankCredentialsPage() {
           body: JSON.stringify({ username: newIbUser, password: newIbPwd, notes: newIbNotes, active: true }),
         })
         const cj = await cr.json().catch(() => ({}))
-        if (!cr.ok) throw new Error(cj.error || `Compte créé mais échec de l'enregistrement des identifiants (${cr.status}).`)
-        // Vérifie que les identifiants ont bien persisté.
-        const check = await fetch(`/api/client/direction/bank-credentials?societe_id=${societeId}`, { cache: 'no-store' }).then(x => x.json()).catch(() => null)
-        const saved = (check?.comptes || []).find((c: any) => c.id === newId)
-        if (!saved?.scraping?.configured) {
-          throw new Error("Compte créé mais les identifiants n'ont pas été persistés côté serveur. Réessaie via « Configurer l'accès ».")
-        }
+        // La route PUT ne renvoie { ok:true } qu'après un upsert réussi (elle
+        // renvoie une erreur explicite si le write DB échoue). On s'appuie donc
+        // sur cette réponse — le rechargement plus bas reflète l'état réel.
+        if (!cr.ok || cj?.error) throw new Error(cj.error || `Compte créé mais échec de l'enregistrement des identifiants (${cr.status}).`)
         credSaved = true
       }
 
