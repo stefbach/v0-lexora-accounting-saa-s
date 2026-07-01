@@ -120,12 +120,31 @@ export async function loginAndScrapeMcb(
         duration_ms: Date.now() - t0,
       }
     }
-    await passwordField.click()
-    await passwordField.type(credentials.password, { delay: 30 })
 
-    // Le bouton peut rester désactivé tant que le formulaire n'est pas valide —
-    // la frappe réelle ci-dessus l'active. On clique.
-    await page.click(SEL.loginButton).catch(() => {})
+    // ⚠ Backbase charge la clé publique RSA (#bbRsaPublicKey) de façon
+    // asynchrone et ne chiffre le mot de passe (→ champ caché #password) qu'une
+    // fois cette clé disponible. Taper avant → chiffrement vide → bouton « Log
+    // in » reste désactivé. On attend donc que la clé soit chargée.
+    await page.waitForFunction(() => {
+      const el = document.querySelector('#bbRsaPublicKey') as HTMLInputElement | null
+      return !!el && !!el.value && el.value.length > 20
+    }, { timeout: 15000 }).catch(() => {})
+
+    await passwordField.click()
+    await passwordField.type(credentials.password, { delay: 45 })
+    // Blur pour finaliser la validation du formulaire (Angular « touched »).
+    await page.keyboard.press('Tab').catch(() => {})
+
+    // Attendre que le bouton s'active (form valide + #password chiffré rempli).
+    await page.waitForFunction(() => {
+      const btn = document.querySelector('#submitBtn') as HTMLButtonElement | null
+      const hidden = document.querySelector('#password') as HTMLInputElement | null
+      return !!btn && !btn.disabled && !!hidden && !!hidden.value
+    }, { timeout: 12000 }).catch(() => {})
+
+    // Clic ; fallback : soumission via Entrée dans le champ mot de passe.
+    const clicked = await page.click(SEL.loginButton, { timeout: 5000 }).then(() => true).catch(() => false)
+    if (!clicked) await passwordField.press('Enter').catch(() => {})
 
     // ── 3. Attendre l'issue : navigation post-login (select-context / dashboard),
     //     OTP, ou erreur. On laisse le temps à la redirection OIDC.
@@ -145,9 +164,24 @@ export async function loginAndScrapeMcb(
     const stillOnLogin = await page.$(SEL.passwordInput).catch(() => null)
     if (errEl || stillOnLogin) {
       const errText = errEl ? (await errEl.textContent().catch(() => '') || '').trim().slice(0, 160) : ''
+      // État du formulaire pour distinguer « mauvais identifiants » d'un
+      // problème de timing (bouton jamais activé / mdp non chiffré).
+      const formState = await page.evaluate(() => {
+        const btn = document.querySelector('#submitBtn') as HTMLButtonElement | null
+        const hidden = document.querySelector('#password') as HTMLInputElement | null
+        const rsa = document.querySelector('#bbRsaPublicKey') as HTMLInputElement | null
+        return {
+          btnDisabled: btn ? btn.disabled : null,
+          hiddenPwdFilled: hidden ? !!hidden.value : null,
+          rsaKeyLoaded: rsa ? !!rsa.value : null,
+        }
+      }).catch(() => null)
+      const detail = formState
+        ? ` [bouton désactivé: ${formState.btnDisabled}, mdp chiffré rempli: ${formState.hiddenPwdFilled}, clé RSA chargée: ${formState.rsaKeyLoaded}]`
+        : ''
       return {
         status: 'failed',
-        error: errText || 'Login MCB refusé (identifiants incorrects ?) — toujours sur la page de connexion.',
+        error: (errText || 'Login MCB refusé — toujours sur la page de connexion.') + detail,
         screenshot_b64: await captureScreenshot(page),
         diagnostic: await capturePageDiagnostic(page),
         duration_ms: Date.now() - t0,
