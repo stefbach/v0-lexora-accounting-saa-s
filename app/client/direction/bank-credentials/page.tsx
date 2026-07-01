@@ -309,7 +309,7 @@ export default function BankCredentialsPage() {
               </div>
             </div>
 
-            {editing === cb.id ? (
+            {(editing === cb.id || !cb.scraping?.configured) ? (
               <div className="space-y-3 border-t pt-3">
                 <div>
                   <label className="text-xs font-medium text-slate-600">
