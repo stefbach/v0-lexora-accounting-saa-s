@@ -48,35 +48,33 @@ export interface McbAdapterOptions {
 }
 
 /**
- * Sélecteurs MCB — à vérifier sur le portail réel.
- * Format `data-testid` priorisé s'il existe, sinon CSS / ARIA.
+ * Sélecteurs MCB « Internet Banking Pro » (identity.mcb.mu, plateforme
+ * Backbase/Keycloak) — confirmés via le diagnostic live (juillet 2026).
+ * ⚠ Le mot de passe visible est chiffré côté navigateur (champ RSA
+ * `bbRsaPublicKey`) : il FAUT taper au clavier (pressSequentially), pas fill().
  */
 const SEL = {
-  // Étape 1 : page username
-  usernameInput: 'input[name="userId"], input[id="userId"], input[placeholder*="User ID" i]',
-  usernameNextButton: 'button[type="submit"], button:has-text("Next"), button:has-text("Continue")',
+  // Login page (username + password sur la MÊME page)
+  usernameInput: '#username, input[name="username"]',
+  // Champ VISIBLE (le hidden #password reçoit la version chiffrée à la soumission)
+  passwordInput: '#password-field, input[name="password-field"]',
+  loginButton: '#submitBtn, button[type="submit"]',
 
-  // Étape 2 : page password (peut être sur même page ou suivante)
-  passwordInput: 'input[type="password"], input[name="password"], input[id="password"]',
-  loginButton: 'button[type="submit"], button:has-text("Login"), button:has-text("Sign in")',
+  // OTP (normalement absent sur ce compte, mais on garde la détection)
+  otpInput: 'input[name*="otp" i], input[id*="otp" i], input[autocomplete="one-time-code"], input[placeholder*="OTP" i]',
 
-  // Étape 3 : détection OTP
-  otpInput: 'input[name*="otp" i], input[id*="otp" i], input[placeholder*="OTP" i], input[placeholder*="One Time" i]',
-  otpForm: 'form:has(input[name*="otp" i]), :text("One Time Password"), :text("OTP")',
+  // Détection d'erreur de login
+  loginError: '.error-message, .alert-danger, [role="alert"], :text("incorrect"), :text("Invalid"), :text("locked")',
 
-  // Étape 4 : dashboard — détection
-  dashboardMarker: ':text("Welcome"), :text("Dashboard"), :text("Accounts"), .account-list, [data-testid="dashboard"]',
-  loginError: '.error-message, .alert-danger, :text("Invalid"), :text("incorrect")',
+  // Après login : la plateforme Pro passe par une page « select-context »
+  // (choix de la société) avant le dashboard.
+  selectContextMarker: ':text("Select"), :text("context"), :text("profile"), [class*="context"]',
+  dashboardMarker: ':text("Accounts"), :text("Balance"), :text("Dashboard"), [class*="account"], [class*="dashboard"]',
 
-  // Étape 5 : liste comptes (à adapter)
   accountRow: '[data-account-number], .account-item, tr.account',
   accountBalance: '.balance, [data-balance], .account-balance',
 
-  // Étape 6 : transactions
   transactionRow: 'table.transactions tr, [data-testid="transaction-row"], .transaction-item',
-  transactionDate: '.date, td:nth-child(1)',
-  transactionDesc: '.description, td:nth-child(2)',
-  transactionAmount: '.amount, td:nth-child(3)',
 }
 
 export async function loginAndScrapeMcb(
@@ -89,68 +87,81 @@ export async function loginAndScrapeMcb(
 
   try {
     // ── 1. Navigation page login ──
-    await page.goto(options.login_url || 'https://ibank.mcb.mu/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+    // Les URL identity.mcb.mu/…/auth?…&state=…&nonce=…&code_challenge=… sont à
+    // usage unique (elles expirent). Si l'utilisateur a collé une telle URL, on
+    // repart de l'entrée de l'app qui amorce un flux OIDC frais.
+    let entryUrl = options.login_url || 'https://ibpro.mcb.mu/'
+    if (/identity\.mcb\.mu/i.test(entryUrl)) entryUrl = 'https://ibpro.mcb.mu/'
+    await page.goto(entryUrl, { waitUntil: 'domcontentloaded', timeout: 40000 })
 
-    // ── 2. Saisie User ID ──
-    const usernameField = await page.waitForSelector(SEL.usernameInput, { timeout: 10000 }).catch(() => null)
+    // ── 2. Attente + saisie username ──
+    const usernameField = await page.waitForSelector(SEL.usernameInput, { timeout: 20000 }).catch(() => null)
     if (!usernameField) {
       return {
         status: 'manual_needed',
-        error: 'Champ User ID introuvable — MCB a probablement modifié sa page login. Diagnostic ci-dessous : copie les champs détectés pour corriger les sélecteurs.',
+        error: 'Champ username introuvable sur la page login MCB. Diagnostic ci-dessous.',
         screenshot_b64: await captureScreenshot(page),
         diagnostic: await capturePageDiagnostic(page),
         duration_ms: Date.now() - t0,
       }
     }
-    await usernameField.fill(credentials.username)
-    await page.click(SEL.usernameNextButton).catch(() => {})
+    // Frappe clavier réelle (déclenche les handlers Backbase de validation +
+    // chiffrement RSA du mot de passe).
+    await usernameField.click()
+    await usernameField.type(credentials.username, { delay: 30 })
 
-    // ── 3. Saisie Password (peut être sur même page ou nouvelle) ──
     const passwordField = await page.waitForSelector(SEL.passwordInput, { timeout: 10000 }).catch(() => null)
     if (!passwordField) {
       return {
         status: 'manual_needed',
-        error: 'Champ password introuvable après saisie User ID',
+        error: 'Champ mot de passe introuvable. Diagnostic ci-dessous.',
         screenshot_b64: await captureScreenshot(page),
         diagnostic: await capturePageDiagnostic(page),
         duration_ms: Date.now() - t0,
       }
     }
-    await passwordField.fill(credentials.password)
-    await page.click(SEL.loginButton)
+    await passwordField.click()
+    await passwordField.type(credentials.password, { delay: 30 })
 
-    // ── 4. Attendre soit dashboard, soit OTP, soit erreur ──
-    const outcome = await Promise.race([
-      page.waitForSelector(SEL.dashboardMarker, { timeout: 20000 }).then(() => 'dashboard' as const).catch(() => null),
-      page.waitForSelector(SEL.otpInput, { timeout: 20000 }).then(() => 'otp' as const).catch(() => null),
-      page.waitForSelector(SEL.loginError, { timeout: 20000 }).then(() => 'error' as const).catch(() => null),
-    ])
+    // Le bouton peut rester désactivé tant que le formulaire n'est pas valide —
+    // la frappe réelle ci-dessus l'active. On clique.
+    await page.click(SEL.loginButton).catch(() => {})
 
-    if (outcome === 'otp') {
-      // OTP requis — on capture le state et on demande au user de saisir.
-      // TODO v2 : implémenter le flow OTP via Telegram (notif user, attente
-      // réponse, resume avec OTP fourni)
+    // ── 3. Attendre l'issue : navigation post-login (select-context / dashboard),
+    //     OTP, ou erreur. On laisse le temps à la redirection OIDC.
+    await page.waitForLoadState('networkidle', { timeout: 25000 }).catch(() => {})
+
+    const otp = await page.$(SEL.otpInput).catch(() => null)
+    if (otp) {
       return {
         status: 'manual_needed',
-        error: 'MCB demande un OTP. Flow OTP automatique pas encore implémenté — login en attente.',
+        error: 'MCB demande un OTP (inattendu sur ce compte). Flow OTP non implémenté.',
         screenshot_b64: await captureScreenshot(page),
+        diagnostic: await capturePageDiagnostic(page),
         duration_ms: Date.now() - t0,
       }
     }
-
-    if (outcome === 'error') {
+    const errEl = await page.$(SEL.loginError).catch(() => null)
+    const stillOnLogin = await page.$(SEL.passwordInput).catch(() => null)
+    if (errEl || stillOnLogin) {
+      const errText = errEl ? (await errEl.textContent().catch(() => '') || '').trim().slice(0, 160) : ''
       return {
         status: 'failed',
-        error: 'MCB a rejeté les credentials (mot de passe incorrect ?)',
+        error: errText || 'Login MCB refusé (identifiants incorrects ?) — toujours sur la page de connexion.',
         screenshot_b64: await captureScreenshot(page),
+        diagnostic: await capturePageDiagnostic(page),
         duration_ms: Date.now() - t0,
       }
     }
 
-    if (outcome !== 'dashboard') {
+    // Login accepté : on a quitté la page de login. On ne connaît pas encore la
+    // structure des pages « select-context » / dashboard → on renvoie le
+    // diagnostic de la page atteinte pour mapper l'étape suivante.
+    const dash = await page.$(SEL.dashboardMarker).catch(() => null)
+    if (!dash) {
       return {
         status: 'manual_needed',
-        error: 'Page inconnue après login (ni dashboard, ni OTP, ni erreur)',
+        error: 'Login réussi ✅ — page post-login atteinte (probablement « sélection de la société »). Copie le diagnostic pour que je mappe l\'étape suivante (choix société → dashboard → transactions).',
         screenshot_b64: await captureScreenshot(page),
         diagnostic: await capturePageDiagnostic(page),
         duration_ms: Date.now() - t0,

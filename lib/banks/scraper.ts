@@ -76,7 +76,7 @@ export type BankScrapeResult = {
 }
 
 const BANK_LOGIN_URLS: Record<BankCode, string> = {
-  MCB:       'https://ibank.mcb.mu',
+  MCB:       'https://ibpro.mcb.mu',
   SBM:       'https://internetbanking.sbmgroup.mu',
   ABC:       'https://www.abcbank.mu/business-banking',
   MAUBANK:   'https://internetbanking.maubank.mu',
