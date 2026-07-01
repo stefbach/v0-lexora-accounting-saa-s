@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
 import { scrapeBankAccount, detectAnomalies } from '@/lib/banks/scraper'
+import { ingestScrapedTransactions } from '@/lib/banks/ingest-scrape'
 
 /**
  * POST /api/client/direction/bank-credentials/scrape?compte_id=Y
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   const admin = getAdminClient()
   const { data: compte } = await admin
-    .from('comptes_bancaires').select('id, societe_id').eq('id', compteId).maybeSingle()
+    .from('comptes_bancaires').select('id, societe_id, numero_compte').eq('id', compteId).maybeSingle()
   if (!compte) return NextResponse.json({ error: 'Compte introuvable' }, { status: 404 })
 
   await assertSocieteAccess(supabase, user.id, compte.societe_id)
@@ -38,8 +39,21 @@ export async function POST(req: NextRequest) {
     societe_id: compte.societe_id,
     trigger_source: 'manual',
   })
+  let ingestion: { ingested: boolean; nb_transactions?: number; reason?: string } | null = null
   if (result.status === 'success') {
     await detectAnomalies(compteId, result)
+    // Alimente le rapprochement avec les transactions récupérées (même pipeline
+    // que l'import OCR : releves_bancaires.transactions_json).
+    try {
+      ingestion = await ingestScrapedTransactions(admin, {
+        compte_bancaire_id: compteId,
+        societe_id: compte.societe_id,
+        numero_compte: compte.numero_compte,
+        result,
+      })
+    } catch (e) {
+      ingestion = { ingested: false, reason: e instanceof Error ? e.message : 'ingestion_failed' }
+    }
   }
-  return NextResponse.json(result)
+  return NextResponse.json({ ...result, ingestion })
 }

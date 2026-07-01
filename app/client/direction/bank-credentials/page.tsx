@@ -162,7 +162,8 @@ export default function BankCredentialsPage() {
       if (j.status === 'manual_needed') {
         setError(`${t('scp.cred_robot_not_active', locale)} ${j.error || t('scp.cred_pw_not_installed', locale)}`)
       } else if (j.status === 'success') {
-        setSuccess(`${t('scp.cred_scrape_ok', locale)} ${j.balance_mur || '?'} ${j.balance_devise || 'MUR'}, ${j.nb_transactions || 0} tx`)
+        const inj = j.ingestion?.ingested ? ` — ${j.ingestion.nb_transactions || 0} tx injectées dans le rapprochement` : ''
+        setSuccess(`${t('scp.cred_scrape_ok', locale)} ${j.balance_mur || '?'} ${j.balance_devise || 'MUR'}, ${j.nb_transactions || 0} tx${inj}`)
       } else {
         setError(`${t('scp.cred_scrape_label', locale)} ${j.status} : ${j.error || t('scp.cred_unknown', locale)}`)
       }
