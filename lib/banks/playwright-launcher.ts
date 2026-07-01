@@ -46,6 +46,15 @@ export async function launchBrowser(opts: LaunchOptions = {}): Promise<BrowserSe
 
   const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME
   if (isServerless) {
+    // ⚠ Vercel n'expose PAS AWS_EXECUTION_ENV / AWS_LAMBDA_JS_RUNTIME. Or
+    // @sparticuz/chromium ne détecte l'environnement Lambda (et donc n'extrait
+    // les librairies système comme libnss3.so depuis al2023.tar.br) que si ces
+    // variables sont présentes. Sans ça : « /tmp/chromium: error while loading
+    // shared libraries: libnss3.so ». On force la détection Node20+/AL2023
+    // AVANT l'import du module (sa détection tourne au chargement + dans
+    // executablePath()).
+    process.env.AWS_LAMBDA_JS_RUNTIME ||= 'nodejs20.x'
+
     // @sparticuz/chromium est publié en CJS et son typing n'expose pas de
     // `.default`. Selon le mode d'interop ESM (ESM strict vs Node interop
     // historique), `import` peut placer l'API sur `.default` ou directement
@@ -57,7 +66,18 @@ export async function launchBrowser(opts: LaunchOptions = {}): Promise<BrowserSe
     }
     const sparticuz = await import('@sparticuz/chromium') as unknown as SparticuzChromium & { default?: SparticuzChromium }
     const chromiumModule: SparticuzChromium = sparticuz.default ?? sparticuz
+    // Déclenche l'inflation de chromium + al2023.tar.br (libs) dans /tmp.
     executablePath = await chromiumModule.executablePath()
+    // Ceinture + bretelles : si le setup de librairie du module a tourné avant
+    // que la détection soit forcée, LD_LIBRARY_PATH peut manquer /tmp/al2023/lib.
+    // On l'ajoute explicitement pour que Chromium trouve ses .so.
+    const libDir = '/tmp/al2023/lib'
+    if (!(process.env.LD_LIBRARY_PATH || '').split(':').includes(libDir)) {
+      process.env.LD_LIBRARY_PATH = process.env.LD_LIBRARY_PATH
+        ? `${process.env.LD_LIBRARY_PATH}:${libDir}`
+        : libDir
+    }
+    process.env.FONTCONFIG_PATH ||= '/tmp/fonts'
     args = [...chromiumModule.args, ...args]
   }
 
