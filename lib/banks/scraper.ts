@@ -44,6 +44,23 @@ export type BankScrapeInput = {
   trigger_source: 'cron' | 'manual' | 'telegram'
 }
 
+export type PageFieldDiagnostic = {
+  tag: string
+  type?: string
+  name?: string
+  id?: string
+  placeholder?: string
+  label?: string
+  visible: boolean
+}
+
+export type ScrapeDiagnostic = {
+  url: string
+  title?: string
+  inputs: PageFieldDiagnostic[]
+  buttons: PageFieldDiagnostic[]
+}
+
 export type BankScrapeResult = {
   status: 'success' | 'failed' | 'manual_needed' | 'partial'
   balance_mur?: number
@@ -52,6 +69,8 @@ export type BankScrapeResult = {
   transactions?: ScrapedTransaction[]
   raw_excerpt?: string
   screenshot_b64?: string
+  /** Diagnostic capturé quand un sélecteur manque : aide à corriger l'adapter. */
+  diagnostic?: ScrapeDiagnostic
   error?: string
   duration_ms?: number
 }

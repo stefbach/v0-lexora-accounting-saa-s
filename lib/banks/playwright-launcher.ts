@@ -94,3 +94,52 @@ export async function captureScreenshot(page: Page): Promise<string> {
   const buf = await page.screenshot({ fullPage: false, type: 'png' })
   return Buffer.from(buf).toString('base64')
 }
+
+/**
+ * Capture un diagnostic de la page courante : URL, titre, et la liste des
+ * champs (inputs) et boutons visibles avec leurs attributs (name/id/type/
+ * placeholder). Sert à corriger les sélecteurs d'un adapter bancaire depuis
+ * l'appli sans avoir besoin des identifiants ni d'un script local.
+ * Ne capture AUCUNE valeur saisie — uniquement la structure du formulaire.
+ */
+export async function capturePageDiagnostic(page: Page): Promise<{
+  url: string
+  title?: string
+  inputs: Array<{ tag: string; type?: string; name?: string; id?: string; placeholder?: string; label?: string; visible: boolean }>
+  buttons: Array<{ tag: string; type?: string; name?: string; id?: string; placeholder?: string; label?: string; visible: boolean }>
+}> {
+  const url = page.url()
+  const title = await page.title().catch(() => undefined)
+  const data = await page.evaluate(() => {
+    const isVisible = (el: Element) => {
+      const r = (el as HTMLElement).getBoundingClientRect()
+      return r.width > 0 && r.height > 0
+    }
+    const inputs = Array.from(document.querySelectorAll('input, select, textarea')).slice(0, 40).map((el) => {
+      const e = el as HTMLInputElement
+      return {
+        tag: e.tagName.toLowerCase(),
+        type: e.getAttribute('type') || undefined,
+        name: e.getAttribute('name') || undefined,
+        id: e.getAttribute('id') || undefined,
+        placeholder: e.getAttribute('placeholder') || undefined,
+        label: (e.getAttribute('aria-label') || '').slice(0, 60) || undefined,
+        visible: isVisible(el),
+      }
+    })
+    const buttons = Array.from(document.querySelectorAll('button, a[role="button"], input[type="submit"], input[type="button"]')).slice(0, 40).map((el) => {
+      const e = el as HTMLElement
+      return {
+        tag: e.tagName.toLowerCase(),
+        type: e.getAttribute('type') || undefined,
+        name: e.getAttribute('name') || undefined,
+        id: e.getAttribute('id') || undefined,
+        placeholder: undefined,
+        label: (e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 60) || undefined,
+        visible: isVisible(el),
+      }
+    })
+    return { inputs, buttons }
+  }).catch(() => ({ inputs: [], buttons: [] }))
+  return { url, title, inputs: data.inputs, buttons: data.buttons }
+}

@@ -40,6 +40,7 @@ export default function BankCredentialsPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [scrapingNow, setScrapingNow] = useState<string | null>(null)
+  const [scrapeDiag, setScrapeDiag] = useState<Record<string, any>>({})
   const [creating, setCreating] = useState(false)
   const [newAccount, setNewAccount] = useState({ banque: 'MCB', nom_compte: '', numero_compte: '', iban: '', swift: '', devise: 'MUR', compte_principal: false })
   // Identifiants Internet Banking saisis directement dans le formulaire de création
@@ -159,6 +160,8 @@ export default function BankCredentialsPage() {
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || t('cui.error_generic', locale))
+      // Mémorise screenshot + diagnostic (sélecteurs détectés) pour l'affichage.
+      setScrapeDiag(p => ({ ...p, [compteId]: { screenshot_b64: j.screenshot_b64, diagnostic: j.diagnostic, status: j.status, error: j.error } }))
       if (j.status === 'manual_needed') {
         setError(`${t('scp.cred_robot_not_active', locale)} ${j.error || t('scp.cred_pw_not_installed', locale)}`)
       } else if (j.status === 'success') {
@@ -370,6 +373,43 @@ export default function BankCredentialsPage() {
                 {cb.scraping?.last_scrape_error && <div className="text-red-600 text-[10px] mt-1">{cb.scraping.last_scrape_error.slice(0, 100)}</div>}
               </div>
             </div>
+
+            {scrapeDiag[cb.id] && scrapeDiag[cb.id].status !== 'success' && (
+              <div className="border-t pt-3 space-y-2">
+                <div className="text-xs font-semibold text-amber-700 flex items-center gap-1.5">
+                  <AlertCircle className="h-3.5 w-3.5" /> Diagnostic du robot (pour corriger les sélecteurs)
+                </div>
+                {scrapeDiag[cb.id].error && (
+                  <div className="text-[11px] text-slate-600">{scrapeDiag[cb.id].error}</div>
+                )}
+                {scrapeDiag[cb.id].screenshot_b64 && (
+                  <img
+                    src={`data:image/png;base64,${scrapeDiag[cb.id].screenshot_b64}`}
+                    alt="Capture de la page bancaire"
+                    className="max-w-full rounded border border-slate-200"
+                  />
+                )}
+                {scrapeDiag[cb.id].diagnostic && (
+                  <div className="text-[11px] font-mono bg-slate-50 border border-slate-200 rounded p-2 overflow-auto max-h-64">
+                    <div className="text-slate-500">URL : {scrapeDiag[cb.id].diagnostic.url}</div>
+                    {scrapeDiag[cb.id].diagnostic.title && <div className="text-slate-500">Titre : {scrapeDiag[cb.id].diagnostic.title}</div>}
+                    <div className="mt-1 font-semibold">Champs (inputs) :</div>
+                    {(scrapeDiag[cb.id].diagnostic.inputs || []).map((f: any, i: number) => (
+                      <div key={`i${i}`} className={f.visible ? '' : 'text-slate-400'}>
+                        &lt;{f.tag}{f.type ? ` type="${f.type}"` : ''}{f.name ? ` name="${f.name}"` : ''}{f.id ? ` id="${f.id}"` : ''}{f.placeholder ? ` placeholder="${f.placeholder}"` : ''}{f.label ? ` aria-label="${f.label}"` : ''}&gt;{f.visible ? '' : ' (caché)'}
+                      </div>
+                    ))}
+                    <div className="mt-1 font-semibold">Boutons :</div>
+                    {(scrapeDiag[cb.id].diagnostic.buttons || []).map((f: any, i: number) => (
+                      <div key={`b${i}`} className={f.visible ? '' : 'text-slate-400'}>
+                        &lt;{f.tag}{f.type ? ` type="${f.type}"` : ''}{f.id ? ` id="${f.id}"` : ''}&gt;{f.label || ''}{f.visible ? '' : ' (caché)'}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[11px] text-slate-500">Copie-moi ce bloc (URL + champs + boutons) — pas tes identifiants — pour que je fige les sélecteurs MCB.</p>
+              </div>
+            )}
 
             {(editing === cb.id || !cb.scraping?.configured) ? (
               <div className="space-y-3 border-t pt-3">

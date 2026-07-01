@@ -30,7 +30,7 @@
 
 import type { Page } from 'playwright-core'
 import type { BankScrapeResult, ScrapedTransaction } from '../scraper'
-import { captureScreenshot } from '../playwright-launcher'
+import { captureScreenshot, capturePageDiagnostic } from '../playwright-launcher'
 
 export interface McbCredentials {
   username: string                  // User ID MCB
@@ -96,8 +96,9 @@ export async function loginAndScrapeMcb(
     if (!usernameField) {
       return {
         status: 'manual_needed',
-        error: 'Champ User ID introuvable — MCB a probablement modifié sa page login',
+        error: 'Champ User ID introuvable — MCB a probablement modifié sa page login. Diagnostic ci-dessous : copie les champs détectés pour corriger les sélecteurs.',
         screenshot_b64: await captureScreenshot(page),
+        diagnostic: await capturePageDiagnostic(page),
         duration_ms: Date.now() - t0,
       }
     }
@@ -111,6 +112,7 @@ export async function loginAndScrapeMcb(
         status: 'manual_needed',
         error: 'Champ password introuvable après saisie User ID',
         screenshot_b64: await captureScreenshot(page),
+        diagnostic: await capturePageDiagnostic(page),
         duration_ms: Date.now() - t0,
       }
     }
@@ -150,6 +152,7 @@ export async function loginAndScrapeMcb(
         status: 'manual_needed',
         error: 'Page inconnue après login (ni dashboard, ni OTP, ni erreur)',
         screenshot_b64: await captureScreenshot(page),
+        diagnostic: await capturePageDiagnostic(page),
         duration_ms: Date.now() - t0,
       }
     }
