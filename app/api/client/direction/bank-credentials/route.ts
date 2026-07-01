@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
   const ids = (comptes || []).map(c => c.id)
   const { data: creds } = ids.length > 0
     ? await admin.from('comptes_bancaires_scraping_creds')
-        .select('compte_bancaire_id, username_enc, password_enc, secondary_pin_enc, notes, active, last_scrape_at, last_scrape_status, last_scrape_error, last_balance_mur')
+        .select('compte_bancaire_id, username_enc, password_enc, secondary_pin_enc, login_url, notes, active, last_scrape_at, last_scrape_status, last_scrape_error, last_balance_mur')
         .in('compte_bancaire_id', ids)
     : { data: [] }
 
@@ -69,6 +69,7 @@ export async function GET(req: NextRequest) {
           has_username: !!cred.username_enc,
           has_password: !!cred.password_enc,
           has_pin: !!cred.secondary_pin_enc,
+          login_url: cred.login_url || null,
           notes: cred.notes,
           active: cred.active,
           last_scrape_at: cred.last_scrape_at,
@@ -110,6 +111,7 @@ export async function PUT(req: NextRequest) {
 
     const updates: Record<string, any> = { compte_bancaire_id: compteId, updated_by: user.id }
     if (typeof body.notes === 'string') updates.notes = body.notes
+    if (typeof body.login_url === 'string') updates.login_url = body.login_url.trim() || null
     if (typeof body.active === 'boolean') updates.active = body.active
     if (typeof body.username === 'string') updates.username_enc = body.username ? encryptSecret(body.username) : null
     if (typeof body.password === 'string') updates.password_enc = body.password ? encryptSecret(body.password) : null

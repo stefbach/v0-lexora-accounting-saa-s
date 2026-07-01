@@ -71,7 +71,7 @@ async function loadCredentials(compte_bancaire_id: string) {
   const admin = getAdminClient()
   const { data: cred } = await admin
     .from('comptes_bancaires_scraping_creds')
-    .select('username_enc, password_enc, secondary_pin_enc, active')
+    .select('username_enc, password_enc, secondary_pin_enc, login_url, active')
     .eq('compte_bancaire_id', compte_bancaire_id)
     .maybeSingle()
   if (!cred) throw new Error(`Credentials non configurées pour compte ${compte_bancaire_id}. Va dans Direction → Accès Bancaires.`)
@@ -83,6 +83,7 @@ async function loadCredentials(compte_bancaire_id: string) {
     username: decryptSecret(cred.username_enc),
     password: decryptSecret(cred.password_enc),
     pin: cred.secondary_pin_enc ? decryptSecret(cred.secondary_pin_enc) : null,
+    login_url: cred.login_url || null,
   }
 }
 
@@ -161,7 +162,12 @@ export async function scrapeBankAccount(input: BankScrapeInput): Promise<BankScr
       const scraped = await loginAndScrapeMcb(
         session.page,
         credentials,
-        { numero_compte: compte.numero_compte, max_transactions: 30 },
+        {
+          numero_compte: compte.numero_compte,
+          max_transactions: 30,
+          // URL configurée par l'utilisateur, sinon URL par défaut de la banque.
+          login_url: credentials.login_url || BANK_LOGIN_URLS[bankCode],
+        },
       )
       result = { ...scraped, duration_ms: Date.now() - t0 }
     } else {

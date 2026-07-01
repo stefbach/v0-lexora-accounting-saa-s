@@ -43,6 +43,8 @@ export interface McbAdapterOptions {
   numero_compte: string
   /** Nombre de transactions à récupérer (défaut 30) */
   max_transactions?: number
+  /** URL de connexion (override) ; défaut https://ibank.mcb.mu/ */
+  login_url?: string
 }
 
 /**
@@ -87,7 +89,7 @@ export async function loginAndScrapeMcb(
 
   try {
     // ── 1. Navigation page login ──
-    await page.goto('https://ibank.mcb.mu/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+    await page.goto(options.login_url || 'https://ibank.mcb.mu/', { waitUntil: 'domcontentloaded', timeout: 30000 })
 
     // ── 2. Saisie User ID ──
     const usernameField = await page.waitForSelector(SEL.usernameInput, { timeout: 10000 }).catch(() => null)

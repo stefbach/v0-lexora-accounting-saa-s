@@ -21,6 +21,7 @@ type Compte = {
     has_username?: boolean
     has_password?: boolean
     has_pin?: boolean
+    login_url?: string | null
     notes?: string | null
     active?: boolean
     last_scrape_at?: string | null
@@ -46,12 +47,14 @@ export default function BankCredentialsPage() {
   const [newIbPwd, setNewIbPwd] = useState('')
   const [newIbShow, setNewIbShow] = useState(false)
   const [newIbNotes, setNewIbNotes] = useState('')
+  const [newIbUrl, setNewIbUrl] = useState('')
 
   // Form state per compte
   const [usernames, setUsernames] = useState<Record<string, string>>({})
   const [passwords, setPasswords] = useState<Record<string, string>>({})
   const [pins, setPins] = useState<Record<string, string>>({})
   const [notes, setNotes] = useState<Record<string, string>>({})
+  const [urls, setUrls] = useState<Record<string, string>>({})
   const [actives, setActives] = useState<Record<string, boolean>>({})
   const [showPwd, setShowPwd] = useState<Record<string, boolean>>({})
 
@@ -65,11 +68,13 @@ export default function BankCredentialsPage() {
       setComptes(j.comptes || [])
       const act: Record<string, boolean> = {}
       const nt: Record<string, string> = {}
+      const ur: Record<string, string> = {}
       for (const c of (j.comptes || []) as Compte[]) {
         act[c.id] = c.scraping?.active ?? true
         nt[c.id] = c.scraping?.notes || ''
+        ur[c.id] = c.scraping?.login_url || ''
       }
-      setActives(act); setNotes(nt)
+      setActives(act); setNotes(nt); setUrls(ur)
     } catch (e: any) { setError(e?.message || t('cui.error_generic', locale)) } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [societeId])
@@ -79,6 +84,7 @@ export default function BankCredentialsPage() {
     try {
       const body: any = {
         notes: notes[compteId] ?? '',
+        login_url: urls[compteId] ?? '',
         active: actives[compteId] ?? true,
       }
       if (usernames[compteId]) body.username = usernames[compteId]
@@ -122,10 +128,10 @@ export default function BankCredentialsPage() {
       // Si des identifiants Internet Banking ont été saisis, on les enregistre
       // (chiffrés côté serveur) immédiatement après la création du compte.
       let credSaved = false
-      if (newId && (newIbUser.trim() || newIbPwd.trim() || newIbNotes.trim())) {
+      if (newId && (newIbUser.trim() || newIbPwd.trim() || newIbNotes.trim() || newIbUrl.trim())) {
         const cr = await fetch(`/api/client/direction/bank-credentials?compte_id=${newId}`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: newIbUser, password: newIbPwd, notes: newIbNotes, active: true }),
+          body: JSON.stringify({ username: newIbUser, password: newIbPwd, notes: newIbNotes, login_url: newIbUrl, active: true }),
         })
         const cj = await cr.json().catch(() => ({}))
         // La route PUT ne renvoie { ok:true } qu'après un upsert réussi (elle
@@ -138,7 +144,7 @@ export default function BankCredentialsPage() {
       setSuccess(credSaved ? t('scp.cred_bank_saved', locale) : t('scp.cred_bank_created', locale))
       setCreating(false)
       setNewAccount({ banque: 'MCB', nom_compte: '', numero_compte: '', iban: '', swift: '', devise: 'MUR', compte_principal: false })
-      setNewIbUser(''); setNewIbPwd(''); setNewIbShow(false); setNewIbNotes('')
+      setNewIbUser(''); setNewIbPwd(''); setNewIbShow(false); setNewIbNotes(''); setNewIbUrl('')
       await load()
       // Si aucun identifiant saisi, ouvre d'emblée la saisie login/mot de passe
       if (newId && !credSaved) setEditing(newId)
@@ -297,13 +303,18 @@ export default function BankCredentialsPage() {
                 </div>
               </div>
               <div>
+                <label className="text-xs font-medium text-slate-600">URL de connexion de la banque (optionnel)</label>
+                <input type="url" value={newIbUrl} onChange={e => setNewIbUrl(e.target.value)} className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5 font-mono" placeholder="https://ibank.mcb.mu/" />
+                <p className="mt-1 text-[11px] text-slate-500">Laisse vide pour utiliser l'URL par défaut de la banque (MCB : ibank.mcb.mu).</p>
+              </div>
+              <div>
                 <label className="text-xs font-medium text-slate-600">Consignes d'accès (optionnel)</label>
                 <textarea value={newIbNotes} onChange={e => setNewIbNotes(e.target.value)} rows={2} className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5" placeholder="Ex : OTP envoyé au +230…, sous-utilisateur lecture seule, PIN…" />
               </div>
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button onClick={() => { setCreating(false); setNewIbUser(''); setNewIbPwd(''); setNewIbShow(false); setNewIbNotes('') }} variant="outline">{t('cui.cancel', locale)}</Button>
+              <Button onClick={() => { setCreating(false); setNewIbUser(''); setNewIbPwd(''); setNewIbShow(false); setNewIbNotes(''); setNewIbUrl('') }} variant="outline">{t('cui.cancel', locale)}</Button>
               <Button onClick={createAccount} className="bg-emerald-600 hover:bg-emerald-700 text-white">
                 <Save className="h-4 w-4 mr-1" /> {t('scp.create_account', locale)}
               </Button>
@@ -404,6 +415,17 @@ export default function BankCredentialsPage() {
                     onChange={e => setPins(p => ({ ...p, [cb.id]: e.target.value }))}
                     className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5 font-mono"
                   />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600">URL de connexion de la banque</label>
+                  <input
+                    type="url"
+                    value={urls[cb.id] || ''}
+                    onChange={e => setUrls(p => ({ ...p, [cb.id]: e.target.value }))}
+                    className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5 font-mono"
+                    placeholder="https://ibank.mcb.mu/"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">Vide = URL par défaut de la banque.</p>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-slate-600">{t('scp.cred_notes', locale)}</label>
