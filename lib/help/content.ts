@@ -133,7 +133,7 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
     ],
     externalLinks: [
       { label: "Inscription Lexora", url: "https://lexora.finance/signup", description: "Création de compte (gratuit pendant l'essai)." },
-      { label: "Corporate and Business Registration Department (CBRD)", url: "https://onlinebrd.govmu.org/", description: "Obtenir BRN, déposer Annual Return." },
+      { label: "Corporate and Business Registration Department (CBRD)", url: "https://companies.govmu.org/cbrd/", description: "Obtenir BRN, déposer Annual Return." },
       { label: "MRA — Portail eServices", url: "https://eservices.mra.mu", description: "Toutes les déclarations fiscales (VAT, PAYE, CIT, TDS)." },
       { label: "FSC Mauritius", url: "https://www.fscmauritius.org", description: "Régulateur GBC, AC, Investment Dealer." },
       { label: "Bot Telegram Lexora", url: "https://t.me/LexoraAgent_bot", description: "Lie ton compte une fois et tout est pilotable mobile." },
@@ -424,37 +424,78 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
   // EMAIL ACCOUNTS
   // ========================================================================
   '/client/email-accounts': {
-    title: 'Comptes email — Envoi sortant Lexora',
+    title: 'Connexions emails — Brancher tes boîtes (Nylas)',
     audience: 'all',
     intro:
-      "Configure les comptes email pour envoi de factures, relances, bulletins, rapports, notifications. Un compte par société (partagé direction+) ou personnel (toi seul). Providers : <b>SMTP</b> (Gmail, OVH, Outlook, custom) et <b>Resend</b> (API transactionnelle, meilleure délivrabilité).",
+      "Connecte une ou plusieurs boîtes email (Gmail, Outlook/Microsoft, Apple iCloud, IMAP) en une fois via <b>Nylas</b>. Une boîte connectée sert à <b>envoyer</b>, <b>lire</b> et laisser <b>l'assistant IA gérer</b> tes emails, ainsi qu'à ton <b>agenda</b> (événements + visio Meet/Zoom). Tu peux brancher plusieurs boîtes : chacune a son propre carnet de contacts.",
     steps: [
-      { title: "1. Choisis ton provider", body: "<b>SMTP</b> : simple, < 500 emails/jour. <b>Resend</b> : transactionnel, domaine vérifié requis, idéal envoi en masse (relances, bulletins lot)." },
-      { title: "2a. Gmail : App Password", body: "Active la <b>2FA</b> sur Google d'abord (obligatoire). Va sur <b>myaccount.google.com/apppasswords</b>. Crée un App Password <em>Lexora</em>. Copie les 16 caractères.", warning: "Page App Passwords inaccessible = 2FA pas activée. Active-la dans Security → 2-Step Verification." },
-      { title: "2b. Outlook / OVH / custom", body: "Récupère host (smtp-mail.outlook.com), port (587 STARTTLS ou 465 SSL), username (email complet), password (normal ou App Password)." },
-      { title: "2c. Resend : domaine vérifié", body: "Sur <b>resend.com/domains</b> → Add Domain (acme.io). Configure DNS (SPF TXT, DKIM CNAME, DMARC TXT) chez ton registrar. Attends vérification ~10 min. Génère API key dans resend.com/api-keys." },
-      { title: "3. Remplis le formulaire", body: "Label (<em>Facturation Acme</em>), From email, From name. Type : <b>Personnel</b> ou <b>Société</b>. Coche <b>Défaut</b> si tu veux ce compte partout." },
-      { title: "4. Teste", body: "Bouton Test : email envoyé à ton From. Si boîte de réception : OK. Si spam : vérifie SPF/DKIM/DMARC. Si erreur : message précis (auth failed, domain unverified)." },
-      { title: "5. Utilise dans Lexora", body: "Factures → bouton Envoyer utilise le défaut. Relances auto (cron 08:00 UTC). Bulletins de paie. Tu peux router par module (Settings → Notifications)." },
+      { title: "1. Connecte une boîte", body: "Clique sur le provider voulu (<b>Gmail / Google</b>, <b>Outlook / Microsoft</b>, <b>Apple iCloud</b>, <b>IMAP</b>). Tu es redirigé vers l'écran de connexion sécurisé du fournisseur — accepte les permissions (email, agenda, contacts)." },
+      { title: "2. Accepte les permissions", body: "Le fournisseur demande l'accès <b>email + agenda + carnet d'adresses</b>. Ces permissions permettent l'envoi/lecture, la gestion de l'agenda et l'autocomplétion des contacts. Aucun mot de passe n'est stocké côté Lexora." },
+      { title: "3. Boîtes connectées", body: "Chaque boîte connectée apparaît dans la liste (avec « Déconnecter »). Tu peux en brancher plusieurs — un sélecteur de boîte apparaîtra dans la Boîte de réception et l'Agenda." },
+      { title: "4. Utilise partout", body: "Une fois connectée, la boîte est utilisée pour : la <b>Boîte de réception</b> (lecture + agent IA), l'<b>Agenda</b>, l'envoi de <b>factures</b> aux clients (PDF joint), et l'assistant de rédaction (Composer)." },
     ],
     pitfalls: [
-      "Gmail avec password normal → 'Username and Password not accepted'. App Password obligatoire.",
-      "Resend domaine non vérifié → status 422 à l'envoi.",
-      "Pas de SPF sur ton domaine → délivrabilité catastrophique, emails en spam.",
-      "Changement de password Google sans MAJ Lexora → tous les envois cassent.",
-      "Limite Gmail 500/jour. Au-delà → bascule sur Resend.",
-    ],
-    externalLinks: [
-      { label: "Google App Passwords", url: "https://myaccount.google.com/apppasswords" },
-      { label: "Resend Domains", url: "https://resend.com/domains" },
-      { label: "Resend API Keys", url: "https://resend.com/api-keys" },
-      { label: "Tester délivrabilité", url: "https://www.mail-tester.com" },
+      "Carnet d'adresses Gmail absent après connexion : la permission contacts a été ajoutée récemment — <b>déconnecte puis reconnecte</b> la boîte pour l'accorder.",
+      "Une boîte tout juste connectée met quelques minutes à se synchroniser (Nylas) : messages/événements peuvent apparaître avec un léger délai.",
+      "Erreur à la reconnexion (scope/redirect) : réessaie après 2 min (le temps du déploiement) ; sinon vérifie que la boîte n'est pas déjà connectée.",
     ],
     tips: [
-      "L'agent Telegram envoie relances automatiquement via ces comptes.",
-      "Brander 'Acme Compta &lt;contact@acme.io&gt;' au lieu de Lexora par défaut : configure Resend avec ton domaine.",
-      "Cabinet : configure un compte par client pour que chaque facture parte du domaine du client.",
-      "Multinationales : route les emails par filiale (Settings → Routing) selon les chartes locales.",
+      "Multi-boîtes : chaque messagerie garde son carnet de contacts et son agenda séparés.",
+      "L'assistant de rédaction (bouton Composer dans la Boîte de réception) envoie depuis la boîte active.",
+      "Les emails système Lexora (notifications) continuent d'utiliser le fournisseur interne — indépendant de tes boîtes connectées.",
+    ],
+  },
+
+  // ========================================================================
+  // BOÎTE DE RÉCEPTION (Nylas + agent IA)
+  // ========================================================================
+  '/client/boite-mail': {
+    title: 'Boîte de réception — Emails + assistant IA',
+    audience: 'all',
+    intro:
+      "Ton poste de travail email dans Lexora : lis, tries et réponds à tes emails avec un <b>agent IA assistant de direction</b>, et compose de nouveaux messages avec l'assistant de rédaction (qualité RAG juridique/fiscale). Nécessite une boîte connectée (voir <b>Connexions emails</b>).",
+    steps: [
+      { title: "1. Paramètre le cerveau (⚙️ Consignes)", body: "Définis tes <b>consignes</b> (priorités, expéditeurs clés, ce qui doit être signalé), tes <b>catégories</b>, ta <b>signature</b> et le <b>ton</b>. Un assistant t'aide à générer ces consignes à partir d'une description. L'agent s'y conforme pour trier et répondre." },
+      { title: "2. Trie ta boîte", body: "Bouton <b>Trier ma boîte</b> : l'agent analyse les ~50 emails récents, les classe (catégorie + priorité + à-répondre), met en cache et affiche des badges. Réglage <b>tri automatique</b> possible dans les consignes." },
+      { title: "3. Briefing du jour", body: "Bouton <b>Briefing</b> : synthèse d'attention du jour (structurée) + liste des emails <b>à répondre</b>, chacun avec une <b>proposition de réponse</b> générée en un clic, éditable et envoyable. Les compteurs (prioritaires, à répondre, moyen, bas) sont cliquables et filtrent la boîte." },
+      { title: "4. Navigation", body: "Filtres (Tous / Non lus / À répondre / Prioritaires / par catégorie), vue <b>Reçus / Envoyés</b>, filtre par <b>période</b> (jour → mois), recherche. Ouvre un email pour le lire, voir/télécharger les pièces jointes, marquer lu, supprimer." },
+      { title: "5. Répondre & Composer", body: "<b>Répondre</b> : notes en vrac → l'IA rédige (avec ta signature), tu valides et envoies. <b>Composer</b> : assistant de rédaction complet (email/courrier, ton/longueur/langue/domaine, sources juridiques, refine, PDF), avec autocomplétion du destinataire." },
+      { title: "6. Contacts & cartes de visite", body: "Bouton <b>Enregistrer le contact</b> dans un email : l'IA récupère la carte de visite (signature, pièce jointe <b>.vcf</b> ou <b>image OCR</b>) et l'enregistre dans le carnet de la boîte. Bouton <b>Contacts</b> pour consulter/gérer le carnet." },
+    ],
+    pitfalls: [
+      "« Aucune boîte connectée » : connecte d'abord une boîte via <b>Connexions emails</b>.",
+      "Le tri IA consomme des appels : privilégie le tri à la demande (bouton) ou active le tri auto en connaissance de cause.",
+      "Pour que tes réponses incluent ta carte de visite, renseigne ta <b>signature</b> dans ⚙️ Consignes.",
+    ],
+    tips: [
+      "Multi-boîtes : le sélecteur en haut change la boîte active (lecture, envoi, contacts).",
+      "Les badges de l'autocomplétion indiquent la source : <b>Carnet</b> (contacts enregistrés) ou <b>Gmail</b> (carnet du compte).",
+      "Le Briefing est idéal chaque matin : synthèse + réponses prêtes en quelques clics.",
+    ],
+  },
+
+  // ========================================================================
+  // AGENDA (Nylas Calendar + Meet/Zoom)
+  // ========================================================================
+  '/client/agenda': {
+    title: 'Agenda — Calendrier + visio (Nylas)',
+    audience: 'all',
+    intro:
+      "Ton agenda unifié, synchronisé avec ta/tes boîte(s) connectée(s). Consulte tes événements, crée des rendez-vous avec <b>visio Google Meet ou Zoom</b> générée automatiquement, et invite des participants. Nécessite une boîte connectée (voir <b>Connexions emails</b>).",
+    steps: [
+      { title: "1. Consulte tes événements", body: "Les événements des 7 derniers jours aux 30 prochains s'affichent, groupés par jour. Avec plusieurs boîtes, le sélecteur <b>Toutes les boîtes</b> / par boîte permet de filtrer ; l'origine de chaque événement est indiquée." },
+      { title: "2. Crée un événement", body: "Bouton <b>Nouvel événement</b> : titre, date/heure, durée, lieu, participants (emails), description. Choisis la <b>boîte</b> dans laquelle créer l'événement (si plusieurs)." },
+      { title: "3. Ajoute une visio", body: "Choisis <b>Google Meet</b> ou <b>Zoom</b> : le lien est généré automatiquement et ajouté à l'invitation envoyée aux participants. Un bouton <b>Rejoindre</b> apparaît sur l'événement." },
+      { title: "4. Gère", body: "Supprime un événement via l'icône corbeille. Les invitations/annulations sont envoyées aux participants." },
+    ],
+    pitfalls: [
+      "<b>Zoom</b> nécessite un connecteur Zoom configuré côté Nylas ; <b>Meet</b> fonctionne directement avec une boîte Google.",
+      "Une boîte fraîchement connectée peut mettre quelques minutes à remonter ses événements (synchro).",
+      "Si une boîte est momentanément indisponible (rate limit), l'agenda affiche les autres et le signale.",
+    ],
+    tips: [
+      "Vue <b>Toutes les boîtes</b> pour un agenda consolidé multi-messageries.",
+      "L'agent comptable (chat) et le bot Telegram peuvent aussi lire/créer des événements via la boîte connectée.",
     ],
   },
 
@@ -1514,7 +1555,7 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
       { title: "2. Prépare les états financiers", body: "Bilan + compte de résultat + notes annexes. Audités si seuils dépassés (CA > 50 M MUR ou actifs > 50 M MUR ou > 50 employés). Lexora génère états aux normes IFRS for SMEs." },
       { title: "3. Liste des actionnaires", body: "Form 1 (Members' Register) : nom, adresse, nb actions, % détention. À jour à la date d'AGM." },
       { title: "4. Liste des directors", body: "Identité, fonction, date de nomination, résidence. Au moins 1 director résident Maurice obligatoire." },
-      { title: "5. Dépôt sur eROC", body: "Portail <b>onlinebrd.govmu.org</b>. Connecte-toi avec BRN + password. Menu <b>Annual Return</b>. Remplis ou charge le formulaire. Joins états financiers PDF." },
+      { title: "5. Dépôt sur eROC", body: "Portail <b>companies.govmu.org/cbrd</b>. Connecte-toi avec BRN + password. Menu <b>Annual Return</b>. Remplis ou charge le formulaire. Joins états financiers PDF." },
       { title: "6. Paye", body: "~2 000 MUR (varie selon type société). Carte bancaire ou virement. Reçu généré." },
       { title: "7. Conservation 10 ans", body: "Tu reçois confirmation officielle. Archive dans Lexora (Documents → ROC) — exigence audit." },
     ],
@@ -1526,8 +1567,8 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
       "Capital social modifié sans amendement statuts → ROC refuse.",
     ],
     externalLinks: [
-      { label: "Portail eROC Maurice", url: "https://onlinebrd.govmu.org/", description: "Dépôt en ligne Annual Return + autres formulaires." },
-      { label: "Companies Act 2001", url: "https://onlinebrd.govmu.org/Documents/CompaniesAct.pdf", description: "Texte intégral, Sections 215+." },
+      { label: "Portail eROC Maurice", url: "https://companies.govmu.org/cbrd/", description: "Dépôt en ligne Annual Return + autres formulaires." },
+      { label: "Companies Act 2001", url: "https://companies.govmu.org/Pages/Legislations.aspx", description: "Texte intégral, Sections 215+." },
       { label: "Guide ROC", url: "https://companies.govmu.org", description: "Documentation officielle." },
     ],
     tips: [
@@ -2669,7 +2710,8 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
       "Oublier la convention collective applicable → règles inadaptées appliquées, contentieux possible.",
     ],
     externalLinks: [
-      { label: "CBRD — Vérification BRN", url: "https://onlinebrd.govmu.org", description: "Validation de ton BRN." },
+      { label: "Recherche entreprise / BRN (MNS)", url: "https://onlinesearch.mns.global", description: "Trouver et vérifier un BRN par nom d'entreprise." },
+      { label: "CBRD — Portail entreprises", url: "https://companies.govmu.org/cbrd/", description: "Registre des sociétés, BRN, Annual Return." },
       { label: "MRA — Enregistrement employeur", url: "https://www.mra.mu/index.php/eservices/employer-registration", description: "Obtention TAN société." },
       { label: "NSF Mauritius", url: "https://socialsecurity.govmu.org/Communities/NSF", description: "Obtention NSF Employer Registration Number." },
       { label: "Workers' Rights Act 2019", url: "https://mauritiusassembly.govmu.org/Documents/Acts/WRA2019.pdf", description: "Obligations employeur." },
@@ -2928,7 +2970,8 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
     externalLinks: [
       { label: "CBRD — Companies Registry", url: "https://companies.govmu.org", description: "Dépôt en ligne des Annual Returns." },
       { label: "Companies Act 2001", url: "https://companies.govmu.org/Pages/legislations.aspx" },
-      { label: "CBRD — BRN verification", url: "https://onlinebrd.govmu.org" },
+      { label: "Recherche entreprise / BRN (MNS)", url: "https://onlinesearch.mns.global" },
+      { label: "CBRD — Portail entreprises", url: "https://companies.govmu.org/cbrd/" },
     ],
     tips: [
       "Lexora rappelle l'échéance de l'Annual Return et pré-remplit les informations à confirmer.",

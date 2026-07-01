@@ -92,7 +92,7 @@ export const HELP_CONTENT_EN: Record<string, HelpEntry> = {
     ],
     externalLinks: [
       { label: "Sign up to Lexora", url: "https://lexora.finance/signup", description: "Account creation (free during trial)." },
-      { label: "Corporate and Business Registration Department (CBRD)", url: "https://onlinebrd.govmu.org/", description: "Obtain BRN, file Annual Return." },
+      { label: "Corporate and Business Registration Department (CBRD)", url: "https://companies.govmu.org/cbrd/", description: "Obtain BRN, file Annual Return." },
       { label: "MRA — eServices portal", url: "https://eservices.mra.mu", description: "All tax returns (VAT, PAYE, CIT, TDS)." },
       { label: "FSC Mauritius", url: "https://www.fscmauritius.org", description: "Regulator for GBC, AC, Investment Dealer." },
       { label: "Lexora Telegram bot", url: "https://t.me/LexoraAgent_bot", description: "Link once and everything is mobile-ready." },
@@ -383,37 +383,78 @@ export const HELP_CONTENT_EN: Record<string, HelpEntry> = {
   // EMAIL ACCOUNTS
   // ========================================================================
   '/client/email-accounts': {
-    title: 'Email accounts — Outgoing mail in Lexora',
+    title: 'Email connections — Link your mailboxes (Nylas)',
     audience: 'all',
     intro:
-      "Configure email accounts used to send invoices, reminders, payslips, reports, notifications. One account per company (shared with management+) or personal (you only). Providers: <b>SMTP</b> (Gmail, OVH, Outlook, custom) and <b>Resend</b> (transactional API, better deliverability).",
+      "Connect one or more mailboxes (Gmail, Outlook/Microsoft, Apple iCloud, IMAP) in one go via <b>Nylas</b>. A connected mailbox lets you <b>send</b>, <b>read</b> and let the <b>AI assistant manage</b> your emails, plus your <b>calendar</b> (events + Meet/Zoom video). You can link several mailboxes: each has its own contact book.",
     steps: [
-      { title: "1. Choose your provider", body: "<b>SMTP</b>: simple, < 500 emails/day. <b>Resend</b>: transactional, verified domain required, ideal for bulk send (reminders, payslip batches)." },
-      { title: "2a. Gmail: App Password", body: "Enable <b>2FA</b> on Google first (mandatory). Go to <b>myaccount.google.com/apppasswords</b>. Create an App Password <em>Lexora</em>. Copy the 16 characters.", warning: "App Passwords page inaccessible = 2FA not enabled. Activate it in Security → 2-Step Verification." },
-      { title: "2b. Outlook / OVH / custom", body: "Get host (smtp-mail.outlook.com), port (587 STARTTLS or 465 SSL), username (full email), password (normal or App Password)." },
-      { title: "2c. Resend: verified domain", body: "On <b>resend.com/domains</b> → Add Domain (acme.io). Configure DNS (SPF TXT, DKIM CNAME, DMARC TXT) with your registrar. Wait for verification ~10 min. Generate API key in resend.com/api-keys." },
-      { title: "3. Fill in the form", body: "Label (<em>Invoicing Acme</em>), From email, From name. Type: <b>Personal</b> or <b>Company</b>. Tick <b>Default</b> if you want this account everywhere." },
-      { title: "4. Test", body: "Test button: email sent to your From. Inbox: OK. Spam: check SPF/DKIM/DMARC. Error: precise message (auth failed, domain unverified)." },
-      { title: "5. Use in Lexora", body: "Invoices → Send button uses default. Auto reminders (cron 08:00 UTC). Payslips. You can route by module (Settings → Notifications)." },
+      { title: "1. Connect a mailbox", body: "Click the provider you want (<b>Gmail / Google</b>, <b>Outlook / Microsoft</b>, <b>Apple iCloud</b>, <b>IMAP</b>). You are redirected to the provider's secure sign-in screen — accept the permissions (email, calendar, contacts)." },
+      { title: "2. Accept the permissions", body: "The provider requests <b>email + calendar + address book</b> access. These enable sending/reading, calendar management and contact autocomplete. No password is stored on Lexora's side." },
+      { title: "3. Connected mailboxes", body: "Each connected mailbox appears in the list (with 'Disconnect'). You can connect several — a mailbox selector then appears in the Inbox and Calendar." },
+      { title: "4. Use everywhere", body: "Once connected, the mailbox powers: the <b>Inbox</b> (reading + AI agent), the <b>Calendar</b>, sending <b>invoices</b> to clients (PDF attached), and the writing assistant (Compose)." },
     ],
     pitfalls: [
-      "Gmail with normal password: 'Username and Password not accepted'. App Password compulsory.",
-      "Resend with unverified domain: status 422 at send.",
-      "No SPF on your domain: catastrophic deliverability, emails to spam.",
-      "Google password change without updating Lexora: all sends break.",
-      "Gmail 500/day limit. Beyond: switch to Resend.",
-    ],
-    externalLinks: [
-      { label: "Google App Passwords", url: "https://myaccount.google.com/apppasswords" },
-      { label: "Resend Domains", url: "https://resend.com/domains" },
-      { label: "Resend API Keys", url: "https://resend.com/api-keys" },
-      { label: "Deliverability tester", url: "https://www.mail-tester.com" },
+      "Gmail address book missing after connecting: the contacts permission was added recently — <b>disconnect then reconnect</b> the mailbox to grant it.",
+      "A just-connected mailbox takes a few minutes to sync (Nylas): messages/events may appear with a slight delay.",
+      "Reconnection error (scope/redirect): retry after 2 min (deployment time); otherwise check the mailbox isn't already connected.",
     ],
     tips: [
-      "Telegram agent sends reminders automatically via these accounts.",
-      "Brand 'Acme Accounting &lt;contact@acme.io&gt;' instead of Lexora default: configure Resend with your domain.",
-      "Practice: configure one account per client so every invoice goes out from the client's domain.",
-      "Multinationals: route emails per subsidiary (Settings → Routing) following local charters.",
+      "Multi-mailbox: each mailbox keeps its own contact book and calendar separate.",
+      "The writing assistant (Compose button in the Inbox) sends from the active mailbox.",
+      "Lexora system emails (notifications) still use the internal provider — independent from your connected mailboxes.",
+    ],
+  },
+
+  // ========================================================================
+  // INBOX (Nylas + AI agent)
+  // ========================================================================
+  '/client/boite-mail': {
+    title: 'Inbox — Emails + AI assistant',
+    audience: 'all',
+    intro:
+      "Your email workstation in Lexora: read, triage and reply to your emails with an <b>AI executive-assistant agent</b>, and compose new messages with the writing assistant (legal/tax RAG quality). Requires a connected mailbox (see <b>Email connections</b>).",
+    steps: [
+      { title: "1. Set up the brain (⚙️ Instructions)", body: "Define your <b>instructions</b> (priorities, key senders, what to flag), your <b>categories</b>, your <b>signature</b> and <b>tone</b>. An assistant helps you generate these instructions from a description. The agent follows them to triage and reply." },
+      { title: "2. Triage your inbox", body: "<b>Sort my inbox</b> button: the agent analyses the ~50 recent emails, classifies them (category + priority + needs-reply), caches and shows badges. <b>Auto-triage</b> can be enabled in the instructions." },
+      { title: "3. Daily briefing", body: "<b>Briefing</b> button: a structured daily attention summary + list of emails <b>to reply to</b>, each with a one-click <b>suggested reply</b>, editable and sendable. The counters (priority, to reply, medium, low) are clickable and filter the inbox." },
+      { title: "4. Navigation", body: "Filters (All / Unread / To reply / Priority / by category), <b>Inbox / Sent</b> view, <b>period</b> filter (day → month), search. Open an email to read it, view/download attachments, mark read, delete." },
+      { title: "5. Reply & Compose", body: "<b>Reply</b>: rough notes → the AI drafts (with your signature), you review and send. <b>Compose</b>: full writing assistant (email/letter, tone/length/language/domain, legal sources, refine, PDF), with recipient autocomplete." },
+      { title: "6. Contacts & business cards", body: "<b>Save contact</b> button in an email: the AI extracts the business card (signature, <b>.vcf</b> attachment or <b>image OCR</b>) and saves it to the mailbox's contact book. <b>Contacts</b> button to view/manage the book." },
+    ],
+    pitfalls: [
+      "'No mailbox connected': first connect a mailbox via <b>Email connections</b>.",
+      "AI triage uses API calls: prefer on-demand triage (button) or knowingly enable auto-triage.",
+      "For your replies to include your business card, set your <b>signature</b> in ⚙️ Instructions.",
+    ],
+    tips: [
+      "Multi-mailbox: the selector at the top switches the active mailbox (reading, sending, contacts).",
+      "Autocomplete badges show the source: <b>Book</b> (saved contacts) or <b>Gmail</b> (account address book).",
+      "The Briefing is ideal every morning: summary + ready replies in a few clicks.",
+    ],
+  },
+
+  // ========================================================================
+  // CALENDAR (Nylas Calendar + Meet/Zoom)
+  // ========================================================================
+  '/client/agenda': {
+    title: 'Calendar — Events + video (Nylas)',
+    audience: 'all',
+    intro:
+      "Your unified calendar, synced with your connected mailbox(es). View your events, create meetings with automatically generated <b>Google Meet or Zoom video</b>, and invite participants. Requires a connected mailbox (see <b>Email connections</b>).",
+    steps: [
+      { title: "1. View your events", body: "Events from the last 7 days to the next 30 are shown, grouped by day. With several mailboxes, the <b>All mailboxes</b> / per-mailbox selector filters them; each event's source mailbox is shown." },
+      { title: "2. Create an event", body: "<b>New event</b> button: title, date/time, duration, location, participants (emails), description. Choose the <b>mailbox</b> to create the event in (if several)." },
+      { title: "3. Add video", body: "Choose <b>Google Meet</b> or <b>Zoom</b>: the link is generated automatically and added to the invitation sent to participants. A <b>Join</b> button appears on the event." },
+      { title: "4. Manage", body: "Delete an event via the trash icon. Invitations/cancellations are sent to participants." },
+    ],
+    pitfalls: [
+      "<b>Zoom</b> requires a Zoom connector configured in Nylas; <b>Meet</b> works directly with a Google mailbox.",
+      "A freshly connected mailbox may take a few minutes to surface its events (sync).",
+      "If a mailbox is briefly unavailable (rate limit), the calendar shows the others and flags it.",
+    ],
+    tips: [
+      "<b>All mailboxes</b> view for a consolidated multi-mailbox calendar.",
+      "The accounting agent (chat) and the Telegram bot can also read/create events via the connected mailbox.",
     ],
   },
 
@@ -1473,7 +1514,7 @@ export const HELP_CONTENT_EN: Record<string, HelpEntry> = {
       { title: "2. Prepare financial statements", body: "Balance sheet + income statement + notes. Audited if thresholds met (turnover > MUR 50 M or assets > MUR 50 M or > 50 employees). Lexora generates statements per IFRS for SMEs." },
       { title: "3. Shareholders list", body: "Form 1 (Members' Register): name, address, number of shares, % holding. Up to date at AGM date." },
       { title: "4. Directors list", body: "Identity, role, appointment date, residence. At least 1 Mauritius-resident director compulsory." },
-      { title: "5. File on eROC", body: "Portal <b>onlinebrd.govmu.org</b>. Sign in with BRN + password. Menu <b>Annual Return</b>. Fill in or upload form. Attach financial statements PDF." },
+      { title: "5. File on eROC", body: "Portal <b>companies.govmu.org/cbrd</b>. Sign in with BRN + password. Menu <b>Annual Return</b>. Fill in or upload form. Attach financial statements PDF." },
       { title: "6. Pay", body: "~MUR 2,000 (varies by company type). Credit card or transfer. Receipt generated." },
       { title: "7. 10-year retention", body: "You receive official confirmation. Archive in Lexora (Documents → ROC) — audit requirement." },
     ],
@@ -1485,8 +1526,8 @@ export const HELP_CONTENT_EN: Record<string, HelpEntry> = {
       "Share capital changed without articles amendment: ROC refuses.",
     ],
     externalLinks: [
-      { label: "eROC Mauritius portal", url: "https://onlinebrd.govmu.org/", description: "Online filing of Annual Return + other forms." },
-      { label: "Companies Act 2001", url: "https://onlinebrd.govmu.org/Documents/CompaniesAct.pdf", description: "Full text, Sections 215+." },
+      { label: "eROC Mauritius portal", url: "https://companies.govmu.org/cbrd/", description: "Online filing of Annual Return + other forms." },
+      { label: "Companies Act 2001", url: "https://companies.govmu.org/Pages/Legislations.aspx", description: "Full text, Sections 215+." },
       { label: "ROC Guide", url: "https://companies.govmu.org", description: "Official documentation." },
     ],
     tips: [
@@ -2628,7 +2669,8 @@ export const HELP_CONTENT_EN: Record<string, HelpEntry> = {
       "Forgetting the applicable CBA: wrong rules applied, possible dispute.",
     ],
     externalLinks: [
-      { label: "CBRD — BRN verification", url: "https://onlinebrd.govmu.org", description: "Validate your BRN." },
+      { label: "Company / BRN search (MNS)", url: "https://onlinesearch.mns.global", description: "Find and verify a BRN by company name." },
+      { label: "CBRD — Companies portal", url: "https://companies.govmu.org/cbrd/", description: "Companies register, BRN, Annual Return." },
       { label: "MRA — Employer registration", url: "https://www.mra.mu/index.php/eservices/employer-registration", description: "Obtain company TAN." },
       { label: "NSF Mauritius", url: "https://socialsecurity.govmu.org/Communities/NSF", description: "Obtain NSF Employer Registration Number." },
       { label: "Workers' Rights Act 2019", url: "https://mauritiusassembly.govmu.org/Documents/Acts/WRA2019.pdf", description: "Employer obligations." },
@@ -2887,7 +2929,8 @@ export const HELP_CONTENT_EN: Record<string, HelpEntry> = {
     externalLinks: [
       { label: "CBRD — Companies Registry", url: "https://companies.govmu.org", description: "Online filing of Annual Returns." },
       { label: "Companies Act 2001", url: "https://companies.govmu.org/Pages/legislations.aspx" },
-      { label: "CBRD — BRN verification", url: "https://onlinebrd.govmu.org" },
+      { label: "Company / BRN search (MNS)", url: "https://onlinesearch.mns.global" },
+      { label: "CBRD — Companies portal", url: "https://companies.govmu.org/cbrd/" },
     ],
     tips: [
       "Lexora reminds you of the Annual Return deadline and pre-fills the information to confirm.",

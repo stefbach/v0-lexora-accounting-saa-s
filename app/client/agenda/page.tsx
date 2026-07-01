@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { PageHelp } from "@/components/help/PageHelp"
 
 type CalEvent = {
   id: string; title: string; description: string; location: string
@@ -108,6 +109,7 @@ export default function AgendaPage() {
           )}
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}</Button>
           <button onClick={() => setShowCreate(true)} className="inline-flex items-center h-9 px-4 rounded-md text-sm font-semibold" style={{ background: NAVY, color: GOLD }}><Plus className="h-4 w-4 mr-1.5" /> Nouvel événement</button>
+          <PageHelp />
         </div>
       </div>
 

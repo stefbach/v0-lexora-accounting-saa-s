@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { PageHelp } from "@/components/help/PageHelp"
 import { FullComposer } from "@/components/email/FullComposer"
 
 type Participant = { name?: string; email?: string }
@@ -301,6 +302,7 @@ export default function BoiteMailPage() {
           <Button size="sm" variant="outline" onClick={() => setShowContacts(true)}><Users className="h-4 w-4 mr-1.5" /> Contacts</Button>
           <button onClick={() => setShowCompose(true)} className="inline-flex items-center h-9 px-4 rounded-md text-sm font-semibold" style={{ background: NAVY, color: GOLD }}><PenLine className="h-4 w-4 mr-1.5" /> Composer</button>
           <Button variant="outline" size="sm" onClick={() => setShowSettings(true)}><Settings2 className="h-4 w-4" /></Button>
+          <PageHelp />
         </div>
       </div>
 
