@@ -3,6 +3,28 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // Scraping bancaire Playwright sur Vercel serverless.
+  // 1) On empêche Next de bundler playwright-core / @sparticuz/chromium
+  //    (sinon webpack les transforme en modules externes hashés qui ne
+  //    retrouvent plus leurs assets → "Cannot find module browsers.json").
+  serverExternalPackages: ['playwright-core', '@sparticuz/chromium'],
+  // 2) On force le file-tracing Vercel à embarquer les assets non-JS de
+  //    playwright-core (browsers.json) + le binaire chromium, pour les
+  //    routes qui lancent le robot.
+  outputFileTracingIncludes: {
+    '/api/client/direction/bank-credentials/scrape': [
+      './node_modules/playwright-core/**',
+      './node_modules/@sparticuz/chromium/**',
+    ],
+    '/api/cron/bank-scraper': [
+      './node_modules/playwright-core/**',
+      './node_modules/@sparticuz/chromium/**',
+    ],
+    '/api/telegram/internal/bank-scrape': [
+      './node_modules/playwright-core/**',
+      './node_modules/@sparticuz/chromium/**',
+    ],
+  },
   // Sprint 1 RH — l'audit a relevé que 12 des 24 URLs RH avaient été
   // renommées en prod par rapport aux conventions historiques. Pour
   // éviter les liens cassés (docs internes, emails, bookmarks, partages
