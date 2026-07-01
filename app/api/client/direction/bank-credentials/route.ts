@@ -38,11 +38,15 @@ export async function GET(req: NextRequest) {
   if ('error' in c) return c.error
 
   const admin = getAdminClient()
-  const { data: comptes } = await admin
+  const { data: comptes, error: comptesError } = await admin
     .from('comptes_bancaires')
-    .select('id, banque, numero_compte, intitule, devise, solde_actuel, actif')
+    .select('id, banque, numero_compte, nom_compte, devise, solde_actuel, actif')
     .eq('societe_id', societeId)
     .order('banque', { ascending: true })
+  // Ne pas masquer une erreur SQL (ex : colonne inexistante) en page vide.
+  if (comptesError) {
+    return NextResponse.json({ error: `Lecture des comptes : ${comptesError.message}` }, { status: 500 })
+  }
 
   const ids = (comptes || []).map(c => c.id)
   const { data: creds } = ids.length > 0
@@ -60,7 +64,7 @@ export async function GET(req: NextRequest) {
         id: cb.id,
         banque: cb.banque,
         numero_compte: cb.numero_compte,
-        intitule: cb.intitule,
+        intitule: cb.nom_compte,
         devise: cb.devise,
         solde_actuel: cb.solde_actuel,
         actif: cb.actif,
