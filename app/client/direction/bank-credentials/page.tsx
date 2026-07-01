@@ -84,8 +84,17 @@ export default function BankCredentialsPage() {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j.error || t('cui.error_generic', locale))
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(j.error || `Erreur ${r.status}`)
+
+      // Vérifie que l'enregistrement a bien persisté (le « OK » sans effet vient
+      // d'un échec silencieux — on le détecte en relisant).
+      const check = await fetch(`/api/client/direction/bank-credentials?societe_id=${societeId}`, { cache: 'no-store' }).then(x => x.json()).catch(() => null)
+      const saved = (check?.comptes || []).find((c: any) => c.id === compteId)
+      if (!saved?.scraping?.configured) {
+        throw new Error("L'enregistrement n'a pas été persisté côté serveur. Réessaie ; si le souci persiste, préviens (clé de chiffrement ou permission).")
+      }
+
       setSuccess(t('scp.cred_bank_saved', locale))
       setUsernames(p => ({ ...p, [compteId]: '' }))
       setPasswords(p => ({ ...p, [compteId]: '' }))
@@ -311,6 +320,9 @@ export default function BankCredentialsPage() {
 
             {(editing === cb.id || !cb.scraping?.configured) ? (
               <div className="space-y-3 border-t pt-3">
+                <div className="flex items-center gap-1.5 text-sm font-semibold text-blue-700">
+                  <KeyRound className="h-4 w-4" /> {t('scp.cred_ib_username', locale) ? 'Identifiants Internet Banking' : 'Identifiants Internet Banking'}
+                </div>
                 <div>
                   <label className="text-xs font-medium text-slate-600">
                     {t('scp.cred_ib_username', locale)}
