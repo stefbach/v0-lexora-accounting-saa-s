@@ -89,44 +89,39 @@ export async function PUT(req: NextRequest) {
   const { data: { user } } = await supabaseAuth.auth.getUser()
   if (!user) return apiError('not_authenticated', 401)
 
-  const admin = getAdminClient()
-  const { data: compte } = await admin
-    .from('comptes_bancaires').select('id, societe_id').eq('id', compteId).maybeSingle()
-  if (!compte) return NextResponse.json({ error: 'Compte introuvable' }, { status: 404 })
-
-  await assertSocieteAccess(supabaseAuth, user.id, compte.societe_id)
-  const { data: us } = await supabaseAuth
-    .from('user_societes').select('role')
-    .eq('user_id', user.id).eq('societe_id', compte.societe_id).maybeSingle()
-  if (!SOCIETE_ROLES.includes(us?.role || '')) {
-    return apiError('management_only', 403)
-  }
-
-  const body = await req.json().catch(() => null)
-  if (!body) return NextResponse.json({ error: 'Body JSON requis' }, { status: 400 })
-
-  const updates: Record<string, any> = { compte_bancaire_id: compteId, updated_by: user.id }
-  if (typeof body.notes === 'string') updates.notes = body.notes
-  if (typeof body.active === 'boolean') updates.active = body.active
-
   try {
-    if (typeof body.username === 'string') {
-      updates.username_enc = body.username ? encryptSecret(body.username) : null
+    const admin = getAdminClient()
+    const { data: compte } = await admin
+      .from('comptes_bancaires').select('id, societe_id').eq('id', compteId).maybeSingle()
+    if (!compte) return NextResponse.json({ error: 'Compte introuvable' }, { status: 404 })
+
+    try { await assertSocieteAccess(supabaseAuth, user.id, compte.societe_id) }
+    catch { return NextResponse.json({ error: 'Accès société refusé (assertSocieteAccess).' }, { status: 403 }) }
+
+    const { data: us } = await supabaseAuth
+      .from('user_societes').select('role')
+      .eq('user_id', user.id).eq('societe_id', compte.societe_id).maybeSingle()
+    if (!SOCIETE_ROLES.includes(us?.role || '')) {
+      return NextResponse.json({ error: `Accès réservé à la direction (ton rôle : ${us?.role || 'aucun'}).` }, { status: 403 })
     }
-    if (typeof body.password === 'string') {
-      updates.password_enc = body.password ? encryptSecret(body.password) : null
-    }
-    if (typeof body.secondary_pin === 'string') {
-      updates.secondary_pin_enc = body.secondary_pin ? encryptSecret(body.secondary_pin) : null
-    }
+
+    const body = await req.json().catch(() => null)
+    if (!body) return NextResponse.json({ error: 'Body JSON requis' }, { status: 400 })
+
+    const updates: Record<string, any> = { compte_bancaire_id: compteId, updated_by: user.id }
+    if (typeof body.notes === 'string') updates.notes = body.notes
+    if (typeof body.active === 'boolean') updates.active = body.active
+    if (typeof body.username === 'string') updates.username_enc = body.username ? encryptSecret(body.username) : null
+    if (typeof body.password === 'string') updates.password_enc = body.password ? encryptSecret(body.password) : null
+    if (typeof body.secondary_pin === 'string') updates.secondary_pin_enc = body.secondary_pin ? encryptSecret(body.secondary_pin) : null
+
+    const { error } = await admin
+      .from('comptes_bancaires_scraping_creds')
+      .upsert(updates, { onConflict: 'compte_bancaire_id' })
+    if (error) return NextResponse.json({ error: `Enregistrement DB : ${error.message}` }, { status: 500 })
+
+    return NextResponse.json({ ok: true })
   } catch (e: any) {
-    return NextResponse.json({ error: `Chiffrement impossible : ${e.message}. Configure CRYPT_KEY côté serveur.` }, { status: 500 })
+    return NextResponse.json({ error: `Erreur serveur : ${e?.message || e}` }, { status: 500 })
   }
-
-  const { error } = await admin
-    .from('comptes_bancaires_scraping_creds')
-    .upsert(updates, { onConflict: 'compte_bancaire_id' })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  return NextResponse.json({ ok: true })
 }
