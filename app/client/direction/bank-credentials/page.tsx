@@ -41,6 +41,11 @@ export default function BankCredentialsPage() {
   const [scrapingNow, setScrapingNow] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [newAccount, setNewAccount] = useState({ banque: 'MCB', nom_compte: '', numero_compte: '', iban: '', swift: '', devise: 'MUR', compte_principal: false })
+  // Identifiants Internet Banking saisis directement dans le formulaire de création
+  const [newIbUser, setNewIbUser] = useState('')
+  const [newIbPwd, setNewIbPwd] = useState('')
+  const [newIbShow, setNewIbShow] = useState(false)
+  const [newIbNotes, setNewIbNotes] = useState('')
 
   // Form state per compte
   const [usernames, setUsernames] = useState<Record<string, string>>({})
@@ -115,15 +120,36 @@ export default function BankCredentialsPage() {
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || t('cui.error_generic', locale))
-      // Récupère l'id du compte créé pour ouvrir directement le formulaire d'accès
+      // Récupère l'id du compte créé pour enregistrer directement les identifiants
       const newId: string | undefined =
         j?.compte?.id || j?.compte_bancaire?.id || j?.id || j?.data?.id
-      setSuccess(t('scp.cred_bank_created', locale))
+
+      // Si des identifiants Internet Banking ont été saisis, on les enregistre
+      // (chiffrés côté serveur) immédiatement après la création du compte.
+      let credSaved = false
+      if (newId && (newIbUser.trim() || newIbPwd.trim() || newIbNotes.trim())) {
+        const cr = await fetch(`/api/client/direction/bank-credentials?compte_id=${newId}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: newIbUser, password: newIbPwd, notes: newIbNotes, active: true }),
+        })
+        const cj = await cr.json().catch(() => ({}))
+        if (!cr.ok) throw new Error(cj.error || `Compte créé mais échec de l'enregistrement des identifiants (${cr.status}).`)
+        // Vérifie que les identifiants ont bien persisté.
+        const check = await fetch(`/api/client/direction/bank-credentials?societe_id=${societeId}`, { cache: 'no-store' }).then(x => x.json()).catch(() => null)
+        const saved = (check?.comptes || []).find((c: any) => c.id === newId)
+        if (!saved?.scraping?.configured) {
+          throw new Error("Compte créé mais les identifiants n'ont pas été persistés côté serveur. Réessaie via « Configurer l'accès ».")
+        }
+        credSaved = true
+      }
+
+      setSuccess(credSaved ? t('scp.cred_bank_saved', locale) : t('scp.cred_bank_created', locale))
       setCreating(false)
       setNewAccount({ banque: 'MCB', nom_compte: '', numero_compte: '', iban: '', swift: '', devise: 'MUR', compte_principal: false })
+      setNewIbUser(''); setNewIbPwd(''); setNewIbShow(false); setNewIbNotes('')
       await load()
-      // Ouvre d'emblée la saisie login/mot de passe du nouveau compte
-      if (newId) setEditing(newId)
+      // Si aucun identifiant saisi, ouvre d'emblée la saisie login/mot de passe
+      if (newId && !credSaved) setEditing(newId)
     } catch (e: any) { setError(e?.message || t('cui.error_generic', locale)) }
   }
 
@@ -261,8 +287,31 @@ export default function BankCredentialsPage() {
               />
               <span>{t('scp.cred_mark_principal', locale)}</span>
             </label>
+
+            {/* Identifiants Internet Banking — saisis directement à la création */}
+            <div className="border-t pt-3 space-y-3">
+              <div className="flex items-center gap-1.5 text-sm font-semibold text-blue-700"><KeyRound className="h-4 w-4" /> Identifiants Internet Banking (pour récupérer les relevés)</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-600">{t('scp.cred_ib_username', locale)}</label>
+                  <input type="text" value={newIbUser} onChange={e => setNewIbUser(e.target.value)} className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5" placeholder="Identifiant de connexion banque" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600">{t('scp.cred_password', locale)}</label>
+                  <div className="mt-1 flex gap-2">
+                    <input type={newIbShow ? 'text' : 'password'} value={newIbPwd} onChange={e => setNewIbPwd(e.target.value)} className="flex-1 text-sm border border-slate-300 rounded px-2 py-1.5" />
+                    <Button type="button" variant="outline" size="sm" onClick={() => setNewIbShow(v => !v)}>{newIbShow ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}</Button>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600">Consignes d'accès (optionnel)</label>
+                <textarea value={newIbNotes} onChange={e => setNewIbNotes(e.target.value)} rows={2} className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5" placeholder="Ex : OTP envoyé au +230…, sous-utilisateur lecture seule, PIN…" />
+              </div>
+            </div>
+
             <div className="flex justify-end gap-2">
-              <Button onClick={() => setCreating(false)} variant="outline">{t('cui.cancel', locale)}</Button>
+              <Button onClick={() => { setCreating(false); setNewIbUser(''); setNewIbPwd(''); setNewIbShow(false); setNewIbNotes('') }} variant="outline">{t('cui.cancel', locale)}</Button>
               <Button onClick={createAccount} className="bg-emerald-600 hover:bg-emerald-700 text-white">
                 <Save className="h-4 w-4 mr-1" /> {t('scp.create_account', locale)}
               </Button>
