@@ -58,7 +58,7 @@ const SEL = {
   usernameInput: '#username, input[name="username"]',
   // Champ VISIBLE (le hidden #password reçoit la version chiffrée à la soumission)
   passwordInput: '#password-field, input[name="password-field"]',
-  loginButton: '#submitBtn, button[type="submit"]',
+  loginButton: '#submitBtn',
 
   // OTP (normalement absent sur ce compte, mais on garde la détection)
   otpInput: 'input[name*="otp" i], input[id*="otp" i], input[autocomplete="one-time-code"], input[placeholder*="OTP" i]',
@@ -135,20 +135,29 @@ export async function loginAndScrapeMcb(
     // Blur pour finaliser la validation du formulaire (Angular « touched »).
     await page.keyboard.press('Tab').catch(() => {})
 
-    // Attendre que le bouton s'active (form valide + #password chiffré rempli).
+    // Attendre que le bouton s'active (form valide). Le champ #password chiffré
+    // ne se remplit qu'AU submit (handler Backbase), donc on ne l'exige pas ici.
     await page.waitForFunction(() => {
       const btn = document.querySelector('#submitBtn') as HTMLButtonElement | null
-      const hidden = document.querySelector('#password') as HTMLInputElement | null
-      return !!btn && !btn.disabled && !!hidden && !!hidden.value
+      return !!btn && !btn.disabled
     }, { timeout: 12000 }).catch(() => {})
 
-    // Clic ; fallback : soumission via Entrée dans le champ mot de passe.
-    const clicked = await page.click(SEL.loginButton, { timeout: 5000 }).then(() => true).catch(() => false)
-    if (!clicked) await passwordField.press('Enter').catch(() => {})
+    // Vrai clic sur le bouton précis (#submitBtn) — déclenche le handler Angular
+    // qui chiffre le mot de passe et soumet le formulaire OIDC.
+    const btn = page.locator('#submitBtn')
+    await btn.click({ timeout: 8000 }).catch(async () => {
+      // Repli 1 : clic forcé (au cas où un overlay intercepte).
+      await btn.click({ force: true, timeout: 4000 }).catch(() => {})
+    })
 
-    // ── 3. Attendre l'issue : navigation post-login (select-context / dashboard),
-    //     OTP, ou erreur. On laisse le temps à la redirection OIDC.
-    await page.waitForLoadState('networkidle', { timeout: 25000 }).catch(() => {})
+    // ── 3. Attendre l'issue. Le login OIDC réussi fait disparaître le formulaire
+    //     (redirection fragment vers select-context). On attend soit la
+    //     disparition du champ mot de passe, soit une erreur, soit networkidle.
+    await Promise.race([
+      page.waitForSelector(SEL.passwordInput, { state: 'detached', timeout: 25000 }).catch(() => null),
+      page.waitForSelector(SEL.loginError, { timeout: 25000 }).catch(() => null),
+    ])
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
 
     const otp = await page.$(SEL.otpInput).catch(() => null)
     if (otp) {
