@@ -37,8 +37,54 @@ function DetailsTab({ data, onSave, locale }: { data: any; onSave: (d: any) => v
   const [f, setF] = useState({ ...data })
   const u = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }))
 
+  const [scanning, setScanning] = useState(false)
+  const [scanMsg, setScanMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+
+  const importRegister = async (file: File) => {
+    setScanning(true); setScanMsg(null)
+    try {
+      const b64 = await new Promise<string>((res, rej) => {
+        const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(file)
+      })
+      const resp = await fetch('/api/client/societes/import-register', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ societe_id: f.id, pdf_base64: b64 }),
+      })
+      const d = await resp.json()
+      if (!resp.ok) throw new Error(d.error || 'Numérisation échouée')
+      const sf = d.societeFields || {}
+      const ex = d.extracted || {}
+      const merged: Record<string, any> = {}
+      for (const [k, v] of Object.entries(sf)) if (v) merged[k] = v
+      if (ex.date_incorporation && /^\d{4}-\d{2}-\d{2}$/.test(ex.date_incorporation)) merged.date_incorporation = ex.date_incorporation
+      setF((p: any) => ({ ...p, ...merged }))
+      const nb = Object.keys(merged).length
+      setScanMsg({ kind: 'ok', text: locale === 'en' ? `${nb} field(s) pre-filled from the register. Review and Save.` : `${nb} champ(s) pré-remplis depuis le registre. Vérifie et Enregistre.` })
+    } catch (e: any) {
+      setScanMsg({ kind: 'err', text: e?.message || 'Erreur' })
+    } finally { setScanning(false) }
+  }
+
   return (
     <div className="space-y-6">
+      {/* Numérisation intelligente d'un registre CBRD */}
+      <div className="rounded-xl border border-dashed p-4 flex flex-wrap items-center gap-3" style={{ borderColor: GOLD, background: 'rgba(212,175,55,0.06)' }}>
+        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: NAVY }}><Building2 className="w-4 h-4" style={{ color: GOLD }} /></div>
+        <div className="flex-1 min-w-[200px]">
+          <div className="text-sm font-semibold" style={{ color: NAVY }}>{locale === 'en' ? 'Scan a company register (CBRD)' : 'Numériser un registre (CBRD)'}</div>
+          <div className="text-xs text-gray-500">{locale === 'en' ? 'Upload the PDF register — the AI fills in the company details automatically.' : "Dépose le registre PDF — l'IA remplit automatiquement les informations de la société."}</div>
+        </div>
+        <label className="inline-flex items-center h-9 px-4 rounded-md text-sm font-semibold cursor-pointer shrink-0" style={{ background: NAVY, color: GOLD }}>
+          {scanning ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Building2 className="w-4 h-4 mr-1.5" />}
+          {scanning ? (locale === 'en' ? 'Scanning…' : 'Numérisation…') : (locale === 'en' ? 'Upload PDF' : 'Charger le PDF')}
+          <input type="file" accept="application/pdf" className="hidden" disabled={scanning}
+            onChange={(e) => { const file = e.target.files?.[0]; if (file) importRegister(file); e.currentTarget.value = '' }} />
+        </label>
+      </div>
+      {scanMsg && (
+        <div className={`text-sm rounded-md p-2 border ${scanMsg.kind === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-700'}`}>{scanMsg.text}</div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-4">
           <div><Label>{t('core.socset.company_name', locale)} *</Label><Input value={f.nom || ""} onChange={e => u("nom", e.target.value)} /></div>

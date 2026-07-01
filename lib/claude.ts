@@ -86,6 +86,35 @@ export async function callClaudeVisionJSON<T = unknown>(
 }
 
 /**
+ * Appel Claude avec un document PDF (lecture native + extraction) — retourne
+ * un objet JSON parsé. `pdf` = base64 brut du PDF.
+ */
+export async function callClaudeDocumentJSON<T = unknown>(
+  systemPrompt: string,
+  userPrompt: string,
+  pdf: string,
+  maxTokens: number = 4096,
+): Promise<T> {
+  const message = await getAnthropic().messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: maxTokens,
+    temperature: 0,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf } },
+        { type: 'text', text: `${systemPrompt}\n\n${userPrompt}` },
+      ],
+    }],
+  })
+  const content = message.content[0]
+  if (content.type !== 'text') throw new Error('Réponse Claude inattendue (pas de texte)')
+  const clean = content.text.replace(/```json|```/g, '').trim()
+  const m = clean.match(/\{[\s\S]*\}/)
+  return JSON.parse(m ? m[0] : clean) as T
+}
+
+/**
  * Vérifie le secret Vercel Cron dans l'Authorization header
  */
 export function verifyCronSecret(request: Request): boolean {
