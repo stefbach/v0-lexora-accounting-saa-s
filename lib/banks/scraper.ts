@@ -179,6 +179,10 @@ export async function scrapeBankAccount(input: BankScrapeInput): Promise<BankScr
     // les autres banques restent en manual_needed jusqu'à mapping de
     // leurs sélecteurs respectifs.
     if (bankCode === 'MCB') {
+      // Nom de la société : nécessaire pour choisir le bon « context » MCB Pro.
+      const admin = getAdminClient()
+      const { data: soc } = await admin
+        .from('societes').select('nom').eq('id', compte.societe_id).maybeSingle()
       session = await launchBrowser({ defaultTimeout: 30000 })
       const scraped = await loginAndScrapeMcb(
         session.page,
@@ -186,6 +190,7 @@ export async function scrapeBankAccount(input: BankScrapeInput): Promise<BankScr
         {
           numero_compte: compte.numero_compte,
           max_transactions: 30,
+          company_name: soc?.nom || null,
           // URL configurée par l'utilisateur, sinon URL par défaut de la banque.
           login_url: credentials.login_url || BANK_LOGIN_URLS[bankCode],
         },

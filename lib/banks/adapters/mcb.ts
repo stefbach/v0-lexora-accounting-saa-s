@@ -45,6 +45,8 @@ export interface McbAdapterOptions {
   max_transactions?: number
   /** URL de connexion (override) ; défaut https://ibank.mcb.mu/ */
   login_url?: string
+  /** Nom de la société — pour choisir le bon « context » MCB Pro. */
+  company_name?: string | null
 }
 
 /**
@@ -228,11 +230,69 @@ export async function loginAndScrapeMcb(
       return hasContent && !spinner
     }, { timeout: 20000 }).catch(() => {})
 
+    // ── Sélection de la société (page « Select company » de MCB Pro) ──
+    const onSelectCompany = await page.evaluate(() =>
+      /select a company|select company/i.test(document.body?.innerText || '')
+    ).catch(() => false)
+
+    if (onSelectCompany) {
+      const company = options.company_name || ''
+      const clicked = await page.evaluate((companyName) => {
+        const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+        const cWords = norm(companyName).split(' ').filter((w) => w.length > 2)
+        if (cWords.length === 0) return null
+        const nodes = Array.from(document.querySelectorAll('a, li, [role="button"], [class*="company" i], [class*="context" i], [class*="list" i] div, button'))
+        let best: Element | null = null
+        let bestScore = 0
+        for (const el of nodes) {
+          const txt = (el.textContent || '').trim()
+          if (!txt || txt.length > 60) continue
+          const n = norm(txt)
+          const score = cWords.filter((w) => n.includes(w)).length
+          if (score > bestScore) { bestScore = score; best = el }
+        }
+        if (best && bestScore > 0) {
+          const label = (best.textContent || '').trim()
+          ;(best as HTMLElement).click()
+          return label
+        }
+        return null
+      }, company).catch(() => null)
+
+      if (!clicked) {
+        return {
+          status: 'manual_needed',
+          error: `Login OK mais impossible de trouver la société « ${company} » dans la liste MCB. Copie le diagnostic (cliquables) pour ajuster.`,
+          screenshot_b64: await captureScreenshot(page),
+          diagnostic: await capturePageDiagnostic(page),
+          duration_ms: Date.now() - t0,
+        }
+      }
+
+      // Attendre le dashboard de la société sélectionnée.
+      await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
+      await page.waitForFunction(() => {
+        const spinner = document.querySelector('[class*="spinner" i], [class*="loading" i], [class*="loader" i]')
+        const txt = (document.body?.innerText || '').replace(/\s+/g, ' ').trim()
+        return txt.length > 150 && !spinner && !/select a company|select company/i.test(txt)
+      }, { timeout: 25000 }).catch(() => {})
+
+      // On ne connaît pas encore la structure du dashboard (liste comptes +
+      // accès transactions) → on capture pour mapper l'étape finale.
+      return {
+        status: 'manual_needed',
+        error: `Société « ${clicked} » sélectionnée ✅ — dashboard atteint. Copie le diagnostic (cliquables + textes) pour que je mappe la lecture du solde et des transactions du compte ${options.numero_compte}.`,
+        screenshot_b64: await captureScreenshot(page),
+        diagnostic: await capturePageDiagnostic(page),
+        duration_ms: Date.now() - t0,
+      }
+    }
+
     const dash = await page.$(SEL.dashboardMarker).catch(() => null)
     if (!dash) {
       return {
         status: 'manual_needed',
-        error: 'Login réussi ✅ — page post-login atteinte (« sélection de la société »). Copie le diagnostic (dont les CLIQUABLES) pour que je mappe l\'étape suivante (choix société → dashboard → transactions).',
+        error: 'Login réussi ✅ — page post-login atteinte. Copie le diagnostic (dont les CLIQUABLES) pour mapper l\'étape suivante.',
         screenshot_b64: await captureScreenshot(page),
         diagnostic: await capturePageDiagnostic(page),
         duration_ms: Date.now() - t0,
