@@ -127,6 +127,7 @@ export async function capturePageDiagnostic(page: Page): Promise<{
   title?: string
   inputs: Array<{ tag: string; type?: string; name?: string; id?: string; placeholder?: string; label?: string; visible: boolean }>
   buttons: Array<{ tag: string; type?: string; name?: string; id?: string; placeholder?: string; label?: string; visible: boolean }>
+  clickables: Array<{ tag: string; type?: string; name?: string; id?: string; placeholder?: string; label?: string; visible: boolean }>
 }> {
   const url = page.url()
   const title = await page.title().catch(() => undefined)
@@ -159,7 +160,29 @@ export async function capturePageDiagnostic(page: Page): Promise<{
         visible: isVisible(el),
       }
     })
-    return { inputs, buttons }
-  }).catch(() => ({ inputs: [], buttons: [] }))
-  return { url, title, inputs: data.inputs, buttons: data.buttons }
+    // Cliquables des SPA (cartes, tuiles, liens de contexte) — pas des <button>.
+    const clickSel = 'a, [role="button"], [role="listitem"], li, [class*="card" i], [class*="tile" i], [class*="context" i], [class*="account" i], [class*="select" i], [tabindex]'
+    const seen = new Set()
+    const clickables = Array.from(document.querySelectorAll(clickSel)).map((el) => {
+      const e = el as HTMLElement
+      const text = (e.textContent || e.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim()
+      return {
+        tag: e.tagName.toLowerCase(),
+        type: undefined,
+        name: undefined,
+        id: e.getAttribute('id') || undefined,
+        placeholder: (e.getAttribute('class') || '').slice(0, 80) || undefined,
+        label: text.slice(0, 80) || undefined,
+        visible: isVisible(el),
+      }
+    }).filter((c) => {
+      if (!c.visible || !c.label) return false
+      const k = `${c.tag}|${c.label}`
+      if (seen.has(k)) return false
+      seen.add(k)
+      return true
+    }).slice(0, 40)
+    return { inputs, buttons, clickables }
+  }).catch(() => ({ inputs: [], buttons: [], clickables: [] }))
+  return { url, title, inputs: data.inputs, buttons: data.buttons, clickables: data.clickables }
 }

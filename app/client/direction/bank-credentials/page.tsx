@@ -405,6 +405,16 @@ export default function BankCredentialsPage() {
                         &lt;{f.tag}{f.type ? ` type="${f.type}"` : ''}{f.id ? ` id="${f.id}"` : ''}&gt;{f.label || ''}{f.visible ? '' : ' (caché)'}
                       </div>
                     ))}
+                    {(scrapeDiag[cb.id].diagnostic.clickables || []).length > 0 && (
+                      <>
+                        <div className="mt-1 font-semibold">Cliquables (cartes / liens) :</div>
+                        {(scrapeDiag[cb.id].diagnostic.clickables || []).map((f: any, i: number) => (
+                          <div key={`c${i}`}>
+                            &lt;{f.tag}{f.id ? ` id="${f.id}"` : ''}{f.placeholder ? ` class="${f.placeholder}"` : ''}&gt; {f.label || ''}
+                          </div>
+                        ))}
+                      </>
+                    )}
                   </div>
                 )}
                 <p className="text-[11px] text-slate-500">Copie-moi ce bloc (URL + champs + boutons) — pas tes identifiants — pour que je fige les sélecteurs MCB.</p>

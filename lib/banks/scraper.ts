@@ -59,6 +59,8 @@ export type ScrapeDiagnostic = {
   title?: string
   inputs: PageFieldDiagnostic[]
   buttons: PageFieldDiagnostic[]
+  /** Éléments cliquables (liens, cartes, tuiles) — utile pour les SPA sans <button>. */
+  clickables?: PageFieldDiagnostic[]
 }
 
 export type BankScrapeResult = {

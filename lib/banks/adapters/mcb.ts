@@ -218,14 +218,21 @@ export async function loginAndScrapeMcb(
       }
     }
 
-    // Login accepté : on a quitté la page de login. On ne connaît pas encore la
-    // structure des pages « select-context » / dashboard → on renvoie le
-    // diagnostic de la page atteinte pour mapper l'étape suivante.
+    // Login accepté : on a quitté la page de login. La SPA post-login
+    // (select-context) charge en asynchrone (spinner) → on lui laisse le temps
+    // de rendre son contenu avant de capturer le diagnostic.
+    await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
+    await page.waitForFunction(() => {
+      const spinner = document.querySelector('[class*="spinner" i], [class*="loading" i], [class*="loader" i]')
+      const hasContent = (document.body?.innerText || '').replace(/\s+/g, ' ').trim().length > 120
+      return hasContent && !spinner
+    }, { timeout: 20000 }).catch(() => {})
+
     const dash = await page.$(SEL.dashboardMarker).catch(() => null)
     if (!dash) {
       return {
         status: 'manual_needed',
-        error: 'Login réussi ✅ — page post-login atteinte (probablement « sélection de la société »). Copie le diagnostic pour que je mappe l\'étape suivante (choix société → dashboard → transactions).',
+        error: 'Login réussi ✅ — page post-login atteinte (« sélection de la société »). Copie le diagnostic (dont les CLIQUABLES) pour que je mappe l\'étape suivante (choix société → dashboard → transactions).',
         screenshot_b64: await captureScreenshot(page),
         diagnostic: await capturePageDiagnostic(page),
         duration_ms: Date.now() - t0,
