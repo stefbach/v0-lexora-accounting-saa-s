@@ -268,10 +268,11 @@ export async function loginAndScrapeMcb(
         }
       }
 
-      // 2) Cliquer la ligne la plus SPÉCIFIQUE (texte le plus court contenant
-      //    tous les mots) — évite de cliquer un conteneur englobant 2 sociétés.
+      // 2) Localiser la ligne la plus SPÉCIFIQUE (texte le plus court contenant
+      //    tous les mots) et récupérer ses coordonnées, pour un VRAI clic souris
+      //    (el.click() DOM ne déclenche pas le routeur Angular de MCB).
       const allWords = norm(company).split(' ').filter((w) => w.length > 2)
-      const clicked = await page.evaluate((words) => {
+      const box = await page.evaluate((words) => {
         const nrm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
         const nodes = Array.from(document.querySelectorAll('a, li, [role="button"], [role="listitem"], button, div, span'))
         let best: Element | null = null
@@ -284,12 +285,18 @@ export async function loginAndScrapeMcb(
           if (all && txt.length < bestLen) { bestLen = txt.length; best = el }
         }
         if (!best) return null
-        const label = (best.textContent || '').trim()
-        // Clique l'ancêtre cliquable le plus proche, sinon l'élément lui-même.
-        const clickable = (best.closest('a, li, [role="button"], [role="listitem"], button, [class*="item" i], [class*="row" i], [class*="card" i]') as HTMLElement | null) || (best as HTMLElement)
-        clickable.click()
-        return label
+        best.scrollIntoView({ block: 'center' })
+        const r = (best as HTMLElement).getBoundingClientRect()
+        return { x: r.x + r.width / 2, y: r.y + r.height / 2, label: (best.textContent || '').trim() }
       }, allWords).catch(() => null)
+
+      let clicked: string | null = null
+      if (box) {
+        clicked = box.label
+        // Vrai clic souris aux coordonnées de la ligne (event trusted, bubbling
+        // jusqu'au handler Angular du composant société).
+        await page.mouse.click(box.x, box.y).catch(() => {})
+      }
 
       if (!clicked) {
         return {
