@@ -230,6 +230,22 @@ export async function loginAndScrapeMcb(
       return hasContent && !spinner
     }, { timeout: 20000 }).catch(() => {})
 
+    // ── Récupération : la chaîne de redirections OIDC post-login échoue parfois
+    //     sur le Chromium serverless (page chrome-error / vide). La session est
+    //     déjà établie (cookie), donc on recharge l'app pour reprendre la main.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const cur = page.url()
+      const bodyLen = await page.evaluate(() => (document.body?.innerText || '').trim().length).catch(() => 0)
+      if (/^chrome-error:/i.test(cur) || cur === 'about:blank' || bodyLen < 40) {
+        await page.goto('https://ibpro.mcb.mu/mcb-corporate-ib-web-app/', { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {})
+        await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
+        await page.waitForFunction(() => {
+          const spinner = document.querySelector('[class*="spinner" i], [class*="loading" i], [class*="loader" i]')
+          return (document.body?.innerText || '').trim().length > 120 && !spinner
+        }, { timeout: 25000 }).catch(() => {})
+      } else break
+    }
+
     // ── Sélection de la société (page « Select company » de MCB Pro) ──
     const onSelectCompany = await page.evaluate(() =>
       /select a company|select company/i.test(document.body?.innerText || '')
