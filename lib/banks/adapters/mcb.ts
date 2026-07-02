@@ -280,6 +280,10 @@ export async function loginAndScrapeMcb(
         for (const el of nodes) {
           const txt = (el.textContent || '').trim()
           if (!txt || txt.length > 50) continue
+          // Uniquement les éléments VISIBLES (sinon on matche un nœud caché).
+          const r0 = (el as HTMLElement).getBoundingClientRect()
+          if (r0.width < 2 || r0.height < 2) continue
+          if ((el as HTMLElement).offsetParent === null && getComputedStyle(el as HTMLElement).position !== 'fixed') continue
           const n = nrm(txt)
           const all = words.every((w: string) => n.includes(w))
           if (all && txt.length < bestLen) { bestLen = txt.length; best = el }
@@ -290,12 +294,17 @@ export async function loginAndScrapeMcb(
         return { x: r.x + r.width / 2, y: r.y + r.height / 2, label: (best.textContent || '').trim() }
       }, allWords).catch(() => null)
 
-      let clicked: string | null = null
-      if (box) {
-        clicked = box.label
-        // Vrai clic souris aux coordonnées de la ligne (event trusted, bubbling
-        // jusqu'au handler Angular du composant société).
-        await page.mouse.click(box.x, box.y).catch(() => {})
+      let clicked: string | null = box?.label || null
+      if (box?.label) {
+        // Priorité : clic Playwright sur le texte exact (vérifie la visibilité +
+        // actionnabilité + fait un vrai clic ciblé). Repli : clic souris + chevron.
+        const rowLoc = page.getByText(box.label, { exact: true }).first()
+        const okClick = await rowLoc.click({ timeout: 6000 }).then(() => true).catch(() => false)
+        if (!okClick) {
+          await page.mouse.click(box.x, box.y).catch(() => {})
+          // Chevron « › » : souvent la vraie zone cliquable, sur le bord droit.
+          await page.mouse.click(box.x + 180, box.y).catch(() => {})
+        }
       }
 
       if (!clicked) {
