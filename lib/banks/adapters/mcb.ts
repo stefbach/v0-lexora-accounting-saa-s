@@ -253,27 +253,43 @@ export async function loginAndScrapeMcb(
 
     if (onSelectCompany) {
       const company = options.company_name || ''
-      const clicked = await page.evaluate((companyName) => {
-        const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
-        const cWords = norm(companyName).split(' ').filter((w) => w.length > 2)
-        if (cWords.length === 0) return null
-        const nodes = Array.from(document.querySelectorAll('a, li, [role="button"], [class*="company" i], [class*="context" i], [class*="list" i] div, button'))
+      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+      const cWords = norm(company).split(' ').filter((w) => w.length > 2 && !['ltd', 'ltee', 'ltée', 'co', 'the', 'sol', 'solutions'].includes(w))
+      // Terme de recherche = mot le plus distinctif (le plus long).
+      const searchTerm = [...cWords].sort((a, b) => b.length - a.length)[0] || ''
+
+      // 1) Filtrer via la recherche (#bb_input_0) pour ne garder qu'une société.
+      if (searchTerm) {
+        const search = await page.$('#bb_input_0, input[type="search"]').catch(() => null)
+        if (search) {
+          await search.click().catch(() => {})
+          await search.type(searchTerm, { delay: 40 }).catch(() => {})
+          await page.waitForTimeout(1500)
+        }
+      }
+
+      // 2) Cliquer la ligne la plus SPÉCIFIQUE (texte le plus court contenant
+      //    tous les mots) — évite de cliquer un conteneur englobant 2 sociétés.
+      const allWords = norm(company).split(' ').filter((w) => w.length > 2)
+      const clicked = await page.evaluate((words) => {
+        const nrm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+        const nodes = Array.from(document.querySelectorAll('a, li, [role="button"], [role="listitem"], button, div, span'))
         let best: Element | null = null
-        let bestScore = 0
+        let bestLen = Infinity
         for (const el of nodes) {
           const txt = (el.textContent || '').trim()
-          if (!txt || txt.length > 60) continue
-          const n = norm(txt)
-          const score = cWords.filter((w) => n.includes(w)).length
-          if (score > bestScore) { bestScore = score; best = el }
+          if (!txt || txt.length > 50) continue
+          const n = nrm(txt)
+          const all = words.every((w: string) => n.includes(w))
+          if (all && txt.length < bestLen) { bestLen = txt.length; best = el }
         }
-        if (best && bestScore > 0) {
-          const label = (best.textContent || '').trim()
-          ;(best as HTMLElement).click()
-          return label
-        }
-        return null
-      }, company).catch(() => null)
+        if (!best) return null
+        const label = (best.textContent || '').trim()
+        // Clique l'ancêtre cliquable le plus proche, sinon l'élément lui-même.
+        const clickable = (best.closest('a, li, [role="button"], [role="listitem"], button, [class*="item" i], [class*="row" i], [class*="card" i]') as HTMLElement | null) || (best as HTMLElement)
+        clickable.click()
+        return label
+      }, allWords).catch(() => null)
 
       if (!clicked) {
         return {
@@ -292,6 +308,20 @@ export async function loginAndScrapeMcb(
         const txt = (document.body?.innerText || '').replace(/\s+/g, ' ').trim()
         return txt.length > 150 && !spinner && !/select a company|select company/i.test(txt)
       }, { timeout: 25000 }).catch(() => {})
+
+      // Vérifie qu'on a bien quitté la page « Select company ».
+      const stillSelect = await page.evaluate(() =>
+        /select a company|select company/i.test(document.body?.innerText || '')
+      ).catch(() => false)
+      if (stillSelect) {
+        return {
+          status: 'manual_needed',
+          error: `Clic sur « ${clicked} » sans navigation (toujours sur Select company). Copie le diagnostic (cliquables) pour ajuster le clic.`,
+          screenshot_b64: await captureScreenshot(page),
+          diagnostic: await capturePageDiagnostic(page),
+          duration_ms: Date.now() - t0,
+        }
+      }
 
       // On ne connaît pas encore la structure du dashboard (liste comptes +
       // accès transactions) → on capture pour mapper l'étape finale.
