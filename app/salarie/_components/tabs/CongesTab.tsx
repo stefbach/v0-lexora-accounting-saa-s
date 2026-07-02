@@ -471,7 +471,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                   </thead>
                   <tbody>
                     {history.map((c: any, i: number) => {
-                      const t = c.type_conge || "AL"
+                      const typeC = c.type_conge || "AL"
                       const d1 = c.date_debut ? new Date(c.date_debut).toLocaleDateString("fr-FR") : "—"
                       const d2 = c.date_fin ? new Date(c.date_fin).toLocaleDateString("fr-FR") : "—"
                       const days = Number(c.nb_jours) || "—"
@@ -481,7 +481,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                         <tr key={c.id || i} className="border-b last:border-0">
                           <td className="py-2.5 pr-3">
                             <div className="flex items-center gap-1 flex-wrap">
-                              <Badge style={{ backgroundColor: `${typeColor[t] || BLUE}20`, color: typeColor[t] || BLUE }}>{typeLabel[t] || t}</Badge>
+                              <Badge style={{ backgroundColor: `${typeColor[typeC] || BLUE}20`, color: typeColor[typeC] || BLUE }}>{typeLabel[typeC] || typeC}</Badge>
                               {c.demi_journee && (
                                 <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800 border border-purple-200">
                                   {c.matin_ou_apres_midi === 'apres_midi' ? '½ PM' : '½ AM'}
@@ -522,17 +522,17 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
               </div>
               <div className="md:hidden space-y-3">
                 {history.map((c: any, i: number) => {
-                  const t = c.type_conge || "AL"
+                  const typeC = c.type_conge || "AL"
                   const d1 = c.date_debut ? new Date(c.date_debut).toLocaleDateString("fr-FR") : "—"
                   const d2 = c.date_fin ? new Date(c.date_fin).toLocaleDateString("fr-FR") : "—"
                   const days = c.nb_jours || (c.date_debut && c.date_fin ? Math.ceil((new Date(c.date_fin).getTime() - new Date(c.date_debut).getTime()) / (1000 * 60 * 60 * 24)) + 1 : "—")
                   const isMine = !c.employe_id || c.employe_id === employe.id
                   const canCancel = isMine && c.statut === "en_attente"
                   return (
-                    <div key={c.id || i} className="p-4 border rounded-xl space-y-2 transition-all duration-200" style={{ borderLeft: `3px solid ${typeColor[t] || BLUE}` }}>
+                    <div key={c.id || i} className="p-4 border rounded-xl space-y-2 transition-all duration-200" style={{ borderLeft: `3px solid ${typeColor[typeC] || BLUE}` }}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1 flex-wrap">
-                          <Badge className="text-xs" style={{ backgroundColor: `${typeColor[t] || BLUE}20`, color: typeColor[t] || BLUE }}>{typeLabel[t] || t}</Badge>
+                          <Badge className="text-xs" style={{ backgroundColor: `${typeColor[typeC] || BLUE}20`, color: typeColor[typeC] || BLUE }}>{typeLabel[typeC] || typeC}</Badge>
                           {c.demi_journee && (
                             <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800">
                               {c.matin_ou_apres_midi === 'apres_midi' ? '½ PM' : '½ AM'}
