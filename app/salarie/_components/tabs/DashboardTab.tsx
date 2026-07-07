@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Bell, CreditCard, Calendar, CalendarPlus, Coffee, FileText, HeartPulse, LogIn, LogOut } from "lucide-react"
-import { NAVY, GOLD, BLUE, GREEN, MONTH_NAMES_FR } from "../shared/constants"
+import { NAVY, GOLD, BLUE, GREEN, MONTH_NAMES_FR, MU_TZ } from "../shared/constants"
 import { fmt, lastDayOfMonth } from "../shared/helpers"
 import {
   EligibiliteBadge,
@@ -107,6 +107,29 @@ export function DashboardTab({
     return h > 0 ? `${h}h${r > 0 ? ` ${String(r).padStart(2, '0')}min` : ''}` : `${r}min`
   }
   const fmtTime = (t?: string | null) => (t ? String(t).slice(0, 5) : '—')
+
+  // PO1-bis — Garde-fou "reprendre" perdu. Le clic Reprendre peut échouer
+  // silencieusement côté client (crash/page blanche), laissant la pause
+  // ouverte : elle gonfle alors sur des heures et fausse la paie. Tant
+  // qu'une pause est en cours, on tick toutes les 30 s et, au-delà d'un
+  // seuil, on affiche une bannière d'alerte bien visible qui invite à
+  // recliquer "Reprendre" — rendant l'incident auto-corrigeable.
+  const LONG_PAUSE_MIN = 45
+  const [, forceTick] = useState(0)
+  useEffect(() => {
+    if (!isEnPause) return
+    const id = setInterval(() => forceTick(t => t + 1), 30000)
+    return () => clearInterval(id)
+  }, [isEnPause])
+  const pauseElapsedMin = (() => {
+    if (!isEnPause || !sessionEnCours?.heure_debut) return 0
+    const [h, m, s] = String(sessionEnCours.heure_debut).split(':').map(Number)
+    const nowStr = new Date().toLocaleTimeString('en-GB', { timeZone: MU_TZ, hour12: false })
+    const [nh, nm, ns] = nowStr.split(':').map(Number)
+    const diff = Math.floor(((nh * 3600 + nm * 60 + (ns || 0)) - (h * 3600 + m * 60 + (s || 0))) / 60)
+    return diff > 0 ? diff : 0
+  })()
+  const pauseTropLongue = isEnPause && pauseElapsedMin >= LONG_PAUSE_MIN
 
   // V3.5 — bannière "contrat à signer" tirée du même endpoint
   // que la sidebar pour cohérence.
@@ -256,6 +279,21 @@ export function DashboardTab({
 
       <Card className="rounded-xl shadow-sm">
         <CardContent className="p-4 space-y-4">
+          {/* PO1-bis — Alerte pause anormalement longue (clic Reprendre
+              probablement perdu). Rendue impossible à manquer pour couper
+              court à la dérive du temps de pause. */}
+          {pauseTropLongue && (
+            <div className="flex items-start gap-3 p-3 rounded-xl border-2 border-amber-400 bg-amber-50 animate-pulse">
+              <Coffee className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+              <div className="text-sm text-amber-900">
+                <p className="font-semibold">⚠️ {t('sal.dashboard.pause_too_long_title', locale)}</p>
+                <p className="text-xs mt-0.5">
+                  {t('sal.dashboard.pause_too_long_prefix', locale)}{' '}
+                  <strong>{formatMin(pauseElapsedMin)}</strong>{t('sal.dashboard.pause_too_long_suffix', locale)}
+                </p>
+              </div>
+            </div>
+          )}
           {/* PO1 — 3 boutons contextuels + timeline.
              - aucune session en cours -> seule [Entrée] est active
              - session travail en cours -> [Pause] + [Sortie] actives
