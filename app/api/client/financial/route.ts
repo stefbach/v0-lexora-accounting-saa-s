@@ -5,6 +5,7 @@ import { fetchAllPaginated } from '@/lib/supabase/paginate'
 import { NextResponse } from 'next/server'
 import { getTauxChange } from '@/lib/taux-change'
 import { getActiveSnapshot } from '@/lib/accounting/exercice-snapshot'
+import { computeFactureHt } from '@/lib/accounting/facture-ht'
 
 function convertToMUR(amount: number, devise: string, rates: Record<string, number>): number {
   if (!devise || devise === 'MUR') return amount
@@ -344,19 +345,9 @@ export async function GET(request: Request) {
     // une facture DÉJÀ hors taxe (export, client offshore, devise étrangère,
     // où HT == TTC légitimement) comme du TTC dès que `taux_tva` traînait une
     // valeur par défaut (15), et sous-estimait le CA de ~13 %.
-    //
-    // Règle appliquée :
-    //   • montant_tva = 0  → facture hors taxe → HT = montant (aucune déduction)
-    //   • montant_tva > 0  → HT = TTC − TVA (auto-corrige aussi le cas legacy
-    //     où le TTC avait été saisi par erreur dans le champ montant_ht)
-    //   • TTC absent/invalide → fallback sur le montant_ht stocké
-    const computeHtMur = (f: any): number => {
-      const ht = Number(f.montant_ht) || 0
-      const ttc = Number(f.montant_ttc) || 0
-      const tva = Number(f.montant_tva) || 0
-      const htReel = ttc > 0 && ttc + 0.01 >= tva ? ttc - tva : ht
-      return convertToMUR(Math.max(0, htReel), f.devise || 'MUR', rates)
-    }
+    // Logique isolée + testée dans lib/accounting/facture-ht.ts.
+    const computeHtMur = (f: any): number =>
+      convertToMUR(computeFactureHt(f), f.devise || 'MUR', rates)
 
     const caFromFactures = facturesFromTable
       .filter(f => f.type_facture === 'client' && f.statut !== 'annule')
