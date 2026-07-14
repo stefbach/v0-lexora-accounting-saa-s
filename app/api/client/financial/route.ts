@@ -5,6 +5,7 @@ import { fetchAllPaginated } from '@/lib/supabase/paginate'
 import { NextResponse } from 'next/server'
 import { getTauxChange } from '@/lib/taux-change'
 import { getActiveSnapshot } from '@/lib/accounting/exercice-snapshot'
+import { computeFactureHt } from '@/lib/accounting/facture-ht'
 
 function convertToMUR(amount: number, devise: string, rates: Record<string, number>): number {
   if (!devise || devise === 'MUR') return amount
@@ -338,21 +339,15 @@ export async function GET(request: Request) {
     // Compute CA et dépenses from factures table — EN HT (hors taxe).
     // En comptabilité, le résultat = CA HT - Charges HT. La TVA est séparée.
     //
-    // Bug fréquent en prod : le `montant_ht` saisi/extrait est en réalité
-    // égal au TTC quand la TVA n'a pas été ventilée (saisie manuelle, OCR
-    // approximatif, factures legacy). Si on détecte cette situation
-    // (montant_ht == montant_ttc avec taux_tva > 0), on RECALCULE le vrai
-    // HT = TTC / (1 + taux_tva/100).
-    const computeHtMur = (f: any): number => {
-      const ht = Number(f.montant_ht) || 0
-      const ttc = Number(f.montant_ttc) || 0
-      const tauxTva = Number(f.taux_tva) || 0
-      // Si HT = TTC alors que taux_tva > 0, le HT en base est en fait le TTC
-      if (tauxTva > 0 && ht > 0 && Math.abs(ht - ttc) < 0.01) {
-        return convertToMUR(ttc / (1 + tauxTva / 100), f.devise || 'MUR', rates)
-      }
-      return convertToMUR(ht, f.devise || 'MUR', rates)
-    }
+    // Définition comptable robuste : HT = TTC − TVA (c'est exactement ce qui
+    // est porté au compte 70x/60x). On n'utilise PAS d'heuristique du type
+    // « si HT == TTC alors diviser par (1 + taux_tva) » : elle traitait à tort
+    // une facture DÉJÀ hors taxe (export, client offshore, devise étrangère,
+    // où HT == TTC légitimement) comme du TTC dès que `taux_tva` traînait une
+    // valeur par défaut (15), et sous-estimait le CA de ~13 %.
+    // Logique isolée + testée dans lib/accounting/facture-ht.ts.
+    const computeHtMur = (f: any): number =>
+      convertToMUR(computeFactureHt(f), f.devise || 'MUR', rates)
 
     const caFromFactures = facturesFromTable
       .filter(f => f.type_facture === 'client' && f.statut !== 'annule')
