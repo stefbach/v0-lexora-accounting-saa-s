@@ -53,13 +53,15 @@ const VARIABLE_HOLIDAYS: Record<number, Holiday[]> = {
     { date: '2025-08-27', name: 'Ganesh Chaturthi' },
     { date: '2025-10-20', name: 'Divali' },
   ],
+  // Dates officielles 2026 (Cabinet / calendrier MRA Maurice) — alignées
+  // sur la table DB `jours_feries` (source de vérité côté RH).
   2026: [
-    { date: '2026-01-02', name: 'Thaipoosam Cavadee' },
+    { date: '2026-02-01', name: 'Thaipoosam Cavadee' },
     { date: '2026-02-15', name: 'Maha Shivaratree' },
     { date: '2026-02-17', name: 'Chinese Spring Festival' },
-    { date: '2026-03-20', name: 'Eid-Ul-Fitr' },
-    { date: '2026-04-03', name: 'Ougadi' },
-    { date: '2026-08-26', name: 'Ganesh Chaturthi' },
+    { date: '2026-03-19', name: 'Ougadi' },
+    { date: '2026-03-21', name: 'Eid-Ul-Fitr' },
+    { date: '2026-09-16', name: 'Ganesh Chaturthi' },
     { date: '2026-11-08', name: 'Divali' },
   ],
 }
