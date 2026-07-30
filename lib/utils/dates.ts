@@ -45,8 +45,10 @@ export function toISODate(value: unknown): string {
 export function addDaysISO(value: unknown, days: number): string {
   const base = toISODate(value) || todayISO()
   const n = Number(days)
+  // `base` est toujours parsable ici : soit une date canonique validée par
+  // toISODate, soit todayISO(). Un jour hors bornes (31 février) est reporté
+  // par JS sur le mois suivant, comportement standard et sans risque.
   const dt = new Date(`${base}T00:00:00Z`)
-  if (Number.isNaN(dt.getTime())) return base
   dt.setUTCDate(dt.getUTCDate() + (Number.isFinite(n) ? Math.trunc(n) : 0))
   return dt.toISOString().slice(0, 10)
 }

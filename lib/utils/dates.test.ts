@@ -27,6 +27,10 @@ describe('toISODate', () => {
     expect(toISODate(new Date(Date.UTC(2026, 6, 30)))).toBe('2026-07-30')
   })
 
+  it('retombe sur le parsing natif pour un format non canonique', () => {
+    expect(toISODate('2026/07/30')).toBe('2026-07-30')
+  })
+
   it('renvoie "" sur vide ou invalide au lieu de lever', () => {
     expect(toISODate('')).toBe('')
     expect(toISODate(null)).toBe('')
@@ -61,5 +65,17 @@ describe('addDaysISO', () => {
 
   it('accepte un timestamp complet en entrée', () => {
     expect(addDaysISO('2026-07-30T10:00:00+04:00', 1)).toBe('2026-07-31')
+  })
+
+  it('reporte un jour hors bornes au lieu de lever', () => {
+    // "2026-02-31" passe le regex de toISODate ; JS le normalise en 2026-03-03.
+    // Cas inatteignable via <input type="date"> ou une colonne `date`, mais on
+    // vérifie qu'il produit une date valide plutôt qu'un throw.
+    expect(addDaysISO('2026-02-31', 5)).toBe('2026-03-08')
+  })
+
+  it('traite un nombre de jours non fini comme 0', () => {
+    expect(addDaysISO('2026-07-30', Number.NaN)).toBe('2026-07-30')
+    expect(addDaysISO('2026-07-30', Number.POSITIVE_INFINITY)).toBe('2026-07-30')
   })
 })
