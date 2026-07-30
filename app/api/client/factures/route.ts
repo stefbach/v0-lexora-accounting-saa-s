@@ -10,8 +10,25 @@ import {
 } from '@/lib/supabase/assert-societe-access'
 import { resolveInternalAuth } from '@/lib/lexora-internal-auth'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
+import { asUuid, isUuid } from '@/lib/utils/uuid'
 
 export const dynamic = 'force-dynamic'
+
+// Colonnes uuid de public.factures alimentées par le client. Les <Select>
+// Radix ne peuvent pas avoir value="" et utilisent donc des sentinelles
+// textuelles ("none"…) : si l'une atteint Postgres, la requête échoue en 500
+// avec `invalid input syntax for type uuid: "none"`, message brut renvoyé à
+// l'utilisateur. On normalise toute valeur non-uuid en null (= colonne vide).
+const UUID_COLUMNS = ['contact_id', 'template_id', 'facture_reference_id', 'dossier_id'] as const
+
+function normalizeUuidColumns<T extends Record<string, unknown>>(payload: T): T {
+  for (const col of UUID_COLUMNS) {
+    if (col in payload && payload[col] != null) {
+      ;(payload as Record<string, unknown>)[col] = asUuid(payload[col])
+    }
+  }
+  return payload
+}
 
 export async function GET(request: Request) {
   try {
@@ -25,6 +42,16 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
     const factureId = searchParams.get('id')
+
+    // Paramètres uuid mal formés → 400 explicite. Sans ce garde-fou, Postgres
+    // levait un 22P02 remonté en 500 opaque (`invalid input syntax for type
+    // uuid`) sur un simple ?societe_id=none dans l'URL.
+    if (societe_id && !isUuid(societe_id)) {
+      return NextResponse.json({ error: 'societe_id invalide (uuid attendu)' }, { status: 400 })
+    }
+    if (factureId && !isUuid(factureId)) {
+      return NextResponse.json({ error: 'id de facture invalide (uuid attendu)' }, { status: 400 })
+    }
 
     // Tenant isolation — verify user has access to the requested societe_id
     // (unified helper, includes user_societes + dossiers + created_by branches)
@@ -166,10 +193,17 @@ export async function POST(request: Request) {
       recurrence_jour_du_mois, recurrence_date_debut, recurrence_date_fin,
       client,
     } = body
-    let contact_id: string | null = contactIdFromBody || null
+    // Sentinelles d'UI ("none", "manual"…) neutralisées avant tout contact
+    // avec Postgres — cf. UUID_COLUMNS.
+    let contact_id: string | null = asUuid(contactIdFromBody)
+    const templateIdClean = asUuid(template_id)
+    const factureReferenceIdClean = asUuid(facture_reference_id)
 
     if (!societe_id || !date_facture) {
       return NextResponse.json({ error: 'societe_id et date_facture requis' }, { status: 400 })
+    }
+    if (!isUuid(societe_id)) {
+      return NextResponse.json({ error: 'societe_id invalide (uuid attendu)' }, { status: 400 })
     }
 
     // Garde-fou conversion devise : si la facture est en devise étrangère mais
@@ -401,7 +435,7 @@ export async function POST(request: Request) {
       montant_ht, montant_tva, montant_ttc: ttc,
       taux_tva, montant_mur: mur, statut: finalStatut, notes,
       notes_internes, lignes, conditions_paiement, termes,
-      template, template_id, client_offshore, remise_pct, remise_montant,
+      template, template_id: templateIdClean, client_offshore, remise_pct, remise_montant,
       recurrent, recurrent_frequence, logo_url,
       mode_paiement, paye_par, contact_id,
       type_document,
@@ -411,8 +445,8 @@ export async function POST(request: Request) {
       insertData.recurrence_date_debut = recurrence_date_debut || date_facture
       insertData.recurrence_date_fin = recurrence_date_fin || null
     }
-    if (facture_reference_id) {
-      insertData.facture_reference_id = facture_reference_id
+    if (factureReferenceIdClean) {
+      insertData.facture_reference_id = factureReferenceIdClean
     }
 
     // Insert robuste : si une colonne récente (ex: template_id mig 286)
@@ -561,6 +595,15 @@ export async function PATCH(request: Request) {
     const { id, ...updates } = body
 
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
+    if (!isUuid(id)) return NextResponse.json({ error: 'id invalide (uuid attendu)' }, { status: 400 })
+    if (updates.societe_id != null && !isUuid(updates.societe_id)) {
+      return NextResponse.json({ error: 'societe_id invalide (uuid attendu)' }, { status: 400 })
+    }
+    // Neutralise les sentinelles d'UI avant .update() : le PATCH passe TOUT
+    // l'objet à Postgres (contrairement au POST qui destructure), donc un
+    // `template_id: "none"` faisait échouer la mise à jour complète du
+    // brouillon avec `invalid input syntax for type uuid: "none"`.
+    normalizeUuidColumns(updates)
 
     // Fetch existing invoice for status transition check + access verification
     const { data: existing } = await supabase

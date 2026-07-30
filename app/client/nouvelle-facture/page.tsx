@@ -16,6 +16,8 @@ import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { CatalogueSelectorDialog, type CatalogueItem as CatalogueDialogItem } from "@/components/client/CatalogueSelectorDialog"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale, type Locale } from '@/lib/i18n'
+import { asUuid } from '@/lib/utils/uuid'
+import { todayISO, toISODate, addDaysISO } from '@/lib/utils/dates'
 
 interface LigneFacture { id: string; description: string; unite: string; quantite: number; prix_unitaire: number; taux_tva: number; montant_ht: number }
 interface InvoiceClient { id: string; nom: string; entreprise: string; adresse: string; email: string; telephone: string; vat_number: string; devise: string; conditions_paiement: number; offshore: boolean; isDb?: boolean }
@@ -25,8 +27,13 @@ interface Societe { id: string; nom: string }
 
 const genId = () => crypto.randomUUID()
 const fmt = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const today = () => new Date().toISOString().split("T")[0]
-const addDays = (d: string, days: number) => { const dt = new Date(d); dt.setDate(dt.getDate() + days); return dt.toISOString().split("T")[0] }
+// Dates calendaires tolérantes : un champ date vidé ne doit jamais lever de
+// RangeError ("Invalid time value") — voir lib/utils/dates.ts.
+const today = todayISO
+const addDays = addDaysISO
+// Sentinelle UI des <Select> Radix (value="" interdit) — "none" ne doit
+// jamais atteindre une colonne uuid côté Postgres.
+const NO_TEMPLATE = "none"
 const UNITES = ["Heure", "Jour", "Mois", "Forfait", "Unite"] as const
 const DEVISES = ["MUR", "EUR", "USD", "GBP"] as const
 const MODES_PAIEMENT = ["Virement", "Cheque", "Especes", "Carte"] as const
@@ -205,8 +212,11 @@ function NouvelleFactureContent() {
         // Hydrate tous les champs du formulaire depuis la facture DB.
         setNumeroFacture(f.numero_facture || '')
         setReference(f.reference || '')
-        setDateFacture(f.date_facture || today())
-        setDateEcheance(f.date_echeance || '')
+        // toISODate : la colonne peut remonter un timestamp complet, que
+        // <input type="date"> refuse d'afficher (champ vide → addDays sur ""
+        // → RangeError au premier changement de <Select>).
+        setDateFacture(toISODate(f.date_facture) || today())
+        setDateEcheance(toISODate(f.date_echeance))
         setDevise(f.devise || 'MUR')
         setTauxChange(Number(f.taux_change) || 1)
         setTypeDocument(f.type_document || 'facture')
@@ -241,8 +251,8 @@ function NouvelleFactureContent() {
           setRecurrent(true)
           if (f.recurrent_frequence) setRecurrentFreq(f.recurrent_frequence)
           if (f.recurrence_jour_du_mois != null) setRecurrenceJour(String(f.recurrence_jour_du_mois))
-          if (f.recurrence_date_debut) setRecurrenceDebut(f.recurrence_date_debut)
-          if (f.recurrence_date_fin) setRecurrenceFin(f.recurrence_date_fin)
+          if (f.recurrence_date_debut) setRecurrenceDebut(toISODate(f.recurrence_date_debut))
+          if (f.recurrence_date_fin) setRecurrenceFin(toISODate(f.recurrence_date_fin))
         }
         setEditingLoaded(true)
       })
@@ -481,7 +491,8 @@ function NouvelleFactureContent() {
   const contreValeurMUR = useMemo(() => devise !== "MUR" ? totalTTC * tauxChange : null, [totalTTC, devise, tauxChange])
 
   const handleEcheancePreset = (val: string) => {
-    const n = parseInt(val)
+    const n = parseInt(val, 10)
+    if (Number.isNaN(n)) return
     setEcheancePreset(n)
     // n === 0  → "À réception" : échéance = date de facture
     // n  >  0  → délai en jours
@@ -491,8 +502,12 @@ function NouvelleFactureContent() {
   }
 
   const handleTemplateSelect = (id: string) => {
+    // "Aucun modèle" = sentinelle UI, PAS un identifiant. On la normalise en
+    // chaîne vide dans le state : sinon `template_id: "none"` partait au
+    // backend et Postgres renvoyait un 500
+    // `invalid input syntax for type uuid: "none"` affiché brut à l'écran.
+    if (!id || id === NO_TEMPLATE) { setTemplateId(""); return }
     setTemplateId(id)
-    if (!id || id === "none") return
     const tpl = templates.find(tp => tp.id === id)
     if (!tpl) return
     if (tpl.couleur_primaire) setAccentColor(tpl.couleur_primaire)
@@ -544,20 +559,23 @@ function NouvelleFactureContent() {
       notes: notesVisibles,
       notes_internes: notesInternes,
       template: localStorage.getItem("lexora_invoice_template") || "standard",
-      template_id: templateId || undefined,
+      // asUuid : filet de sécurité sur TOUS les champs uuid. Une sentinelle
+      // d'UI ("none") ou une valeur legacy non-uuid devient null (= colonne
+      // vide) au lieu de faire échouer l'insert/update entier.
+      template_id: asUuid(templateId),
       client_offshore: clientOffshore,
       // remise_type='pct' → remise_pct ; sinon → remise_montant.
       remise_pct: remiseType === 'pct' ? remiseValue : 0,
       remise_montant: remiseType === 'pct' ? 0 : remiseValue,
       logo_url: settings?.logo_url || "",
       type_document: typeDocument,
-      facture_reference_id: factureReferenceId || undefined,
+      facture_reference_id: asUuid(factureReferenceId),
       // Lien stable vers le contact DB (utilisé par les relances et le
       // suivi client). On envoie null si le client a été saisi à la main
       // ou provient du localStorage legacy.
       contact_id: (() => {
         const c = clients.find(cl => cl.id === selectedClientId)
-        return c?.isDb ? c.id : null
+        return c?.isDb ? asUuid(c.id) : null
       })(),
       recurrent,
       recurrent_frequence: recurrent ? recurrentFreq : undefined,
@@ -746,8 +764,8 @@ function NouvelleFactureContent() {
           <CardContent>
             <div className="flex items-center gap-4 flex-wrap">
               <div className="flex-1 min-w-[220px]">
-                <Sel value={templateId || "none"} onValueChange={handleTemplateSelect} placeholder={t('inv.nf.choose_template', locale)}>
-                  <SelectItem value="none">{t('inv.nf.no_template_default', locale)}</SelectItem>
+                <Sel value={templateId || NO_TEMPLATE} onValueChange={handleTemplateSelect} placeholder={t('inv.nf.choose_template', locale)}>
+                  <SelectItem value={NO_TEMPLATE}>{t('inv.nf.no_template_default', locale)}</SelectItem>
                   {templates.map(tpl => (
                     <SelectItem key={tpl.id} value={tpl.id}>
                       {tpl.nom} {tpl.devise_defaut ? `· ${tpl.devise_defaut}` : ""} {tpl.tva_defaut !== undefined ? `· TVA ${tpl.tva_defaut}%` : ""}
@@ -755,7 +773,7 @@ function NouvelleFactureContent() {
                   ))}
                 </Sel>
               </div>
-              {templateId && templateId !== "none" && (() => {
+              {templateId && templateId !== NO_TEMPLATE && (() => {
                 const tpl = templates.find(tp => tp.id === templateId)
                 return tpl ? (
                   <div className="flex items-center gap-3 text-sm text-gray-600">
@@ -765,7 +783,7 @@ function NouvelleFactureContent() {
                 ) : null
               })()}
             </div>
-            {templateId && templateId !== "none" && <p className="text-xs text-green-600 mt-2">{t('inv.nf.template_applied', locale)}</p>}
+            {templateId && templateId !== NO_TEMPLATE && <p className="text-xs text-green-600 mt-2">{t('inv.nf.template_applied', locale)}</p>}
           </CardContent>
         </Card>
       )}
@@ -777,9 +795,14 @@ function NouvelleFactureContent() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Field label={t('inv.nf.invoice_number_label', locale)}><Input value={numeroFacture} onChange={e => setNumeroFacture(e.target.value)} className="font-mono" /></Field>
             <Field label={t('inv.nf.invoice_date', locale)}><Input type="date" value={dateFacture} onChange={e => {
-              setDateFacture(e.target.value)
-              if (echeancePreset === 0) setDateEcheance(e.target.value)
-              else if (echeancePreset > 0) setDateEcheance(addDays(e.target.value, echeancePreset))
+              const v = e.target.value
+              setDateFacture(v)
+              // Champ vidé (ou date partielle pendant la saisie) → on laisse
+              // l'échéance telle quelle plutôt que de la recalculer sur une
+              // date invalide.
+              if (!toISODate(v)) return
+              if (echeancePreset === 0) setDateEcheance(v)
+              else if (echeancePreset > 0) setDateEcheance(addDays(v, echeancePreset))
             }} /></Field>
             <Field label={t('inv.nf.due_date_label', locale)}><Input type="date" value={dateEcheance} onChange={e => { setDateEcheance(e.target.value); setEcheancePreset(-1) }} /></Field>
             <Field label={t('inv.nf.reference', locale)}><Input value={reference} onChange={e => setReference(e.target.value)} placeholder={t('inv.nf.reference_placeholder', locale)} /></Field>
