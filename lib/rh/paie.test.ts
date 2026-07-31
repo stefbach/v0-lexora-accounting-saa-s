@@ -47,6 +47,33 @@ describe("calculerPAYE — barème cumulatif × 13", () => {
   })
 })
 
+describe("Remboursement frais km (other_refund) — versé mais NON imposable", () => {
+  const base: ElementsBrut = { salaire_base: 60000 }
+  const avecKm: ElementsBrut = { salaire_base: 60000, other_refund: 976 }
+
+  it("le km est bien versé (net augmente exactement du montant km)", () => {
+    const sans = calculerBulletin(base, P, 26)
+    const avec = calculerBulletin(avecKm, P, 26)
+    expect(avec.salaire_net - sans.salaire_net).toBe(976)
+  })
+
+  it("le km n'est PAS taxé (CSG/NSF/PAYE identiques avec ou sans km)", () => {
+    const sans = calculerBulletin(base, P, 26)
+    const avec = calculerBulletin(avecKm, P, 26)
+    expect(avec.csg_salarie).toBe(sans.csg_salarie)
+    expect(avec.nsf_salarie).toBe(sans.nsf_salarie)
+    expect(avec.paye).toBe(sans.paye)
+    expect(avec.total_deductions).toBe(sans.total_deductions)
+  })
+
+  it("le km n'alourdit pas les charges patronales (CSG/NSF employeur identiques)", () => {
+    const sans = calculerBulletin(base, P, 26)
+    const avec = calculerBulletin(avecKm, P, 26)
+    expect(avec.csg_patronal).toBe(sans.csg_patronal)
+    expect(avec.nsf_patronal).toBe(sans.nsf_patronal)
+  })
+})
+
 describe("calculerNIT — crédit bas revenus", () => {
   it("éligible si 0 < revenu ≤ 25 000", () => {
     expect(calculerNIT(20000)).toEqual({ eligible: true, montant: 1000 })

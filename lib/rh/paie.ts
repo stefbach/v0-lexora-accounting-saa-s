@@ -166,7 +166,12 @@ export function calculerBulletin(
   const salaire_brut = salaire_brut_base + eoy_bonus
 
   // Base PAYE = salaire_brut_base (basic + allowances + CIL) - deductionAbsence.
-  const base_paye = Math.max(0, salaire_brut_base - (deductionAbsence || 0))
+  // NON IMPOSABLE — `other_refund` correspond au remboursement de frais
+  // (frais kilométriques approuvés du mois). C'est un remboursement de
+  // dépenses, PAS une émolument : il est bien versé à l'employé (inclus
+  // dans salaire_brut / salaire_net) mais retiré de la base CSG/NSF/PAYE
+  // et des charges patronales. Sans ce retrait, le km était taxé à tort.
+  const base_paye = Math.max(0, salaire_brut_base - other_refund - (deductionAbsence || 0))
 
   // FIX juin 2026 — Base CSG/NSF alignée sur base_paye, conformément aux
   // CSG Regulations 2020 s.150 modifiée (toutes "monthly emoluments" sont
