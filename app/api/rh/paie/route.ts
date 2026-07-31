@@ -800,10 +800,15 @@ export async function POST(request: Request) {
       let joursSickLeaveSingle = 0
       let joursUnpaidLeaveSingle = 0
       for (const c of congesApprouves || []) {
-        const n = countLeaveDaysInPeriod(
+        let n = countLeaveDaysInPeriod(
           c.date_debut, c.date_fin, periodeStartSingle, periodeEndSingle,
           emp, joursFeriesSetSingle
         )
+        // Demi-journée : le congé ne vaut que 0,5 jour (countLeaveDaysInPeriod
+        // renvoie 1 jour ouvré plein). Sans ça, un demi-congé non payé (UL)
+        // était déduit comme un jour entier (cas Suzelle : 1 UL + 1 demi-UL
+        // comptés 2j au lieu de 1,5j).
+        if (c.demi_journee === true && n > 0) n = 0.5
         if (n <= 0) continue
         // INTÉGRATION 3 — normalisation defensive trim + upper (idem batch).
         const tc = String(c.type_conge || '').trim().toUpperCase()
@@ -1760,10 +1765,12 @@ export async function POST(request: Request) {
         let joursUnpaidLeave = 0
         let joursMatPat = 0
         for (const c of congesApprouves || []) {
-          const n = countLeaveDaysInPeriod(
+          let n = countLeaveDaysInPeriod(
             c.date_debut, c.date_fin, periodeStart, periodeEnd,
             emp, joursFeriesSet
           )
+          // Demi-journée : 0,5 jour au lieu d'un jour ouvré plein (voir chemin single).
+          if (c.demi_journee === true && n > 0) n = 0.5
           if (n <= 0) continue
           const tc = String(c.type_conge || '').trim().toUpperCase()
           if (tc === 'SL') joursSickLeave += n
