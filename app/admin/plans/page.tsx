@@ -22,8 +22,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { t, getLocale } from "@/lib/i18n"
 
 type TypeCible = 'dirigeant' | 'comptable'
-type Pack = 'compta' | 'paie' | 'bundle' | 'addon' | 'cabinet' | 'legacy' | null
-type Taille = 'solo' | 'petite' | 'pme' | 'grande' | null
+type Pack = 'societe' | 'gbc' | 'compta' | 'paie' | 'bundle' | 'addon' | 'cabinet' | 'legacy' | null
+type Taille = 'solo' | 'petite' | 'pme' | 'grande' | 'enterprise' | null
 
 interface Plan {
   id: string
@@ -50,6 +50,8 @@ const MODULE_KEYS = [
   'documents', 'comptabilite', 'facturation', 'rh', 'fiscal', 'alertes_ia', 'tibok', 'telegram',
   // Sous-modules avancés (internes, non listés sur /tarifs)
   'juridique', 'etats_financiers', 'employe_portal',
+  // Bloc Global Business — réservé aux plans du pack `gbc`
+  'gbc', 'ifrs_avance',
 ] as const
 function moduleLabel(key: string, locale: any): string {
   const k = `adm2.plans.mod_${key}`
@@ -107,7 +109,7 @@ export default function AdminPlansPage() {
 
   // Groupage par pack et par taille pour la vue grille.
   const grid = useMemo(() => {
-    const byPack: Record<string, Record<string, Plan>> = { compta: {}, paie: {}, bundle: {} }
+    const byPack: Record<string, Record<string, Plan>> = { societe: {}, gbc: {}, compta: {}, paie: {}, bundle: {} }
     const addons: Plan[] = []
     const cabinets: Plan[] = []
     const legacy: Plan[] = []
@@ -124,7 +126,7 @@ export default function AdminPlansPage() {
   }, [visible])
 
   const stats = useMemo(() => ({
-    packs_actifs: ['compta', 'paie', 'bundle']
+    packs_actifs: ['societe', 'gbc', 'compta', 'paie', 'bundle']
       .map(p => Object.values(grid.byPack[p] || {}).filter(x => x?.actif).length)
       .reduce((s, n) => s + n, 0),
     addons_actifs: grid.addons.filter(p => p.actif).length,
@@ -233,6 +235,14 @@ export default function AdminPlansPage() {
         <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>
       ) : (
         <div className="space-y-6">
+          <PackGrid title={t('adm2.plans.pack_societe_title', locale)} subtitle={t('adm2.plans.pack_societe_sub', locale)}
+                    icon={Briefcase} color="#D4AF37" locale={locale}
+                    plans={grid.byPack.societe} onEdit={setEdit} onToggle={toggleActif} onDelete={del} deletingId={deletingId} />
+
+          <PackGrid title={t('adm2.plans.pack_gbc_title', locale)} subtitle={t('adm2.plans.pack_gbc_sub', locale)}
+                    icon={Briefcase} color="#7c3aed" locale={locale}
+                    plans={grid.byPack.gbc} onEdit={setEdit} onToggle={toggleActif} onDelete={del} deletingId={deletingId} />
+
           <PackGrid title={t('adm2.plans.pack_compta_title', locale)} subtitle={t('adm2.plans.pack_compta_sub', locale)}
                     icon={Briefcase} color="#2563eb" locale={locale}
                     plans={grid.byPack.compta} onEdit={setEdit} onToggle={toggleActif} onDelete={del} deletingId={deletingId} />
@@ -267,7 +277,7 @@ export default function AdminPlansPage() {
 function tailleMeta(key: string, locale: any): { label: string; sub: string } {
   return { label: t(`adm2.plans.size_${key}`, locale), sub: t(`adm2.plans.size_${key}_sub`, locale) }
 }
-const TAILLES_ORDER = ['solo', 'petite', 'pme', 'grande']
+const TAILLES_ORDER = ['solo', 'petite', 'pme', 'grande', 'enterprise']
 
 function PackGrid({ title, subtitle, icon: Icon, color, locale, plans, onEdit, onToggle, onDelete, deletingId }: {
   title: string; subtitle: string; icon: any; color: string; locale: any
@@ -285,7 +295,7 @@ function PackGrid({ title, subtitle, icon: Icon, color, locale, plans, onEdit, o
           <p className="text-xs text-gray-500">{subtitle}</p>
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
         {TAILLES_ORDER.map(size => {
           const p = plans[size]
           const meta = tailleMeta(size, locale)
