@@ -62,10 +62,14 @@ import {
   HeartPulse,
 } from "lucide-react"
 
-// Affichage des tarifs sur la page d'accueil. Masqué volontairement (juin 2026) :
-// lancement trop tôt + repositionnement tarifaire à la hausse en cours.
-// Repasser à `true` pour réafficher la section Offres + le comparateur de prix.
-const SHOW_PRICING = false
+// Affichage des tarifs sur la page d'accueil.
+//
+// Masqué en juin 2026 le temps du repositionnement tarifaire à la hausse.
+// Ce repositionnement est fait (Package Société + Package GBC/IFRS, migration
+// 467) et le comparateur lit désormais ses prix depuis lib/pricing/packages.ts
+// plutôt qu'une copie manuelle : l'accueil ne peut plus afficher une grille
+// périmée. Réactivé.
+const SHOW_PRICING = true
 
 export default function HomePage() {
   const locale = getLocale()

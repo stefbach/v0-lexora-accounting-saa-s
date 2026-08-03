@@ -22,6 +22,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { t } from "@/lib/i18n"
 import { AnimatedCounter } from "@/components/AnimatedCounter"
+import { SOCIETE_TIERS } from "@/lib/pricing/packages"
 import {
   StaggerGroup,
   StaggerItem,
@@ -53,39 +54,50 @@ type Tier = {
   cta?: { key: string; href: string }
 }
 
+/**
+ * Les prix viennent de lib/pricing/packages.ts — source de vérité partagée
+ * avec /tarifs et la migration 467. Ils étaient auparavant recopiés à la main
+ * ici, et cette copie portait encore l'ancienne grille bundle_* (2 720 /
+ * 4 960 / 10 560 / 21 200) après la refonte : le comparateur de l'accueil
+ * aurait affiché des tarifs abandonnés.
+ *
+ * Le palier Enterprise n'apparaît pas : son prix est négocié, il n'a rien à
+ * faire dans une grille de comparaison.
+ */
+const [ESSENTIEL, CROISSANCE, PME, CORPORATE] = SOCIETE_TIERS
+
 const TIERS: Tier[] = [
   {
-    id: "solo",
+    id: "essentiel",
     icon: Rocket,
-    badgeKey: "cmkt.pr.solo.badge",
-    nameKey: "cmkt.pr.solo.name",
-    audienceKey: "cmkt.pr.solo.audience",
-    monthly: 2720,
+    badgeKey: "cmkt.pr.essentiel.badge",
+    nameKey: "cmkt.pr.essentiel.name",
+    audienceKey: "cmkt.pr.essentiel.audience",
+    monthly: ESSENTIEL.monthly,
     featureKeys: [
-      "cmkt.pr.solo.f1",
-      "cmkt.pr.solo.f2",
-      "cmkt.pr.solo.f3",
-      "cmkt.pr.solo.f4",
-      "cmkt.pr.solo.f5",
-      "cmkt.pr.solo.f6",
-      "cmkt.pr.solo.f7",
+      "cmkt.pr.essentiel.f1",
+      "cmkt.pr.essentiel.f2",
+      "cmkt.pr.essentiel.f3",
+      "cmkt.pr.essentiel.f4",
+      "cmkt.pr.essentiel.f5",
+      "cmkt.pr.essentiel.f6",
     ],
   },
   {
-    id: "growth",
+    id: "croissance",
     icon: TrendingUp,
-    badgeKey: "cmkt.pr.growth.badge",
-    nameKey: "cmkt.pr.growth.name",
-    audienceKey: "cmkt.pr.growth.audience",
-    monthly: 4960,
+    badgeKey: "cmkt.pr.croissance.badge",
+    nameKey: "cmkt.pr.croissance.name",
+    audienceKey: "cmkt.pr.croissance.audience",
+    monthly: CROISSANCE.monthly,
+    popular: true,
     featureKeys: [
-      "cmkt.pr.growth.f1",
-      "cmkt.pr.growth.f2",
-      "cmkt.pr.growth.f3",
-      "cmkt.pr.growth.f4",
-      "cmkt.pr.growth.f5",
-      "cmkt.pr.growth.f6",
-      "cmkt.pr.growth.f7",
+      "cmkt.pr.croissance.f1",
+      "cmkt.pr.croissance.f2",
+      "cmkt.pr.croissance.f3",
+      "cmkt.pr.croissance.f4",
+      "cmkt.pr.croissance.f5",
+      "cmkt.pr.croissance.f6",
     ],
   },
   {
@@ -94,8 +106,7 @@ const TIERS: Tier[] = [
     badgeKey: "cmkt.pr.pme.badge",
     nameKey: "cmkt.pr.pme.name",
     audienceKey: "cmkt.pr.pme.audience",
-    monthly: 10560,
-    popular: true,
+    monthly: PME.monthly,
     featureKeys: [
       "cmkt.pr.pme.f1",
       "cmkt.pr.pme.f2",
@@ -103,31 +114,23 @@ const TIERS: Tier[] = [
       "cmkt.pr.pme.f4",
       "cmkt.pr.pme.f5",
       "cmkt.pr.pme.f6",
-      "cmkt.pr.pme.f7",
-      "cmkt.pr.pme.f8",
     ],
   },
   {
-    id: "enterprise",
+    id: "corporate",
     icon: Building2,
-    badgeKey: "cmkt.pr.enterprise.badge",
-    nameKey: "cmkt.pr.enterprise.name",
-    audienceKey: "cmkt.pr.enterprise.audience",
-    monthly: 21200,
+    badgeKey: "cmkt.pr.corporate.badge",
+    nameKey: "cmkt.pr.corporate.name",
+    audienceKey: "cmkt.pr.corporate.audience",
+    monthly: CORPORATE.monthly,
     featureKeys: [
-      "cmkt.pr.enterprise.f1",
-      "cmkt.pr.enterprise.f2",
-      "cmkt.pr.enterprise.f3",
-      "cmkt.pr.enterprise.f4",
-      "cmkt.pr.enterprise.f5",
-      "cmkt.pr.enterprise.f6",
-      "cmkt.pr.enterprise.f7",
-      "cmkt.pr.enterprise.f8",
+      "cmkt.pr.corporate.f1",
+      "cmkt.pr.corporate.f2",
+      "cmkt.pr.corporate.f3",
+      "cmkt.pr.corporate.f4",
+      "cmkt.pr.corporate.f5",
+      "cmkt.pr.corporate.f6",
     ],
-    cta: {
-      key: "cmkt.pr.enterprise.cta",
-      href: "/inscription?role=enterprise",
-    },
   },
 ]
 
