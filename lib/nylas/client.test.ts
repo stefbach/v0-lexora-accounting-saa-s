@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { nylasRedirectUri, getNylasGrantStatus } from './client'
+import { nylasRedirectUri, getNylasGrantStatus, probeNylasApplication, NYLAS_REGIONS } from './client'
 
 /**
  * Ces deux fonctions portent le diagnostic de /api/nylas/diag.
@@ -13,7 +13,7 @@ import { nylasRedirectUri, getNylasGrantStatus } from './client'
  * la marquer `active`.
  */
 
-const ENV_KEYS = ['NEXT_PUBLIC_APP_URL', 'NYLAS_API_KEY', 'NYLAS_API_URI'] as const
+const ENV_KEYS = ['NEXT_PUBLIC_APP_URL', 'NYLAS_API_KEY', 'NYLAS_API_URI', 'NYLAS_CLIENT_ID'] as const
 const saved: Record<string, string | undefined> = {}
 
 beforeEach(() => {
@@ -121,5 +121,58 @@ describe('getNylasGrantStatus', () => {
     mockFetch(500, 'x'.repeat(1000))
     const s = await getNylasGrantStatus('grant-1')
     expect(s.error).toHaveLength(200)
+  })
+})
+
+describe('probeNylasApplication', () => {
+  it('interroge l’hôte de la région demandée, pas NYLAS_API_URI', async () => {
+    // Le but de la sonde est précisément de tester l'AUTRE région que celle
+    // configurée : elle ne doit donc pas se laisser dicter l'hôte par l'env.
+    process.env.NYLAS_API_URI = NYLAS_REGIONS.us
+    const fn = mockFetch(200, { data: { application_id: 'app-1' } })
+    await probeNylasApplication('eu')
+    expect(fn.mock.calls[0][0]).toBe(`${NYLAS_REGIONS.eu}/v3/applications`)
+  })
+
+  it('signale que le client_id configuré est celui de l’application', async () => {
+    process.env.NYLAS_CLIENT_ID = 'app-1'
+    mockFetch(200, { data: { application_id: 'app-1' } })
+    const p = await probeNylasApplication('us')
+    expect(p.httpStatus).toBe(200)
+    expect(p.applicationId).toBe('app-1')
+    expect(p.correspondAuClientId).toBe(true)
+    expect(p.error).toBeNull()
+  })
+
+  it('signale un client_id qui n’est pas celui de la clé serveur', async () => {
+    // Clé serveur et client_id issus de deux applications différentes : la
+    // région est bonne, mais /v3/connect/auth renvoie quand même 50002.
+    process.env.NYLAS_CLIENT_ID = 'app-autre'
+    mockFetch(200, { data: { application_id: 'app-1' } })
+    const p = await probeNylasApplication('us')
+    expect(p.correspondAuClientId).toBe(false)
+  })
+
+  it('ne conclut rien quand le client_id n’est pas configuré', async () => {
+    delete process.env.NYLAS_CLIENT_ID
+    mockFetch(200, { data: { application_id: 'app-1' } })
+    const p = await probeNylasApplication('us')
+    expect(p.correspondAuClientId).toBeNull()
+  })
+
+  it('remonte une région qui ne reconnaît pas la clé', async () => {
+    // Cas réel visé : l'application vit en EU, NYLAS_API_URI pointe sur US.
+    mockFetch(401, { error: { message: 'unauthorized' } })
+    const p = await probeNylasApplication('us')
+    expect(p.httpStatus).toBe(401)
+    expect(p.applicationId).toBeNull()
+    expect(p.error).toContain('unauthorized')
+  })
+
+  it('ne jette pas si l’hôte est injoignable', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('ENOTFOUND') }))
+    const p = await probeNylasApplication('eu')
+    expect(p.httpStatus).toBe(0)
+    expect(p.error).toContain('ENOTFOUND')
   })
 })

@@ -96,6 +96,60 @@ export function nylasRedirectUri(fallbackOrigin: string): string {
   return `${base}/api/auth/nylas/callback`
 }
 
+/** Hôtes régionaux Nylas v3. Une application n'existe que dans UNE région. */
+export const NYLAS_REGIONS = {
+  us: 'https://api.us.nylas.com',
+  eu: 'https://api.eu.nylas.com',
+} as const
+
+export type NylasApplicationProbe = {
+  region: keyof typeof NYLAS_REGIONS
+  host: string
+  httpStatus: number
+  /** `application_id` renvoyé par Nylas — c'est le client_id de l'application. */
+  applicationId: string | null
+  /** true si cet `application_id` est bien celui configuré en NYLAS_CLIENT_ID. */
+  correspondAuClientId: boolean | null
+  error: string | null
+}
+
+/**
+ * Interroge `/v3/applications` dans une région donnée avec la clé serveur.
+ *
+ * C'est le seul test qui distingue les deux causes de
+ * « Application not found: 404/50002 » renvoyé par `/v3/connect/auth` :
+ *   - l'application vit dans l'autre région (NYLAS_API_URI mal réglée) ;
+ *   - le NYLAS_CLIENT_ID configuré n'est pas celui de l'application à
+ *     laquelle appartient la clé serveur.
+ *
+ * Les deux régions renvoient un 50002 identique face à un client_id inconnu :
+ * le message d'erreur seul ne permet pas de trancher.
+ */
+export async function probeNylasApplication(region: keyof typeof NYLAS_REGIONS): Promise<NylasApplicationProbe> {
+  const host = NYLAS_REGIONS[region]
+  const cid = clientId()
+  try {
+    const res = await fetch(`${host}/v3/applications`, { headers: authHeaders() })
+    const raw = await res.text().catch(() => '')
+    let parsed: { data?: { application_id?: string } } = {}
+    try { parsed = JSON.parse(raw) } catch { /* réponse non JSON */ }
+    const applicationId = parsed.data?.application_id || null
+    return {
+      region,
+      host,
+      httpStatus: res.status,
+      applicationId,
+      correspondAuClientId: applicationId && cid ? applicationId === cid : null,
+      error: res.ok ? null : raw.slice(0, 200),
+    }
+  } catch (e) {
+    return {
+      region, host, httpStatus: 0, applicationId: null, correspondAuClientId: null,
+      error: e instanceof Error ? e.message : 'appel impossible',
+    }
+  }
+}
+
 export type NylasGrantStatus = {
   /** Code HTTP renvoyé par Nylas ; 200 = le grant est vivant. */
   httpStatus: number
