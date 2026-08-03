@@ -156,18 +156,18 @@ export default function InscriptionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0B0F2E] via-[#1a2659] to-[#0B0F2E] py-12 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-white via-[#F5F8FD] to-white py-12 px-4">
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 text-white/80 hover:text-white">
-            <LexoraLogo size="lg" />
+          <Link href="/" className="inline-flex items-center gap-2 text-[#42506B] hover:text-[#0B0F2E]">
+            <LexoraLogo size="lg" tone="light" />
           </Link>
-          <h1 className="text-3xl md:text-4xl font-bold text-white mt-6">
+          <h1 className="text-3xl md:text-4xl font-bold text-[#0B0F2E] mt-6">
             {etape === 'success' ? t('samsc.insc_success_title', locale) : t('samsc.insc_create_account', locale)}
           </h1>
           {etape !== 'success' && (
-            <p className="text-white/70 mt-2 text-sm">
+            <p className="text-[#42506B] mt-2 text-sm">
               {t('samsc.insc_lead', locale)}
             </p>
           )}
@@ -405,7 +405,7 @@ export default function InscriptionPage() {
           )}
         </div>
 
-        <p className="text-center text-white/50 text-xs mt-6">
+        <p className="text-center text-[#64708C] text-xs mt-6">
           {t('samsc.insc_privacy_note', locale)} <Link href="/protection-donnees" className="underline hover:text-white/80">{t('samsc.insc_privacy_link', locale)}</Link>.
         </p>
       </div>
@@ -417,11 +417,11 @@ function StepDot({ active, done, label }: { active: boolean; done: boolean; labe
   return (
     <div className="flex flex-col items-center gap-1">
       <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-        done ? 'bg-emerald-500 text-white' : active ? 'bg-[#D4AF37] text-[#0B0F2E]' : 'bg-white/20 text-white/60'
+        done ? 'bg-emerald-500 text-white' : active ? 'bg-[#D4AF37] text-[#0B0F2E]' : 'bg-white/20 text-[#64708C]'
       }`}>
         {done ? <Check className="h-4 w-4" /> : (label[0])}
       </div>
-      <span className={`text-[10px] font-medium ${active ? 'text-white' : 'text-white/60'}`}>{label}</span>
+      <span className={`text-[10px] font-medium ${active ? 'text-white' : 'text-[#64708C]'}`}>{label}</span>
     </div>
   )
 }

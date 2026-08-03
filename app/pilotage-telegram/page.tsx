@@ -28,6 +28,15 @@ import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
+/* Surfaces claires — alignées sur lib/theme/brand.ts. L'or ne passant pas
+ * le contraste AA sur blanc, GOLD_TEXT prend le relais dès qu'il s'agit
+ * de texte ; GOLD reste réservé aux aplats et bordures. */
+const PAGE_BG = "#FFFFFF"
+const PAGE_ALT = "#F5F8FD"
+const SURFACE = "#FFFFFF"
+const BORDER = "#E3E9F3"
+const INK_BODY = "#42506B"
+const GOLD_TEXT = "#8A6D1B"
 
 /**
  * Services orchestrés depuis Telegram. Catégorisés par domaine
@@ -73,15 +82,15 @@ const CONVERSATIONS = [
 export default function PilotageTelegramPage() {
   const locale = getLocale()
   return (
-    <div className="min-h-screen text-white" style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #1a2659 50%, ${NAVY} 100%)` }}>
+    <div className="min-h-screen text-[#0B0F2E]" style={{ background: `linear-gradient(135deg, ${PAGE_BG} 0%, ${PAGE_ALT} 50%, ${PAGE_BG} 100%)` }}>
       {/* Nav */}
-      <nav className="border-b border-white/10 backdrop-blur-md sticky top-0 z-50" style={{ backgroundColor: `${NAVY}E6` }}>
+      <nav className="border-b backdrop-blur-md sticky top-0 z-50" style={{ backgroundColor: "rgba(255,255,255,0.92)", borderColor: BORDER }}>
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 hover:opacity-90">
-            <LexoraLogo size="md" />
+            <LexoraLogo size="md" tone="light" />
           </Link>
           <div className="flex items-center gap-4 text-sm">
-            <Link href="/tarifs" className="text-white/80 hover:text-white">{t('tg.land.nav.pricing', locale)}</Link>
+            <Link href="/tarifs" className="text-[#42506B] hover:text-[#0B0F2E]">{t('tg.land.nav.pricing', locale)}</Link>
             <Link
               href="/inscription"
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg font-semibold hover:opacity-95"
@@ -111,7 +120,7 @@ export default function PilotageTelegramPage() {
           {/* Badge */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium"
-                 style={{ backgroundColor: `${GOLD}15`, borderColor: `${GOLD}55`, color: GOLD }}>
+                 style={{ backgroundColor: `${GOLD}15`, borderColor: `${GOLD}55`, color: GOLD_TEXT }}>
               <Briefcase className="h-3.5 w-3.5" />
               <span>{t('tg.land.badge', locale)}</span>
             </div>
@@ -139,9 +148,9 @@ export default function PilotageTelegramPage() {
                     style={{
                       left: l.x,
                       top: l.y,
-                      backgroundColor: `${NAVY}D0`,
+                      backgroundColor: SURFACE,
                       borderColor: `${GOLD}77`,
-                      color: GOLD,
+                      color: GOLD_TEXT,
                       animationDuration: '3.5s',
                     }}
                   >
@@ -157,13 +166,13 @@ export default function PilotageTelegramPage() {
           <div className="relative text-center mt-6 md:-mt-4">
             <h1 className="text-4xl md:text-6xl font-black leading-tight">
               {t('tg.land.hero.title1', locale)}<br />
-              <span className="bg-gradient-to-r from-yellow-300 to-yellow-200 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-[#8A6D1B] to-[#0B0F2E] bg-clip-text text-transparent">
                 {t('tg.land.hero.title2', locale)}
               </span>
             </h1>
 
-            <p className="text-lg md:text-xl text-white/80 mt-6 max-w-3xl mx-auto leading-relaxed">
-              {t('tg.land.hero.subtitle.a', locale)} <strong className="text-white">{t('tg.land.hero.subtitle.b', locale)}</strong> {t('tg.land.hero.subtitle.c', locale)} <strong className="text-white">{t('tg.land.hero.subtitle.d', locale)}</strong>.
+            <p className="text-lg md:text-xl text-[#42506B] mt-6 max-w-3xl mx-auto leading-relaxed">
+              {t('tg.land.hero.subtitle.a', locale)} <strong className="text-[#0B0F2E]">{t('tg.land.hero.subtitle.b', locale)}</strong> {t('tg.land.hero.subtitle.c', locale)} <strong className="text-[#0B0F2E]">{t('tg.land.hero.subtitle.d', locale)}</strong>.
             </p>
 
             <div className="mt-10 flex items-center justify-center gap-3 flex-wrap">
@@ -176,7 +185,7 @@ export default function PilotageTelegramPage() {
               </Link>
               <Link
                 href="/tarifs"
-                className="inline-flex items-center gap-2 border border-white/30 text-white px-6 py-3 rounded-lg hover:bg-white/10"
+                className="inline-flex items-center gap-2 border border-white/30 text-[#0B0F2E] px-6 py-3 rounded-lg hover:bg-[#F5F8FD]"
               >
                 {t('tg.land.hero.seePricing', locale)} <ChevronRight className="h-4 w-4" />
               </Link>
@@ -190,9 +199,9 @@ export default function PilotageTelegramPage() {
                 { label: t('tg.land.diff.agentsLabel', locale), value: t('tg.land.diff.agentsValue', locale) },
                 { label: t('tg.land.diff.availLabel', locale), value: t('tg.land.diff.availValue', locale) },
               ].map(s => (
-                <div key={s.label} className="rounded-xl p-4 border border-white/10" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
-                  <p className="text-xs uppercase tracking-wider font-semibold" style={{ color: GOLD }}>{s.label}</p>
-                  <p className="text-sm font-bold mt-1.5 text-white">{s.value}</p>
+                <div key={s.label} className="rounded-xl p-4 border border-[#E3E9F3]" style={{ backgroundColor: SURFACE, border: `1px solid ${BORDER}` }}>
+                  <p className="text-xs uppercase tracking-wider font-semibold" style={{ color: GOLD_TEXT }}>{s.label}</p>
+                  <p className="text-sm font-bold mt-1.5 text-[#0B0F2E]">{s.value}</p>
                 </div>
               ))}
             </div>
@@ -229,15 +238,15 @@ export default function PilotageTelegramPage() {
       />
 
       {/* Agents IA spécialisés */}
-      <section className="px-4 py-16" style={{ backgroundColor: "rgba(0,0,0,0.25)" }}>
+      <section className="px-4 py-16" style={{ backgroundColor: PAGE_ALT }}>
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold mb-3"
-                 style={{ backgroundColor: `${GOLD}1F`, color: GOLD }}>
+                 style={{ backgroundColor: `${GOLD}1F`, color: GOLD_TEXT }}>
               <Bot className="h-3.5 w-3.5" /> {t('tg.land.agents.badge', locale).toUpperCase()}
             </div>
             <h2 className="text-3xl md:text-4xl font-bold">{t('tg.land.agents.title', locale)}</h2>
-            <p className="text-white/70 mt-3 max-w-2xl mx-auto">
+            <p className="text-[#42506B] mt-3 max-w-2xl mx-auto">
               {t('tg.land.agents.subtitle', locale)}
             </p>
           </div>
@@ -246,15 +255,15 @@ export default function PilotageTelegramPage() {
             {AGENTS.map(a => {
               const Icon = a.icon
               return (
-                <div key={a.nom} className="rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 p-5">
+                <div key={a.nom} className="rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-[#E3E9F3] p-5">
                   <div className="flex items-start gap-3">
                     <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg flex-shrink-0"
                          style={{ backgroundColor: `${GOLD}20` }}>
-                      <Icon className="h-5 w-5" style={{ color: GOLD }} />
+                      <Icon className="h-5 w-5" style={{ color: GOLD_TEXT }} />
                     </div>
                     <div>
                       <h3 className="font-bold">{a.nom}</h3>
-                      <p className="text-xs text-white/70 mt-0.5">{t(a.roleKey, locale)}</p>
+                      <p className="text-xs text-[#42506B] mt-0.5">{t(a.roleKey, locale)}</p>
                     </div>
                   </div>
                 </div>
@@ -269,7 +278,7 @@ export default function PilotageTelegramPage() {
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-10">
             <h2 className="text-3xl md:text-4xl font-bold">{t('tg.land.conv.title', locale)}</h2>
-            <p className="text-white/70 mt-3">{t('tg.land.conv.subtitle', locale)}</p>
+            <p className="text-[#42506B] mt-3">{t('tg.land.conv.subtitle', locale)}</p>
           </div>
 
           <div className="space-y-5">
@@ -278,16 +287,16 @@ export default function PilotageTelegramPage() {
               return (
                 <div key={i} className="space-y-2">
                   <div className="flex justify-end">
-                    <div className="max-w-md border border-white/20 rounded-2xl rounded-br-sm px-4 py-2.5 text-sm flex items-center gap-2"
+                    <div className="max-w-md border border-[#CBD5E8] rounded-2xl rounded-br-sm px-4 py-2.5 text-sm flex items-center gap-2"
                          style={{ background: `linear-gradient(135deg, ${NAVY}, #1a2659)` }}>
-                      <Icon className="h-4 w-4 flex-shrink-0" style={{ color: GOLD }} />
+                      <Icon className="h-4 w-4 flex-shrink-0" style={{ color: GOLD_TEXT }} />
                       <span>{t(c.userKey, locale)}</span>
                     </div>
                   </div>
                   <div className="flex justify-start">
                     <div className="max-w-md border rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm"
                          style={{ backgroundColor: `${GOLD}10`, borderColor: `${GOLD}55` }}>
-                      <p className="text-xs font-semibold mb-1 flex items-center gap-1" style={{ color: GOLD }}>
+                      <p className="text-xs font-semibold mb-1 flex items-center gap-1" style={{ color: GOLD_TEXT }}>
                         <Bot className="h-3 w-3" /> {t('tg.land.lexora', locale)}
                       </p>
                       {t(c.botKey, locale)}
@@ -301,11 +310,11 @@ export default function PilotageTelegramPage() {
       </section>
 
       {/* Activation */}
-      <section className="px-4 py-16" style={{ backgroundColor: "rgba(0,0,0,0.25)" }}>
+      <section className="px-4 py-16" style={{ backgroundColor: PAGE_ALT }}>
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-10">
             <h2 className="text-3xl md:text-4xl font-bold">{t('tg.land.act.title', locale)}</h2>
-            <p className="text-white/70 mt-3">{t('tg.land.act.subtitle', locale)}</p>
+            <p className="text-[#42506B] mt-3">{t('tg.land.act.subtitle', locale)}</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-4">
@@ -316,13 +325,13 @@ export default function PilotageTelegramPage() {
             ].map(step => {
               const Icon = step.icon
               return (
-                <div key={step.n} className="rounded-2xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 p-6 text-center">
+                <div key={step.n} className="rounded-2xl bg-gradient-to-br from-white/10 to-white/5 border border-[#E3E9F3] p-6 text-center">
                   <div className="inline-flex items-center justify-center w-14 h-14 rounded-full mb-3" style={{ backgroundColor: `${GOLD}20` }}>
-                    <Icon className="h-7 w-7" style={{ color: GOLD }} />
+                    <Icon className="h-7 w-7" style={{ color: GOLD_TEXT }} />
                   </div>
-                  <p className="text-xs font-bold tracking-wider" style={{ color: GOLD }}>{t('tg.land.act.step', locale).toUpperCase()} {step.n}</p>
+                  <p className="text-xs font-bold tracking-wider" style={{ color: GOLD_TEXT }}>{t('tg.land.act.step', locale).toUpperCase()} {step.n}</p>
                   <h3 className="text-lg font-bold mt-1">{step.title}</h3>
-                  <p className="text-sm text-white/70 mt-2">{step.desc}</p>
+                  <p className="text-sm text-[#42506B] mt-2">{step.desc}</p>
                 </div>
               )
             })}
@@ -334,7 +343,7 @@ export default function PilotageTelegramPage() {
       <section className="px-4 py-20">
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold">{t('tg.land.cta.title', locale)}</h2>
-          <p className="text-white/70 mt-3 text-lg">
+          <p className="text-[#42506B] mt-3 text-lg">
             {t('tg.land.cta.subtitle', locale)}
           </p>
           <div className="mt-10 flex items-center justify-center gap-3 flex-wrap">
@@ -347,7 +356,7 @@ export default function PilotageTelegramPage() {
             </Link>
             <Link
               href="/tarifs"
-              className="inline-flex items-center gap-2 border border-white/30 text-white px-8 py-3.5 rounded-lg hover:bg-white/10"
+              className="inline-flex items-center gap-2 border border-white/30 text-[#0B0F2E] px-8 py-3.5 rounded-lg hover:bg-[#F5F8FD]"
             >
               {t('tg.land.cta.seePricing', locale)}
             </Link>
@@ -355,8 +364,8 @@ export default function PilotageTelegramPage() {
         </div>
       </section>
 
-      <footer className="border-t border-white/10 py-6 px-4 text-center text-xs text-white/50">
-        <p>© Lexora · <Link href="/cgu" className="hover:text-white/80">{t('tg.land.footer.terms', locale)}</Link> · <Link href="/cgv" className="hover:text-white/80">{t('tg.land.footer.salesTerms', locale)}</Link> · <Link href="/protection-donnees" className="hover:text-white/80">{t('tg.land.footer.privacy', locale)}</Link></p>
+      <footer className="border-t border-[#E3E9F3] py-6 px-4 text-center text-xs text-[#64708C]">
+        <p>© Lexora · <Link href="/cgu" className="hover:text-[#42506B]">{t('tg.land.footer.terms', locale)}</Link> · <Link href="/cgv" className="hover:text-[#42506B]">{t('tg.land.footer.salesTerms', locale)}</Link> · <Link href="/protection-donnees" className="hover:text-[#42506B]">{t('tg.land.footer.privacy', locale)}</Link></p>
       </footer>
     </div>
   )
@@ -375,31 +384,31 @@ function ServicesSection({ eyebrow, title, subtitle, services, alt, locale }: {
   locale: Locale
 }) {
   return (
-    <section className="px-4 py-16 md:py-20" style={alt ? { backgroundColor: "rgba(0,0,0,0.25)" } : undefined}>
+    <section className="px-4 py-16 md:py-20" style={alt ? { backgroundColor: PAGE_ALT } : undefined}>
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-12">
-          <p className="text-xs uppercase tracking-widest font-bold mb-3" style={{ color: GOLD }}>
+          <p className="text-xs uppercase tracking-widest font-bold mb-3" style={{ color: GOLD_TEXT }}>
             {eyebrow}
           </p>
           <h2 className="text-3xl md:text-4xl font-bold">{title}</h2>
-          <p className="text-white/70 mt-3 max-w-2xl mx-auto">{subtitle}</p>
+          <p className="text-[#42506B] mt-3 max-w-2xl mx-auto">{subtitle}</p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-5">
           {services.map(s => {
             const Icon = s.icon
             return (
-              <div key={s.key} className="rounded-2xl bg-white/5 border border-white/10 p-6 hover:border-white/30 transition-colors">
-                <div className="inline-flex items-center justify-center w-11 h-11 rounded-xl mb-4 border border-white/20"
+              <div key={s.key} className="rounded-2xl bg-white border border-[#E3E9F3] p-6 hover:border-white/30 transition-colors">
+                <div className="inline-flex items-center justify-center w-11 h-11 rounded-xl mb-4 border border-[#CBD5E8]"
                      style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
-                  <Icon className="h-5 w-5" style={{ color: GOLD }} />
+                  <Icon className="h-5 w-5" style={{ color: GOLD_TEXT }} />
                 </div>
                 <h3 className="text-lg font-bold">{t(s.titleKey, locale)}</h3>
-                <p className="text-sm text-white/70 mt-2 leading-relaxed">{t(s.descKey, locale)}</p>
+                <p className="text-sm text-[#42506B] mt-2 leading-relaxed">{t(s.descKey, locale)}</p>
                 <ul className="mt-4 space-y-1.5">
                   {s.bullets.map(b => (
-                    <li key={b} className="flex items-start gap-2 text-xs text-white/80">
-                      <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: GOLD }} />
+                    <li key={b} className="flex items-start gap-2 text-xs text-[#42506B]">
+                      <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: GOLD_TEXT }} />
                       <span>{t(b, locale)}</span>
                     </li>
                   ))}

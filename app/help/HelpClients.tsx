@@ -50,14 +50,14 @@ export function HelpHome() {
   const locale = useLocale()
   return (
     <div style={{ background: "#F8F9FC", minHeight: "100vh", fontFamily: FONT }}>
-      <header style={{ background: "#0B0F2E", padding: "48px 24px", color: "#E8EAFC" }}>
+      <header style={{ background: "#F5F8FD", padding: "48px 24px", color: "#0B0F2E", borderBottom: "1px solid #E3E9F3" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <Link href="/" style={{ color: "#A8AFC7", fontSize: 13, textDecoration: "none" }}>&larr; {tr("back", locale)}</Link>
+          <Link href="/" style={{ color: "#4A5670", fontSize: 13, textDecoration: "none" }}>&larr; {tr("back", locale)}</Link>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16 }}>
             <HelpCircle size={28} aria-hidden />
             <h1 style={{ fontSize: 36, fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>{tr("center", locale)}</h1>
           </div>
-          <p style={{ color: "#A8AFC7", marginTop: 12, fontSize: 16, maxWidth: 720 }}>{tr("home_sub", locale)}</p>
+          <p style={{ color: "#4A5670", marginTop: 12, fontSize: 16, maxWidth: 720 }}>{tr("home_sub", locale)}</p>
         </div>
       </header>
       <main style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 24px" }}>
@@ -103,15 +103,15 @@ export function HelpCategoryView({ categorySlug }: { categorySlug: string }) {
   const articles = getArticlesByCategory(categorySlug)
   return (
     <div style={{ background: "#F8F9FC", minHeight: "100vh", fontFamily: FONT }}>
-      <header style={{ background: "#0B0F2E", padding: "32px 24px", color: "#E8EAFC" }}>
+      <header style={{ background: "#F5F8FD", padding: "32px 24px", color: "#0B0F2E", borderBottom: "1px solid #E3E9F3" }}>
         <div style={{ maxWidth: 900, margin: "0 auto" }}>
-          <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "#A8AFC7", display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
-            <Link href="/help" style={{ color: "#A8AFC7", textDecoration: "none" }}>{tr("center", locale)}</Link>
+          <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "#4A5670", display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
+            <Link href="/help" style={{ color: "#4A5670", textDecoration: "none" }}>{tr("center", locale)}</Link>
             <ChevronRight size={14} aria-hidden />
-            <span style={{ color: "#E8EAFC" }}>{catTitle(cat, locale)}</span>
+            <span style={{ color: "#0B0F2E" }}>{catTitle(cat, locale)}</span>
           </nav>
           <h1 style={{ fontSize: 32, fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>{catTitle(cat, locale)}</h1>
-          <p style={{ color: "#A8AFC7", marginTop: 8, fontSize: 15 }}>{catDesc(cat, locale)}</p>
+          <p style={{ color: "#4A5670", marginTop: 8, fontSize: 15 }}>{catDesc(cat, locale)}</p>
         </div>
       </header>
       <main style={{ maxWidth: 900, margin: "0 auto", padding: "32px 24px" }}>
@@ -145,14 +145,14 @@ export function HelpArticleView({ categorySlug, slug }: { categorySlug: string; 
   const related = getArticlesByCategory(categorySlug).filter((a) => a.slug !== slug)
   return (
     <div style={{ background: "#F8F9FC", minHeight: "100vh", fontFamily: FONT }}>
-      <header style={{ background: "#0B0F2E", padding: "28px 24px", color: "#E8EAFC" }}>
+      <header style={{ background: "#F5F8FD", padding: "28px 24px", color: "#0B0F2E", borderBottom: "1px solid #E3E9F3" }}>
         <div style={{ maxWidth: 900, margin: "0 auto" }}>
-          <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "#A8AFC7", display: "flex", alignItems: "center", gap: 6 }}>
-            <Link href="/help" style={{ color: "#A8AFC7", textDecoration: "none" }}>{tr("help_crumb", locale)}</Link>
+          <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "#4A5670", display: "flex", alignItems: "center", gap: 6 }}>
+            <Link href="/help" style={{ color: "#4A5670", textDecoration: "none" }}>{tr("help_crumb", locale)}</Link>
             <ChevronRight size={14} aria-hidden />
-            <Link href={`/help/${cat.slug}`} style={{ color: "#A8AFC7", textDecoration: "none" }}>{catTitle(cat, locale)}</Link>
+            <Link href={`/help/${cat.slug}`} style={{ color: "#4A5670", textDecoration: "none" }}>{catTitle(cat, locale)}</Link>
             <ChevronRight size={14} aria-hidden />
-            <span style={{ color: "#E8EAFC" }}>{artTitle(article, locale)}</span>
+            <span style={{ color: "#0B0F2E" }}>{artTitle(article, locale)}</span>
           </nav>
         </div>
       </header>
