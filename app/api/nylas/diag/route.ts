@@ -104,6 +104,10 @@ export async function GET(req: NextRequest) {
     region_detectee: check.regionDetectee,
     sondes: check.sondes.map((s) => ({
       region: s.region, http: s.httpStatus,
+      // `application_id` EST le client_id attendu : le montrer transforme
+      // « ta valeur est fausse » en « voici celle à coller ». Public par
+      // nature — il figure en clair dans chaque URL d'auth OAuth.
+      application_id: s.applicationId,
       client_id_correspond: s.correspondAuClientId, erreur: s.error,
     })),
     verdict: check.probleme ?? 'Application et région cohérentes.',

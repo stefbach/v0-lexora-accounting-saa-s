@@ -221,7 +221,10 @@ export async function checkNylasApplication(): Promise<NylasApplicationCheck> {
   } else if (reconnue.host !== hoteConfigure) {
     probleme = `L’application Nylas est dans la région « ${reconnue.region} », mais NYLAS_API_URI pointe sur ${hoteConfigure}. Régler NYLAS_API_URI sur ${reconnue.host} côté Vercel, puis redéployer.`
   } else if (reconnue.correspondAuClientId === false) {
-    probleme = 'NYLAS_CLIENT_ID ne correspond pas à l’application à laquelle appartient NYLAS_API_KEY. Reprendre les deux valeurs dans le tableau de bord Nylas.'
+    // On connaît la bonne valeur : la donner évite un aller-retour dans le
+    // tableau de bord. Un client_id n'est pas un secret — il transite en clair
+    // dans chaque URL d'auth OAuth.
+    probleme = `NYLAS_CLIENT_ID ne correspond pas à l’application à laquelle appartient NYLAS_API_KEY. Valeur attendue : ${reconnue.applicationId}. La corriger côté Vercel, puis redéployer.`
   }
 
   return { regionDetectee: reconnue?.region ?? null, hoteConfigure, sondes, probleme }
