@@ -57,6 +57,8 @@ export async function updateSession(request: NextRequest) {
     '/inscription',
     // Public contract-signing flow (signed link URL)
     '/signer-contrat',
+    // Public booking page (prise de RDV prospect)
+    '/rdv',
   ]
   // API routes explicitly whitelisted as public (no auth required).
   // All other /api/* routes require an authenticated user (see below).
@@ -79,6 +81,23 @@ export async function updateSession(request: NextRequest) {
   const publicApiExact = [
     '/api/contact',
     '/api/health',
+    // Catalogue tarifaire et parcours d'inscription — consultés par des
+    // visiteurs anonymes depuis /tarifs et /inscription. Sans ces deux
+    // entrées, le middleware renvoyait 401 avant même d'atteindre la route :
+    // la grille tarifaire restait vide et le formulaire d'inscription ne
+    // pouvait pas être soumis. `/api/plans` ne lit que les colonnes
+    // publiques des plans actifs (policy RLS `plans_public_read`).
+    '/api/plans',
+    '/api/inscription',
+    // Prise de RDV publique. Chaque route est publique par contrat ; les
+    // écritures de `settings` vérifient la session dans la route elle-même.
+    // `/api/rdv/diag` est volontairement absent : il expose la configuration
+    // Google Calendar du propriétaire et doit rester protégé.
+    '/api/rdv/settings',
+    '/api/rdv/slots',
+    '/api/rdv/book',
+    '/api/rdv/google-config',
+    '/api/rdv/google-signin',
     '/api/telegram/webhook',
     '/api/telegram/send',
     '/api/telegram/send-with-buttons',
