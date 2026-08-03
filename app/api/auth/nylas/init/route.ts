@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 import { signOAuthState } from '@/lib/google/oauth-state'
-import { buildNylasAuthUrl, isNylasConfigured } from '@/lib/nylas/client'
+import { buildNylasAuthUrl, isNylasConfigured, nylasRedirectUri } from '@/lib/nylas/client'
 
 /**
  * GET /api/auth/nylas/init?provider=google&societe_id=...&return_to=...
@@ -12,15 +12,21 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams
     const debug = sp.get('debug') === '1'
 
-    // Diagnostic env (sans exposer les secrets).
+    // Ce préfixe `/api/auth/**` est public dans le middleware (les callbacks
+    // OAuth doivent y accéder). Le diagnostic doit donc vérifier la session
+    // lui-même, sinon n'importe qui lit la configuration Nylas de Lexora —
+    // même décision que pour `/api/rdv/diag`, laissé hors liste blanche.
+    // Diagnostic complet, par boîte : /api/nylas/diag.
     if (debug) {
+      const debugUser = await resolveUserAuth(req)
+      if (!debugUser) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
       return NextResponse.json({
         configured: isNylasConfigured(),
         NYLAS_API_KEY_definie: !!process.env.NYLAS_API_KEY,
         NYLAS_CLIENT_ID_definie: !!process.env.NYLAS_CLIENT_ID,
         NYLAS_API_URI: process.env.NYLAS_API_URI || '(defaut us)',
         NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || '(non definie)',
-        redirectUri: `${(process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).replace(/\/+$/, '')}/api/auth/nylas/callback`,
+        redirectUri: nylasRedirectUri(req.nextUrl.origin),
       })
     }
 
@@ -35,9 +41,7 @@ export async function GET(req: NextRequest) {
     const returnTo = sp.get('return_to') || '/client/email-accounts'
 
     const state = signOAuthState(user.id, JSON.stringify({ s: societeId, r: returnTo }))
-    const base = (process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).replace(/\/+$/, '')
-    const redirectUri = `${base}/api/auth/nylas/callback`
-    const url = buildNylasAuthUrl({ redirectUri, state, provider })
+    const url = buildNylasAuthUrl({ redirectUri: nylasRedirectUri(req.nextUrl.origin), state, provider })
     return NextResponse.redirect(url)
   } catch (e) {
     // Au lieu d'un 500 muet, on renvoie le détail.
