@@ -38,6 +38,7 @@ import { NewFeatures2026 } from "@/components/NewFeatures2026"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcherLight } from "@/components/LanguageSwitcher"
 import { LexoraLogo } from "@/components/LexoraLogo"
+import { SOCIETE_TIERS } from "@/lib/pricing/packages"
 import {
   FileSearch,
   BookOpen,
@@ -62,10 +63,14 @@ import {
   HeartPulse,
 } from "lucide-react"
 
-// Affichage des tarifs sur la page d'accueil. Masqué volontairement (juin 2026) :
-// lancement trop tôt + repositionnement tarifaire à la hausse en cours.
-// Repasser à `true` pour réafficher la section Offres + le comparateur de prix.
-const SHOW_PRICING = false
+// Affichage des tarifs sur la page d'accueil.
+//
+// Masqué en juin 2026 le temps du repositionnement tarifaire à la hausse.
+// Ce repositionnement est fait (Package Société + Package GBC/IFRS, migration
+// 467) et le comparateur lit désormais ses prix depuis lib/pricing/packages.ts
+// plutôt qu'une copie manuelle : l'accueil ne peut plus afficher une grille
+// périmée. Réactivé.
+const SHOW_PRICING = true
 
 export default function HomePage() {
   const locale = getLocale()
@@ -1520,7 +1525,9 @@ export default function HomePage() {
                     className="text-3xl font-bold"
                     style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif" }}
                   >
-                    Rs 1 500
+                    {/* Prix d'entrée lu depuis la grille partagée : écrit en dur,
+                        il annonçait encore Rs 1 500 — l'ancien compta_solo. */}
+                    Rs {SOCIETE_TIERS[0].monthly.toLocaleString("fr-FR")}
                     <span
                       className="text-sm font-normal"
                       style={{ color: "#8B90B8" }}
