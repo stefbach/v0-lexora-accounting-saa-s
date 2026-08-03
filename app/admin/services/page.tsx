@@ -45,7 +45,7 @@ interface Plan {
   modules_inclus: Record<string, boolean>
   populaire: boolean
   actif: boolean
-  pack: 'compta' | 'paie' | 'bundle' | 'addon' | 'cabinet' | 'legacy' | null
+  pack: 'societe' | 'gbc' | 'compta' | 'paie' | 'bundle' | 'addon' | 'cabinet' | 'legacy' | null
   taille_entreprise: 'solo' | 'petite' | 'pme' | 'grande' | null
   is_addon: boolean
   prix_visible: boolean
@@ -78,6 +78,13 @@ function moduleLabel(key: string, locale: any): string {
   const v = t(k, locale)
   return v === k ? key : v
 }
+/**
+ * Packs qu'un admin peut attribuer à une société, dans l'ordre d'affichage.
+ * `societe` et `gbc` sont la grille 2026 ; les trois suivants ne subsistent
+ * que pour les sociétés encore rattachées à l'ancienne grille (mig. 283).
+ */
+const ASSIGNABLE_PACKS: readonly string[] = ['societe', 'gbc', 'compta', 'paie', 'bundle', 'cabinet']
+
 function packLabel(key: string, locale: any): string {
   const k = `adm2.serv.pack_${key}`
   const v = t(k, locale)
@@ -244,7 +251,7 @@ function SubscriptionDialog({ societe, plans, locale, onClose, onSaved }: {
   // pour ne pas bloquer l'attribution.
   const hasPackData = plans.some(p => p.pack)
   const packPlans = hasPackData
-    ? plans.filter(p => !p.is_addon && p.pack && ['compta', 'paie', 'bundle', 'cabinet'].includes(p.pack))
+    ? plans.filter(p => !p.is_addon && p.pack && ASSIGNABLE_PACKS.includes(p.pack))
     : plans.filter(p => !p.is_addon)
   const addonPlans = plans.filter(p => p.is_addon || (p.code || '').startsWith('addon_'))
 
@@ -290,13 +297,13 @@ function SubscriptionDialog({ societe, plans, locale, onClose, onSaved }: {
 
   // Groupage des plans par pack pour l'UI (avec fallback "autres" si pas
   // de pack défini).
-  const byPack: Record<string, Plan[]> = { compta: [], paie: [], bundle: [], cabinet: [], autres: [] }
+  const byPack: Record<string, Plan[]> = Object.fromEntries([...ASSIGNABLE_PACKS, 'autres'].map(k => [k, [] as Plan[]]))
   for (const p of packPlans) {
-    const key = p.pack && ['compta', 'paie', 'bundle', 'cabinet'].includes(p.pack) ? p.pack : 'autres'
+    const key = p.pack && ASSIGNABLE_PACKS.includes(p.pack) ? p.pack : 'autres'
     byPack[key].push(p)
   }
   Object.values(byPack).forEach(arr => arr.sort((a, b) => {
-    const order: Record<string, number> = { solo: 1, petite: 2, pme: 3, grande: 4, null: 5 }
+    const order: Record<string, number> = { solo: 1, petite: 2, pme: 3, grande: 4, enterprise: 5, null: 6 }
     return (order[a.taille_entreprise || 'null'] || 99) - (order[b.taille_entreprise || 'null'] || 99)
   }))
 
@@ -324,7 +331,7 @@ function SubscriptionDialog({ societe, plans, locale, onClose, onSaved }: {
           </div>
 
           {/* Plans par pack */}
-          {(['compta', 'paie', 'bundle', 'cabinet', 'autres'] as const).map(pack => byPack[pack].length > 0 && (
+          {[...ASSIGNABLE_PACKS, 'autres'].map(pack => byPack[pack].length > 0 && (
             <div key={pack}>
               <p className="text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">{packLabel(pack, locale)}</p>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-2">

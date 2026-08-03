@@ -5,6 +5,13 @@ import Link from "next/link"
 import { LexoraLogo } from "@/components/LexoraLogo"
 import { t, getLocale, setLocale, type Locale } from "@/lib/i18n"
 import {
+  SOCIETE_TIERS,
+  GBC_TIERS,
+  OVERAGE_MUR_PER_TX,
+  resolveTierIndex,
+  annualMonthlyPrice,
+} from "@/lib/pricing/packages"
+import {
   FileSearch, BookOpen, FileText, Users, Landmark, BellRing,
   HeartPulse, TrendingUp, Zap, ShieldCheck, Check, Minus,
   Camera, Sparkles, Crown, Send,
@@ -44,7 +51,6 @@ const C = {
 }
 
 const FONT = "'Poppins', sans-serif"
-const ANNUAL_FACTOR = 10 / 12
 
 /* ------------------------------------------------------------------ */
 /*  i18n                                                               */
@@ -107,140 +113,129 @@ const frTexts = {
   trust5: "0 concurrent ERP+Sant\u00e9",
 
   // Tabs
-  tabCompta: "Comptabilit\u00e9 + Facturation",
-  tabPaie: "RH & Paie + TIBOK",
-  tabBundle: "Pack Complet ERP",
-  tabMatrix: "Matrice fonctionnalit\u00e9s",
+  tabSociete: "Package Société",
+  tabGbc: "Package GBC / IFRS",
+  tabMatrix: "Ce qui varie d’un palier à l’autre",
 
-  // Tier names & data
-  tierNames: ["Solo", "Petite entreprise", "PME", "Grande entreprise"],
-  tierDescs: [
-    "Id\u00e9al pour freelances et auto-entrepreneurs.",
-    "Pour les petites \u00e9quipes en croissance.",
-    "La solution compl\u00e8te pour les entreprises \u00e9tablies.",
-    "Sur mesure pour les grandes structures.",
-  ],
-  tierBadges: ["Starter", "Meilleure valeur", "C\u0153ur de cible", "Enterprise"],
-  tierRois: [
-    "\u00c9conomisez ~Rs 8 000/mois vs comptable",
-    "\u00c9conomisez ~Rs 15 000/mois vs comptable",
-    "\u00c9conomisez ~Rs 25 000/mois vs comptable",
-    "ROI sur mesure \u2014 contactez-nous",
-  ],
-  tierEmras: [
-    "e-MRA : EDF5 basique",
-    "e-MRA : EDF5 + VAT auto",
-    "e-MRA : toutes d\u00e9clarations",
-    "e-MRA : toutes d\u00e9clarations + audit trail",
-  ],
-  tierStorages: ["500 Mo", "2 Go", "10 Go", "Illimit\u00e9"],
-  tierCtas: ["Commencer maintenant", "Commencer maintenant", "Commencer maintenant", "Contacter l\u2019\u00e9quipe"],
-  criteriaCompta: [
-    "Jusqu\u2019\u00e0 50 transactions/mois",
-    "Jusqu\u2019\u00e0 200 transactions/mois",
-    "Jusqu\u2019\u00e0 500 transactions/mois",
-    "Transactions illimit\u00e9es",
-  ],
-  criteriaPaie: ["1 \u00e0 3 employ\u00e9s", "4 \u00e0 15 employ\u00e9s", "16 \u00e0 50 employ\u00e9s", "51+ employ\u00e9s"],
-  criteriaBundle: [
-    "Solo / micro-entreprise",
-    "Petite \u00e9quipe (< 15 pers.)",
-    "PME \u00e9tablie (< 50 pers.)",
-    "Grande structure (50+)",
+  // ---- Promesse commune aux deux packages -------------------------
+  unlimitedTag: "Salariés & utilisateurs illimités",
+  tibokPaygTag: "TIBOK : Rs 500 par téléconsultation, à l’acte",
+  quoteLabel: "Sur devis",
+  allInTitle: "Tout compris — identique sur tous les paliers",
+  overageNote: "Au-delà du plafond : Rs 15 par transaction, sans jamais dépasser le prix du palier supérieur.",
+  featAllIn: [
+    "Comptabilité complète (PCM mauricien / OHADA)",
+    "Facturation MRA agréée (IRN + QR Code)",
+    "Banque : import relevés & rapprochement automatique",
+    "OCR & documents pilotés par l’IA",
+    "Fiscal MRA : TVA, CSG/NSF/PAYE, TDS, IT Form 3, ROC",
+    "RH & Paie — salariés illimités",
+    "Congés, planning, pointage, frais kilométriques",
+    "Portail salarié self-service",
+    "Juridique : contrats, signature, assistant rédaction",
+    "États financiers : bilan, résultat, trésorerie",
+    "Alertes IA & pilotage prévisionnel",
+    "Chief of Staff IA sur Telegram",
+    "TIBOK Corporate — téléconsultation à la demande",
   ],
 
-  // Feature lists
-  featCompta: [
-    "Plan comptable OHADA / mauricien",
-    "Saisie journal & grand livre",
-    "Facturation illimit\u00e9e",
-    "Rapprochement bancaire auto",
-    "TVA / TPS auto-calcul",
-    "D\u00e9clarations e-MRA (EDF5, VAT)",
-    "Multi-devises (EUR, USD, GBP)",
-    "Bilan & compte de r\u00e9sultat",
-    "Tableau de bord analytique",
-    "API & int\u00e9grations tierces",
-    "Support prioritaire",
+  // ---- Package Société : un seul axe de prix, le volume de pièces --
+  societeNames: ["Essentiel", "Croissance", "PME", "Corporate", "Enterprise"],
+  societeDescs: [
+    "Freelances, professions libérales et micro-entreprises.",
+    "Entreprises en croissance, activité régulière.",
+    "PME établies, flux fournisseurs et clients soutenus.",
+    "Grandes structures, volumes élevés et support dédié.",
+    "Volumes illimités, SLA, API dédiée et accompagnement sur mesure.",
   ],
-  featPaie: [
-    "Fiches de paie conformes",
-    "Calcul NPF / NSF / PAYE",
-    "Cong\u00e9s & absences",
-    "Virements bancaires auto",
-    "D\u00e9clarations CSG / TDS",
-    "Portail employ\u00e9 self-service",
-    "Gestion temps & pointage",
-    "Primes & commissions",
-    "Multi-sites",
-    "Rapports RH avanc\u00e9s",
-    "Support prioritaire",
+  societeBadges: ["Démarrage", "Le plus choisi", "PME établie", "Grande structure", "Sur mesure"],
+  societeTx: [
+    "Jusqu’à 50 transactions/mois",
+    "Jusqu’à 200 transactions/mois",
+    "Jusqu’à 500 transactions/mois",
+    "Jusqu’à 1 500 transactions/mois",
+    "Transactions illimitées",
   ],
-  featBundle: [
-    "Comptabilit\u00e9 compl\u00e8te",
-    "Facturation illimit\u00e9e",
-    "Paie (selon taille)",
-    "Rapprochement bancaire",
-    "D\u00e9clarations e-MRA",
-    "Multi-devises",
-    "Portail employ\u00e9",
-    "Gestion inventaire",
-    "API ouverte",
-    "Support d\u00e9di\u00e9",
-    "Chief of Staff IA Telegram",
+  societeRois: [
+    "Économisez ~Rs 8 000/mois vs comptable externe",
+    "Économisez ~Rs 15 000/mois vs comptable externe",
+    "Économisez ~Rs 25 000/mois vs comptable externe",
+    "Économisez ~Rs 40 000/mois vs cabinet compta + RH",
+    "ROI calculé avec vous",
   ],
+  societeStorages: ["Stockage 5 Go", "Stockage 20 Go", "Stockage 100 Go", "Stockage illimité", "Stockage illimité"],
+  societeCtas: ["Commencer maintenant", "Commencer maintenant", "Commencer maintenant", "Commencer maintenant", "Contacter l’équipe"],
 
-  // TIBOK features for RH tab
-  tibokTitle: "TIBOK Corporate inclus",
-  tibokFeats: [
-    "Bilan sant\u00e9 annuel pour chaque salari\u00e9",
-    "T\u00e9l\u00e9consultation m\u00e9dicale 24/7",
-    "Programme bien-\u00eatre & pr\u00e9vention",
-    "Tableau de bord sant\u00e9 employeur",
+  // ---- Package GBC / IFRS : axe de prix = périmètre consolidé ------
+  gbcExtraTitle: "En plus : Global Business & IFRS complet",
+  featGbcExtra: [
+    "IFRS complet (et non IFRS for SMEs)",
+    "Partial Exemption Regime — exonération 80 %",
+    "Substance & activités génératrices de revenu (CIGA)",
+    "Bénéficiaires effectifs (UBO) & registre FSC",
+    "Échanges CRS / FATCA",
+    "IFRS 9 — dépréciation ECL par étages",
+    "IFRS 16 — contrats de location",
+    "IFRS 10 — consolidation multi-entités",
+    "Prix de transfert & documentation",
+    "BEPS Pillar Two — calcul GloBE",
+    "IAS 21 — monnaie fonctionnelle",
   ],
+  gbcNames: ["Authorised Company", "Standard", "Groupe consolidé", "Management Company"],
+  gbcDescs: [
+    "Authorised Company ou GBC simple, une entité.",
+    "GBC en régime d’exonération partielle, reporting IFRS étendu.",
+    "Groupe multi-entités : consolidation, prix de transfert, Pillar Two.",
+    "Portefeuille de GBC administré par une management company.",
+  ],
+  gbcBadges: ["Entrée GBC", "Le plus choisi", "Groupe", "Sur mesure"],
+  gbcTx: [
+    "1 entité · jusqu’à 100 transactions/mois",
+    "1 entité · jusqu’à 500 transactions/mois",
+    "Jusqu’à 5 entités · 1 500 transactions/mois",
+    "Entités & transactions illimitées",
+  ],
+  gbcRois: [
+    "Économisez ~Rs 25 000/mois vs prestataire de reporting",
+    "Économisez ~Rs 45 000/mois vs cabinet IFRS",
+    "Économisez ~Rs 90 000/mois vs consolidation externalisée",
+    "ROI calculé avec vous",
+  ],
+  gbcStorages: ["Stockage 50 Go", "Stockage 200 Go", "Stockage illimité", "Stockage illimité"],
+  gbcCtas: ["Commencer maintenant", "Commencer maintenant", "Commencer maintenant", "Contacter l’équipe"],
+  gbcEntiteNote: "Entité consolidée supplémentaire : Rs 4 500/mois.",
 
-  // Matrix
-  matrixTitle: "Matrice compl\u00e8te des fonctionnalit\u00e9s",
-  matrixDesc: "Comparez les 40+ fonctionnalit\u00e9s incluses dans chaque formule Lexora.",
-  matrixCol: "Fonctionnalit\u00e9",
-  tierNamesShort: ["Solo", "Petite entr.", "PME", "Grande entr."],
+  // Matrix — ne compare plus des fonctionnalités (tout est inclus partout)
+  // mais les seules dimensions qui varient réellement d’un palier à l’autre.
+  matrixTitle: "Ce qui varie d’un palier à l’autre",
+  matrixDesc: "Toutes les fonctionnalités sont incluses dans chaque palier. Seuls le volume traité et le niveau de service changent.",
+  matrixCol: "Dimension",
+  tierNamesShort: ["Essentiel", "Croissance", "PME", "Corporate", "Enterprise"],
   matrixCats: [
     {
-      category: "Mon espace & Documents",
-      features: ["Tableau de bord personnalis\u00e9", "OCR IA documents", "Classement automatique", "Stockage s\u00e9curis\u00e9"],
-    },
-    {
-      category: "Facturation MRA agr\u00e9\u00e9e",
-      features: ["Factures illimit\u00e9es", "Devis & bons de commande", "Avoirs & notes de cr\u00e9dit", "Relances automatiques", "Portail client", "Paiement en ligne (MCB Juice)"],
-    },
-    {
-      category: "Comptabilit\u00e9",
-      features: ["Plan comptable OHADA / mauricien", "Saisie journal & grand livre", "Balance g\u00e9n\u00e9rale", "Rapprochement bancaire auto", "Import relev\u00e9s (CSV/OFX)", "Multi-devises (EUR, USD, GBP)", "\u00c9critures r\u00e9currentes auto"],
-    },
-    {
-      category: "\u00c9tats financiers",
-      features: ["Bilan comptable", "Compte de r\u00e9sultat", "Flux de tr\u00e9sorerie", "Tableau de bord analytique", "Rapports personnalis\u00e9s", "Export PDF / Excel"],
-    },
-    {
-      category: "Fiscal MRA",
-      features: ["TVA / TPS auto-calcul", "D\u00e9claration EDF5 (e-MRA)", "D\u00e9claration VAT auto", "CSG / TDS d\u00e9clarations", "Audit trail fiscal", "Export XML e-MRA"],
-    },
-    {
-      category: "RH & Paie",
-      features: ["Fiches de paie conformes", "Calcul NPF / NSF / PAYE", "Gestion cong\u00e9s & absences", "Virements bancaires auto", "Portail employ\u00e9 self-service", "Gestion temps & pointage", "Primes, commissions & bonus", "Multi-sites", "Rapports RH avanc\u00e9s"],
-    },
-    {
-      category: "TIBOK Corporate",
-      features: ["Bilan sant\u00e9 annuel", "T\u00e9l\u00e9consultation 24/7", "Programme bien-\u00eatre", "Dashboard sant\u00e9 employeur"],
+      category: "Tout compris — dans chaque palier",
+      features: [
+        "Comptabilité, facturation & banque",
+        "Fiscal MRA (TVA, PAYE, TDS, IT Form 3, ROC)",
+        "RH & Paie — salariés illimités",
+        "Juridique & contrats",
+        "OCR & alertes IA",
+        "Chief of Staff Telegram",
+        "TIBOK Corporate — accès santé",
+        "Utilisateurs illimités",
+      ],
       isGreen: true,
     },
     {
-      category: "Chief of Staff IA Telegram",
-      features: ["Agenda & RDV en langage naturel", "Envoi d\u2019emails & rappels automatiques", "OCR / banque / RH pilot\u00e9s depuis Telegram", "Workflows personnalis\u00e9s"],
-    },
-    {
-      category: "Support & SLA",
-      features: ["Support email", "Support prioritaire", "Account manager d\u00e9di\u00e9", "SLA garanti"],
+      category: "Ce qui varie",
+      features: [
+        "Transactions incluses / mois",
+        "Stockage documentaire",
+        "Dépassement au-delà du plafond",
+        "Support",
+        "Engagement de service (SLA)",
+        "API & intégrations dédiées",
+      ],
     },
   ],
 
@@ -252,30 +247,30 @@ const frTexts = {
   stat3v: "MRA",
   stat3l: "conformit\u00e9 native",
 
-  // Calculator
-  calcTitle: "Estimez votre tarif",
-  calcSub: "Ajustez le nombre d\u2019employ\u00e9s pour voir le tarif adapt\u00e9 \u00e0 votre structure.",
-  calcTabPaie: "RH & Paie + TIBOK",
-  calcTabCompta: "Comptabilit\u00e9 + Facturation",
-  calcTabBundle: "Pack Complet ERP \u221220%",
-  calcEmployees: "Nombre d\u2019employ\u00e9s",
-  calcBase: "Base",
-  calcPerEmp: "par employ\u00e9",
+  // Calculator — l’unique variable est le volume de transactions
+  calcTitle: "Estimez votre palier",
+  calcSub: "Le prix ne dépend que d’une chose : le nombre moyen de transactions traitées par mois. L’effectif n’entre pas dans le calcul.",
+  calcTabSociete: "Package Société",
+  calcTabGbc: "Package GBC / IFRS",
+  calcTransactions: "Transactions par mois",
+  calcWhatIsTx: "Ce qui compte comme transaction",
+  calcTxIncluded: "Pièce comptable, facture émise ou reçue, ligne de relevé bancaire, document passé à l’OCR.",
+  calcTxExcluded: "Ne comptent pas : bulletins de paie, salariés, congés, pointages, contrats, utilisateurs — tout cela est illimité.",
+  calcEstimator: "Vous ne connaissez pas votre volume ?",
+  calcEstimatorHelp: "Comptez environ 10 transactions par salarié et par mois pour une activité de services, 25 pour du négoce.",
+  calcEntites: "Entités à consolider",
   calcMonthly: "Mensuel",
   calcAnnual: "Annuel",
-  calcResult: "Votre estimation",
-  calcTibokInfo: "TIBOK Corporate sant\u00e9 inclus pour tous vos salari\u00e9s",
-  calcCta1: "D\u00e9marrer l\u2019essai gratuit",
-  calcCta2: "Demander une d\u00e9mo",
+  calcResult: "Votre palier",
+  calcTibokInfo: "TIBOK Corporate : accès ouvert à tous vos salariés, sans supplément d’abonnement. Chaque téléconsultation effectuée est facturée Rs 500 — vous ne payez que ce qui est consommé.",
+  calcCta1: "Démarrer l’essai gratuit",
+  calcCta2: "Demander une démo",
   calcVsTitle: "Comparaison de valeur",
   calcVsRH: "vs cabinet RH externe",
-  calcVsRHPrice: "~Rs 15 000 \u2013 40 000/mois",
+  calcVsRHPrice: "~Rs 15 000 – 40 000/mois",
   calcVsCompta: "vs comptable externe",
-  calcVsComptaPrice: "~Rs 8 000 \u2013 25 000/mois",
-  calcFeatTitle: "Inclus dans votre formule",
-  calcFeatsSmall: ["Fiches de paie conformes", "Calcul NPF/NSF/PAYE", "Cong\u00e9s & absences", "TIBOK sant\u00e9 salari\u00e9s"],
-  calcFeatsMed: ["Fiches de paie conformes", "Calcul NPF/NSF/PAYE", "Cong\u00e9s & absences", "Virements bancaires auto", "D\u00e9clarations CSG/TDS", "Portail employ\u00e9", "TIBOK sant\u00e9 salari\u00e9s"],
-  calcFeatsLarge: ["Fiches de paie conformes", "Calcul NPF/NSF/PAYE", "Cong\u00e9s & absences", "Virements bancaires auto", "D\u00e9clarations CSG/TDS", "Portail employ\u00e9", "Gestion temps & pointage", "Primes & commissions", "Multi-sites", "Rapports RH avanc\u00e9s", "TIBOK sant\u00e9 salari\u00e9s"],
+  calcVsComptaPrice: "~Rs 8 000 – 25 000/mois",
+  calcFeatTitle: "Inclus dans votre palier",
 
   // Bottom CTA
   ctaTitle: "L\u2019ERP mauricien complet. RH, Paie, Sant\u00e9 & Compta.",
@@ -352,138 +347,128 @@ const enTexts = {
   trust5: "0 ERP+Health competitor",
 
   // Tabs
-  tabCompta: "Accounting + Invoicing",
-  tabPaie: "HR & Payroll + TIBOK",
-  tabBundle: "Full ERP Pack",
-  tabMatrix: "Feature matrix",
+  tabSociete: "Company Package",
+  tabGbc: "GBC / IFRS Package",
+  tabMatrix: "What changes per tier",
 
-  // Tier names & data
-  tierNames: ["Solo", "Small business", "Mid-size", "Enterprise"],
-  tierDescs: [
-    "Ideal for freelancers and sole traders.",
-    "For small growing teams.",
-    "The complete solution for established businesses.",
-    "Tailored for large organisations.",
+  // ---- Shared promise across both packages ------------------------
+  unlimitedTag: "Unlimited employees & users",
+  tibokPaygTag: "TIBOK: Rs 500 per teleconsultation, pay as you go",
+  quoteLabel: "On quote",
+  allInTitle: "All included — identical across every tier",
+  overageNote: "Above the cap: Rs 15 per transaction, never more than the price of the next tier.",
+  featAllIn: [
+    "Full accounting (Mauritian chart of accounts / OHADA)",
+    "MRA-approved invoicing (IRN + QR code)",
+    "Banking: statement import & automatic reconciliation",
+    "AI-driven OCR & document processing",
+    "MRA tax: VAT, CSG/NSF/PAYE, TDS, IT Form 3, ROC",
+    "HR & Payroll — unlimited employees",
+    "Leave, scheduling, time clock, mileage claims",
+    "Employee self-service portal",
+    "Legal: contracts, signature, drafting assistant",
+    "Financial statements: balance sheet, P&L, cash flow",
+    "AI alerts & forecasting",
+    "AI Chief of Staff on Telegram",
+    "TIBOK Corporate — teleconsultation on demand",
   ],
-  tierBadges: ["Starter", "Best value", "Most popular", "Enterprise"],
-  tierRois: [
-    "Save ~Rs 8,000/mo vs accountant",
-    "Save ~Rs 15,000/mo vs accountant",
-    "Save ~Rs 25,000/mo vs accountant",
-    "Custom ROI \u2014 contact us",
+
+  // ---- Company Package: one pricing axis, transaction volume -------
+  societeNames: ["Essential", "Growth", "Mid-size", "Corporate", "Enterprise"],
+  societeDescs: [
+    "Freelancers, professionals and micro-businesses.",
+    "Growing companies with steady activity.",
+    "Established SMEs with sustained supplier and client flows.",
+    "Large organisations, high volumes and dedicated support.",
+    "Unlimited volume, SLA, dedicated API and tailored onboarding.",
   ],
-  tierEmras: [
-    "e-MRA: basic EDF5",
-    "e-MRA: EDF5 + auto VAT",
-    "e-MRA: all filings",
-    "e-MRA: all filings + audit trail",
-  ],
-  tierStorages: ["500 MB", "2 GB", "10 GB", "Unlimited"],
-  tierCtas: ["Get started", "Get started", "Get started", "Contact sales"],
-  criteriaCompta: [
+  societeBadges: ["Getting started", "Most chosen", "Established SME", "Large organisation", "Tailored"],
+  societeTx: [
     "Up to 50 transactions/mo",
     "Up to 200 transactions/mo",
     "Up to 500 transactions/mo",
+    "Up to 1,500 transactions/mo",
     "Unlimited transactions",
   ],
-  criteriaPaie: ["1\u20133 employees", "4\u201315 employees", "16\u201350 employees", "51+ employees"],
-  criteriaBundle: [
-    "Solo / micro-business",
-    "Small team (< 15 people)",
-    "Established SME (< 50 people)",
-    "Large organisation (50+)",
+  societeRois: [
+    "Save ~Rs 8,000/mo vs external accountant",
+    "Save ~Rs 15,000/mo vs external accountant",
+    "Save ~Rs 25,000/mo vs external accountant",
+    "Save ~Rs 40,000/mo vs accounting + HR firm",
+    "ROI worked out with you",
   ],
+  societeStorages: ["5 GB storage", "20 GB storage", "100 GB storage", "Unlimited storage", "Unlimited storage"],
+  societeCtas: ["Get started", "Get started", "Get started", "Get started", "Contact the team"],
 
-  featCompta: [
-    "OHADA / Mauritian chart of accounts",
-    "Journal entries & general ledger",
-    "Unlimited invoicing",
-    "Auto bank reconciliation",
-    "VAT / TPS auto-calculation",
-    "e-MRA filings (EDF5, VAT)",
-    "Multi-currency (EUR, USD, GBP)",
-    "Balance sheet & P&L",
-    "Analytics dashboard",
-    "API & third-party integrations",
-    "Priority support",
+  // ---- GBC / IFRS Package: pricing axis = consolidation scope ------
+  gbcExtraTitle: "On top: Global Business & full IFRS",
+  featGbcExtra: [
+    "Full IFRS (not IFRS for SMEs)",
+    "Partial Exemption Regime — 80% exemption",
+    "Substance & core income generating activities (CIGA)",
+    "Ultimate beneficial owners (UBO) & FSC register",
+    "CRS / FATCA reporting",
+    "IFRS 9 — staged ECL impairment",
+    "IFRS 16 — lease accounting",
+    "IFRS 10 — multi-entity consolidation",
+    "Transfer pricing & documentation",
+    "BEPS Pillar Two — GloBE computation",
+    "IAS 21 — functional currency",
   ],
-  featPaie: [
-    "Compliant payslips",
-    "NPF / NSF / PAYE calculation",
-    "Leave & absence management",
-    "Auto bank transfers",
-    "CSG / TDS filings",
-    "Employee self-service portal",
-    "Time & attendance tracking",
-    "Bonuses & commissions",
-    "Multi-site",
-    "Advanced HR reports",
-    "Priority support",
+  gbcNames: ["Authorised Company", "Standard", "Consolidated Group", "Management Company"],
+  gbcDescs: [
+    "Authorised Company or single-entity GBC.",
+    "GBC under partial exemption, extended IFRS reporting.",
+    "Multi-entity group: consolidation, transfer pricing, Pillar Two.",
+    "Portfolio of GBCs administered by a management company.",
   ],
-  featBundle: [
-    "Full accounting",
-    "Unlimited invoicing",
-    "Payroll (by size)",
-    "Bank reconciliation",
-    "e-MRA filings",
-    "Multi-currency",
-    "Employee portal",
-    "Inventory management",
-    "Open API",
-    "Dedicated support",
-    "Chief of Staff AI Telegram",
+  gbcBadges: ["GBC entry", "Most chosen", "Group", "Tailored"],
+  gbcTx: [
+    "1 entity · up to 100 transactions/mo",
+    "1 entity · up to 500 transactions/mo",
+    "Up to 5 entities · 1,500 transactions/mo",
+    "Unlimited entities & transactions",
   ],
-
-  tibokTitle: "TIBOK Corporate included",
-  tibokFeats: [
-    "Annual health check-up for every employee",
-    "24/7 medical teleconsultation",
-    "Wellbeing & prevention program",
-    "Employer health dashboard",
+  gbcRois: [
+    "Save ~Rs 25,000/mo vs reporting provider",
+    "Save ~Rs 45,000/mo vs IFRS firm",
+    "Save ~Rs 90,000/mo vs outsourced consolidation",
+    "ROI worked out with you",
   ],
+  gbcStorages: ["50 GB storage", "200 GB storage", "Unlimited storage", "Unlimited storage"],
+  gbcCtas: ["Get started", "Get started", "Get started", "Contact the team"],
+  gbcEntiteNote: "Each additional consolidated entity: Rs 4,500/mo.",
 
   // Matrix
-  matrixTitle: "Full feature matrix",
-  matrixDesc: "Compare 40+ features included in each Lexora plan.",
-  matrixCol: "Feature",
-  tierNamesShort: ["Solo", "Small biz", "Mid-size", "Enterprise"],
+  matrixTitle: "What changes from one tier to the next",
+  matrixDesc: "Every feature is included in every tier. Only the processed volume and the service level change.",
+  matrixCol: "Dimension",
+  tierNamesShort: ["Essential", "Growth", "Mid-size", "Corporate", "Enterprise"],
   matrixCats: [
     {
-      category: "My space & Documents",
-      features: ["Personalised dashboard", "AI OCR documents", "Automatic classification", "Secure storage"],
-    },
-    {
-      category: "MRA-approved Invoicing",
-      features: ["Unlimited invoices", "Quotes & purchase orders", "Credit & debit notes", "Automatic reminders", "Client portal", "Online payment (MCB Juice)"],
-    },
-    {
-      category: "Accounting",
-      features: ["OHADA / Mauritian chart of accounts", "Journal entries & general ledger", "Trial balance", "Auto bank reconciliation", "Statement import (CSV/OFX)", "Multi-currency (EUR, USD, GBP)", "Recurring automatic entries"],
-    },
-    {
-      category: "Financial statements",
-      features: ["Balance sheet", "Income statement", "Cash flow statement", "Analytics dashboard", "Custom reports", "PDF / Excel export"],
-    },
-    {
-      category: "MRA Tax",
-      features: ["VAT / TPS auto-calculation", "EDF5 filing (e-MRA)", "Automatic VAT filing", "CSG / TDS filings", "Tax audit trail", "XML export e-MRA"],
-    },
-    {
-      category: "HR & Payroll",
-      features: ["Compliant payslips", "NPF / NSF / PAYE calculation", "Leave & absence management", "Auto bank transfers", "Employee self-service portal", "Time & attendance tracking", "Bonuses, commissions & rewards", "Multi-site", "Advanced HR reports"],
-    },
-    {
-      category: "TIBOK Corporate",
-      features: ["Annual health check-up", "24/7 teleconsultation", "Wellbeing program", "Employer health dashboard"],
+      category: "All included — in every tier",
+      features: [
+        "Accounting, invoicing & banking",
+        "MRA tax (VAT, PAYE, TDS, IT Form 3, ROC)",
+        "HR & Payroll — unlimited employees",
+        "Legal & contracts",
+        "OCR & AI alerts",
+        "Telegram Chief of Staff",
+        "TIBOK Corporate — health access",
+        "Unlimited users",
+      ],
       isGreen: true,
     },
     {
-      category: "Chief of Staff AI Telegram",
-      features: ["Calendar & meetings in natural language", "Automatic emails & reminders", "OCR / banking / HR driven from Telegram", "Custom workflows"],
-    },
-    {
-      category: "Support & SLA",
-      features: ["Email support", "Priority support", "Dedicated account manager", "Guaranteed SLA"],
+      category: "What changes",
+      features: [
+        "Transactions included / month",
+        "Document storage",
+        "Overage above the cap",
+        "Support",
+        "Service level agreement (SLA)",
+        "Dedicated API & integrations",
+      ],
     },
   ],
 
@@ -494,29 +479,29 @@ const enTexts = {
   stat3v: "MRA",
   stat3l: "native compliance",
 
-  calcTitle: "Estimate your price",
-  calcSub: "Adjust employee count to see the plan tailored to your organisation.",
-  calcTabPaie: "HR & Payroll + TIBOK",
-  calcTabCompta: "Accounting + Invoicing",
-  calcTabBundle: "Full ERP Pack \u221220%",
-  calcEmployees: "Number of employees",
-  calcBase: "Base",
-  calcPerEmp: "per employee",
+  calcTitle: "Find your tier",
+  calcSub: "Price depends on one thing only: the average number of transactions processed per month. Headcount is not part of the calculation.",
+  calcTabSociete: "Company Package",
+  calcTabGbc: "GBC / IFRS Package",
+  calcTransactions: "Transactions per month",
+  calcWhatIsTx: "What counts as a transaction",
+  calcTxIncluded: "An accounting entry, an invoice issued or received, a bank statement line, a document sent through OCR.",
+  calcTxExcluded: "Not counted: payslips, employees, leave, time entries, contracts, users — all unlimited.",
+  calcEstimator: "Don’t know your volume?",
+  calcEstimatorHelp: "Count roughly 10 transactions per employee per month for a services business, 25 for trading.",
+  calcEntites: "Entities to consolidate",
   calcMonthly: "Monthly",
   calcAnnual: "Annual",
-  calcResult: "Your estimate",
-  calcTibokInfo: "TIBOK Corporate health included for all your employees",
+  calcResult: "Your tier",
+  calcTibokInfo: "TIBOK Corporate: open to every employee at no subscription surcharge. Each teleconsultation is billed Rs 500 — you only pay for what is used.",
   calcCta1: "Start free trial",
   calcCta2: "Request a demo",
   calcVsTitle: "Value comparison",
   calcVsRH: "vs external HR firm",
-  calcVsRHPrice: "~Rs 15,000 \u2013 40,000/mo",
+  calcVsRHPrice: "~Rs 15,000 – 40,000/mo",
   calcVsCompta: "vs external accountant",
-  calcVsComptaPrice: "~Rs 8,000 \u2013 25,000/mo",
-  calcFeatTitle: "Included in your plan",
-  calcFeatsSmall: ["Compliant payslips", "NPF/NSF/PAYE calculation", "Leave & absences", "TIBOK employee health"],
-  calcFeatsMed: ["Compliant payslips", "NPF/NSF/PAYE calculation", "Leave & absences", "Auto bank transfers", "CSG/TDS filings", "Employee portal", "TIBOK employee health"],
-  calcFeatsLarge: ["Compliant payslips", "NPF/NSF/PAYE calculation", "Leave & absences", "Auto bank transfers", "CSG/TDS filings", "Employee portal", "Time & attendance tracking", "Bonuses & commissions", "Multi-site", "Advanced HR reports", "TIBOK employee health"],
+  calcVsComptaPrice: "~Rs 8,000 – 25,000/mo",
+  calcFeatTitle: "Included in your tier",
 
   ctaTitle: "The complete Mauritian ERP. HR, Payroll, Health & Accounting.",
   ctaTrust: ["MRA-approved invoicing", "TIBOK Corporate included", "40+ features", "Made in Mauritius", "No commitment"],
@@ -538,52 +523,34 @@ type Txt = typeof frTexts
 /* ------------------------------------------------------------------ */
 /*  Pricing data                                                       */
 /* ------------------------------------------------------------------ */
-const pricesCompta = [1500, 3500, 6500, 12000]
-const pricesPaie = [1700, 2700, 6700, 14500]
-const pricesBundle = [2720, 4960, 10560, 21200]
+/**
+ * Les grilles vivent dans lib/pricing/packages.ts — testé, et partagé avec
+ * le reste de l'application. Cette page n'ajoute que l'habillage : couleur
+ * d'accent et palier mis en avant.
+ */
+const SOCIETE_ACCENTS = [C.blue, C.green, C.orange, C.gold, C.gold]
+const GBC_ACCENTS = [C.blue, C.green, C.orange, C.gold]
+/** Un seul palier mis en avant par package (index dans la grille). */
+const SOCIETE_POPULAIRE = 1
+const GBC_POPULAIRE = 1
 
-const badgeColorsMap = [C.blue, C.blue, C.orange, C.gold] // Compta tab
-const badgeColorsPaie = [C.blue, C.blue, C.orange, C.gold]
-const badgeColorsBundle = [C.blue, C.green, C.orange, C.gold]
-
-const comptaIncluded = [
-  [true,true,true,false,true,false,false,true,false,false,false],
-  [true,true,true,true,true,true,false,true,true,false,false],
-  [true,true,true,true,true,true,true,true,true,true,false],
-  [true,true,true,true,true,true,true,true,true,true,true],
-]
-const paieIncluded = [
-  [true,true,true,false,false,false,false,false,false,false,false],
-  [true,true,true,true,true,true,false,false,false,false,false],
-  [true,true,true,true,true,true,true,true,true,false,false],
-  [true,true,true,true,true,true,true,true,true,true,true],
-]
-const bundleIncluded = [
-  [true,true,true,false,false,false,false,false,false,false,false],
-  [true,true,true,true,true,false,true,false,false,false,true],
-  [true,true,true,true,true,true,true,true,true,false,true],
-  [true,true,true,true,true,true,true,true,true,true,true],
-]
-
+/**
+ * Matrice « ce qui varie » — 2 catégories, 5 colonnes (paliers Société).
+ * La première catégorie est volontairement pleine : c'est le message.
+ */
+const ALL_IN_ROW: boolean[] = [true, true, true, true, true]
 const matrixTiers: (boolean | string)[][][] = [
-  // Mon espace & Documents (4 features)
-  [[true,true,true,true],[true,true,true,true],[false,true,true,true],["500 Mo","2 Go","10 Go","Illimit\u00e9"]],
-  // Facturation MRA (6 features)
-  [[true,true,true,true],[true,true,true,true],[false,true,true,true],[false,true,true,true],[false,false,true,true],[false,false,true,true]],
-  // Comptabilite (7 features)
-  [[true,true,true,true],[true,true,true,true],[true,true,true,true],[false,true,true,true],[false,true,true,true],[false,false,true,true],[false,true,true,true]],
-  // Etats financiers (6 features)
-  [[true,true,true,true],[true,true,true,true],[false,true,true,true],[false,true,true,true],[false,false,true,true],[true,true,true,true]],
-  // Fiscal MRA (6 features)
-  [[true,true,true,true],[false,true,true,true],[false,true,true,true],[false,false,true,true],[false,false,false,true],[false,true,true,true]],
-  // RH & Paie (9 features)
-  [[true,true,true,true],[true,true,true,true],[true,true,true,true],[false,true,true,true],[false,true,true,true],[false,false,true,true],[false,false,true,true],[false,false,true,true],[false,false,false,true]],
-  // TIBOK Corporate (4 features)
-  [[false,true,true,true],[false,true,true,true],[false,false,true,true],[false,false,true,true]],
-  // Chief of Staff IA Telegram (4 features)
-  [[false,true,true,true],[false,true,true,true],[false,false,true,true],[false,false,false,true]],
-  // Support & SLA (4 features)
-  [[true,true,true,true],[false,false,true,true],[false,false,false,true],[false,false,false,true]],
+  // Tout compris — 8 lignes, toutes vraies sur les 5 paliers
+  Array.from({ length: 8 }, () => ALL_IN_ROW),
+  // Ce qui varie — 6 lignes
+  [
+    ["50", "200", "500", "1 500", "Illimité"],
+    ["5 Go", "20 Go", "100 Go", "Illimité", "Illimité"],
+    [...Array(4).fill(`Rs ${OVERAGE_MUR_PER_TX}/tx`), "—"],
+    ["Email", "Email", "Prioritaire", "Dédié", "Dédié 24/7"],
+    [false, false, false, true, true],
+    [false, false, true, true, true],
+  ],
 ]
 
 /* ------------------------------------------------------------------ */
@@ -594,7 +561,7 @@ function fmt(n: number): string {
 }
 
 function annualPrice(monthly: number): number {
-  return Math.round(monthly * ANNUAL_FACTOR)
+  return annualMonthlyPrice(monthly)
 }
 
 /* ------------------------------------------------------------------ */
@@ -632,15 +599,18 @@ function footerLinkHref(label: string): string {
 
 /* ---------- Tier Card ---------- */
 function TierCard({
-  badge, badgeColor, name, desc, criteria, monthlyPrice, roi, emra,
-  storage, features, ctaLabel, ctaHref, ctaPrimary, billing, txt, tibokFeats,
+  badge, badgeColor, name, desc, txLabel, monthlyPrice, roi, unlimitedLabel,
+  storage, features, ctaLabel, ctaHref, ctaPrimary, billing, txt,
+  extraTitle, extraFeats,
 }: {
   badge: string; badgeColor: string; name: string; desc: string
-  criteria: string; monthlyPrice: number; roi: string; emra: string
+  txLabel: string; monthlyPrice: number; roi: string; unlimitedLabel: string
   storage: string; features: { label: string; included: boolean }[]
   ctaLabel: string; ctaHref: string; ctaPrimary: boolean; billing: "monthly" | "annual"
-  txt: Txt; tibokFeats?: string[]
+  txt: Txt; extraTitle?: string; extraFeats?: string[]
 }) {
+  // monthlyPrice = 0 → palier négocié, on affiche « Sur devis » au lieu du montant.
+  const onQuote = monthlyPrice === 0
   const price = billing === "monthly" ? monthlyPrice : annualPrice(monthlyPrice)
 
   return (
@@ -714,25 +684,27 @@ function TierCard({
         display: "inline-block", fontSize: "12px", fontWeight: 500, color: C.blue,
         backgroundColor: `${C.blue}15`, padding: "5px 10px", borderRadius: "8px",
         alignSelf: "flex-start", marginBottom: "22px",
-      }}>{criteria}</span>
+      }}>{txLabel}</span>
 
       {/* Price — count-up animation when scrolled into view */}
       <div style={{ position: "relative", marginBottom: "6px", display: "flex", alignItems: "baseline", gap: "6px" }}>
         <span style={{
-          color: C.gold, fontSize: "40px", fontWeight: 800, lineHeight: 1,
+          color: C.gold, fontSize: onQuote ? "32px" : "40px", fontWeight: 800, lineHeight: 1,
           fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em",
         }}>
-          <AnimatedCounter
-            value={price}
-            prefix="MRs "
-            duration={1.2}
-            format={(n) => fmt(Math.round(n))}
-            ariaLabel={`MRs ${fmt(price)} ${txt.perMonth}`}
-          />
+          {onQuote ? txt.quoteLabel : (
+            <AnimatedCounter
+              value={price}
+              prefix="MRs "
+              duration={1.2}
+              format={(n) => fmt(Math.round(n))}
+              ariaLabel={`MRs ${fmt(price)} ${txt.perMonth}`}
+            />
+          )}
         </span>
-        <span style={{ color: C.muted, fontSize: "14px" }}>{txt.perMonth}</span>
+        {!onQuote && <span style={{ color: C.muted, fontSize: "14px" }}>{txt.perMonth}</span>}
       </div>
-      {billing === "annual" && (
+      {billing === "annual" && !onQuote && (
         <span style={{ color: C.green, fontSize: "12px", fontWeight: 600 }}>{txt.annualLabel}</span>
       )}
 
@@ -740,13 +712,17 @@ function TierCard({
       <div style={{ marginTop: "14px", padding: "8px 12px", borderRadius: "8px", backgroundColor: `${C.green}12`, border: `1px solid ${C.green}30` }}>
         <span style={{ color: C.green, fontSize: "12px", fontWeight: 500 }}>{roi}</span>
       </div>
-      {/* e-MRA tag */}
+      {/* Salariés & utilisateurs illimités — vrai sur tous les paliers */}
       <div style={{ marginTop: "10px", padding: "8px 12px", borderRadius: "8px", backgroundColor: `${C.blue}12`, border: `1px solid ${C.blue}30` }}>
-        <span style={{ color: C.blue, fontSize: "12px", fontWeight: 500 }}>{emra}</span>
+        <span style={{ color: C.blue, fontSize: "12px", fontWeight: 500 }}>{unlimitedLabel}</span>
       </div>
       {/* Storage tag */}
       <div style={{ marginTop: "10px", padding: "8px 12px", borderRadius: "8px", backgroundColor: `${C.orange}12`, border: `1px solid ${C.orange}30` }}>
         <span style={{ color: C.orange, fontSize: "12px", fontWeight: 500 }}>{storage}</span>
+      </div>
+      {/* TIBOK — accès inclus, consultations facturées à l'acte */}
+      <div style={{ marginTop: "10px", padding: "8px 12px", borderRadius: "8px", backgroundColor: `${C.green}12`, border: `1px solid ${C.green}30` }}>
+        <span style={{ color: C.green, fontSize: "12px", fontWeight: 500 }}>{txt.tibokPaygTag}</span>
       </div>
 
       <div style={{ height: "1px", backgroundColor: C.navyBorder, margin: "20px 0" }} />
@@ -773,17 +749,17 @@ function TierCard({
         ))}
       </ul>
 
-      {/* TIBOK section (for RH & Paie tab) */}
-      {tibokFeats && tibokFeats.length > 0 && (
+      {/* Bloc supplémentaire — conformité GBC / IFRS sur les paliers GBC */}
+      {extraFeats && extraFeats.length > 0 && (
         <div style={{
           margin: "0 0 16px", padding: "12px",
           borderRadius: "10px", backgroundColor: `${C.green}10`,
           border: `1px solid ${C.green}25`,
         }}>
           <div style={{ color: C.green, fontSize: "12px", fontWeight: 700, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            {txt.tibokTitle}
+            {extraTitle}
           </div>
-          {tibokFeats.map((tf, i) => (
+          {extraFeats.map((tf, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px", fontSize: "12px", color: C.green }}>
               <Check className="w-4 h-4 inline-block" style={{ color: C.green }} /> {tf}
             </div>
@@ -853,7 +829,7 @@ function MatrixTable({ txt }: { txt: Txt }) {
               </td>
             </tr>
             {cat.features.map((fname, fi) => {
-              const row = matrixTiers[ci]?.[fi] || [false, false, false, false]
+              const row = matrixTiers[ci]?.[fi] || Array(tierCount).fill(false)
               return (
                 <tr key={fname} style={(cat as any).isGreen ? { backgroundColor: `${C.green}05` } : undefined}>
                   <td style={{ padding: "10px 16px", color: C.white, borderBottom: `1px solid ${C.navyBorder}20`, textAlign: "left" }}>{fname}</td>
@@ -883,10 +859,11 @@ function MatrixTable({ txt }: { txt: Txt }) {
 /* ------------------------------------------------------------------ */
 export default function TarifsPage() {
   const [billing, setBilling] = useState<"monthly" | "annual">("monthly")
-  const [activeTab, setActiveTab] = useState<"compta" | "paie" | "bundle" | "matrix">("compta")
+  const [activeTab, setActiveTab] = useState<"societe" | "gbc" | "matrix">("societe")
   const [locale, setLoc] = useState<Locale>(getLocale())
-  const [calcTab, setCalcTab] = useState<"paie" | "compta" | "bundle">("paie")
-  const [employees, setEmployees] = useState(10)
+  const [calcTab, setCalcTab] = useState<"societe" | "gbc">("societe")
+  const [transactions, setTransactions] = useState(200)
+  const [entites, setEntites] = useState(1)
   const [calcBilling, setCalcBilling] = useState<"monthly" | "annual">("monthly")
 
   const switchLang = (l: Locale) => { setLoc(l); setLocale(l) }
@@ -903,161 +880,83 @@ export default function TarifsPage() {
 
   /* Tabs */
   const tabs: { key: typeof activeTab; label: string }[] = [
-    { key: "compta", label: txt.tabCompta },
-    { key: "paie", label: txt.tabPaie },
-    { key: "bundle", label: txt.tabBundle },
+    { key: "societe", label: txt.tabSociete },
+    { key: "gbc", label: txt.tabGbc },
     { key: "matrix", label: txt.tabMatrix },
   ]
 
-  /* Build tier cards */
+  /* Build tier cards — la liste de fonctionnalités est la MÊME partout :
+   * c'est la promesse « tout compris ». Seul le package GBC ajoute un bloc. */
   function buildCards() {
-    const section = activeTab as "compta" | "paie" | "bundle"
-    const mp = section === "compta" ? pricesCompta : section === "paie" ? pricesPaie : pricesBundle
-    const criteria = section === "compta" ? txt.criteriaCompta : section === "paie" ? txt.criteriaPaie : txt.criteriaBundle
-    const featLabels = section === "compta" ? txt.featCompta : section === "paie" ? txt.featPaie : txt.featBundle
-    const included = section === "compta" ? comptaIncluded : section === "paie" ? paieIncluded : bundleIncluded
-    const bColors = section === "compta" ? badgeColorsMap : section === "paie" ? badgeColorsPaie : badgeColorsBundle
+    const isGbc = activeTab === "gbc"
+    const tiers = isGbc ? GBC_TIERS : SOCIETE_TIERS
+    const accents = isGbc ? GBC_ACCENTS : SOCIETE_ACCENTS
+    const populaire = isGbc ? GBC_POPULAIRE : SOCIETE_POPULAIRE
+    const names = isGbc ? txt.gbcNames : txt.societeNames
+    const descs = isGbc ? txt.gbcDescs : txt.societeDescs
+    const badges = isGbc ? txt.gbcBadges : txt.societeBadges
+    const txLabels = isGbc ? txt.gbcTx : txt.societeTx
+    const rois = isGbc ? txt.gbcRois : txt.societeRois
+    const storages = isGbc ? txt.gbcStorages : txt.societeStorages
+    const ctas = isGbc ? txt.gbcCtas : txt.societeCtas
 
-    return txt.tierNames.map((name, i) => (
+    return names.map((name, i) => (
       <TierCard
-        key={i}
-        badge={txt.tierBadges[i]}
-        badgeColor={bColors[i]}
+        key={`${isGbc ? "gbc" : "societe"}-${i}`}
+        badge={badges[i]}
+        badgeColor={accents[i]}
         name={name}
-        desc={txt.tierDescs[i]}
-        criteria={criteria[i]}
-        monthlyPrice={mp[i]}
-        roi={txt.tierRois[i]}
-        emra={txt.tierEmras[i]}
-        storage={txt.tierStorages[i]}
-        features={featLabels.map((label, j) => ({ label, included: included[i][j] }))}
-        ctaLabel={txt.tierCtas[i]}
-        ctaHref={i === txt.tierNames.length - 1 ? "/inscription?role=enterprise" : "/inscription"}
-        ctaPrimary={i === 1}
+        desc={descs[i]}
+        txLabel={txLabels[i]}
+        monthlyPrice={tiers[i].monthly}
+        roi={rois[i]}
+        unlimitedLabel={txt.unlimitedTag}
+        storage={storages[i]}
+        features={txt.featAllIn.map((label) => ({ label, included: true }))}
+        ctaLabel={ctas[i]}
+        ctaHref={tiers[i].monthly === 0 ? "/inscription?role=enterprise" : "/inscription"}
+        ctaPrimary={i === populaire}
         billing={billing}
         txt={txt}
-        tibokFeats={section === "paie" ? txt.tibokFeats : undefined}
+        extraTitle={isGbc ? txt.gbcExtraTitle : undefined}
+        extraFeats={isGbc ? txt.featGbcExtra : undefined}
       />
     ))
   }
 
   /* ------------------------------------------------------------------
-   * Calculator logic — per-employee for Paie, transaction-based for Compta
+   * Calculator — une seule variable : le volume de transactions.
    * ------------------------------------------------------------------
-   * Paie pricing is PURE per-employee (no flat platform fee). The rate
-   * is tiered so larger companies benefit from a volume discount, but
-   * the total always equals the sum of the marginal rate paid for each
-   * headcount. Adding 1 employee changes the total by exactly the rate
-   * in the current tier — no bracket jumps.
+   * Le palier retenu est le premier dont le plafond couvre le volume
+   * saisi (et, pour GBC, le nombre d'entités à consolider). Au-delà du
+   * dernier palier chiffré on bascule sur le palier négocié.
    *
-   * Floor price: Rs 250/mois — even a solo setup (1 employee) pays
-   * at least Rs 250. This is the "prix plancher RH".
-   *
-   * Compta is transaction-based (we estimate ~10 tx per employee per
-   * month) and maps to one of four plans (50/200/500/unlimited tx).
-   * Bundle = Paie + Compta with a 20 % discount. */
+   * L'effectif n'intervient nulle part : servir 5 ou 100 bulletins
+   * mobilise le même code. Il n'est affiché qu'à titre indicatif, pour
+   * aider un prospect qui ne connaît pas son volume à se situer.
+   */
 
-  const PAIE_FLOOR = 250 // minimum monthly Paie price
-  const PAIE_TIERS: { upTo: number; rate: number }[] = [
-    { upTo: 5,        rate: 250 }, // entry rate — 1 emp = Rs 250 (floor)
-    { upTo: 15,       rate: 180 },
-    { upTo: 50,       rate: 120 },
-    { upTo: 100,      rate: 90  },
-    { upTo: Infinity, rate: 70  },
-  ]
+  /* Paliers du curseur — resserrés en bas d'échelle, là où se joue
+   * l'essentiel des décisions d'achat. */
+  const TX_STEPS = [10, 20, 30, 40, 50, 75, 100, 150, 200, 300, 400, 500, 750, 1000, 1250, 1500, 2000]
+  const txIdx = Math.max(0, TX_STEPS.indexOf(transactions))
 
-  function computePaiePrice(emp: number): number {
-    if (emp <= 0) return PAIE_FLOOR
-    let price = 0
-    let remaining = emp
-    let from = 1
-    for (const tier of PAIE_TIERS) {
-      if (remaining <= 0) break
-      const tierSize = tier.upTo - from + 1
-      const count = Math.min(remaining, tierSize)
-      price += count * tier.rate
-      remaining -= count
-      from = tier.upTo + 1
-    }
-    return Math.max(PAIE_FLOOR, Math.round(price))
-  }
+  const isGbcCalc = calcTab === "gbc"
+  const calcTiers = isGbcCalc ? GBC_TIERS : SOCIETE_TIERS
+  const calcIndex = resolveTierIndex(calcTiers, transactions, isGbcCalc ? entites : 1)
+  const calcTier = calcTiers[calcIndex]
+  const calcTierName = (isGbcCalc ? txt.gbcNames : txt.societeNames)[calcIndex]
+  const calcTierTx = (isGbcCalc ? txt.gbcTx : txt.societeTx)[calcIndex]
+  const calcOnQuote = calcTier.monthly === 0
 
-  function paieTierLabel(emp: number): { tier: string; range: string } {
-    if (emp <= 3)  return { tier: "Solo",              range: "1–3 sal." }
-    if (emp <= 15) return { tier: txt.tierNames[1],    range: "4–15 sal." }
-    if (emp <= 50) return { tier: "PME",               range: "16–50 sal." }
-    return            { tier: txt.tierNames[3],        range: "51+ sal." }
-  }
+  const getCalcPrice = (): number =>
+    calcBilling === "annual" ? annualPrice(calcTier.monthly) : calcTier.monthly
 
-  function computeComptaPrice(emp: number): { price: number; tier: string; tx: string } {
-    // ~10 transactions per employee per month as a working estimate.
-    const estTx = Math.max(20, emp * 10)
-    if (estTx <= 50)  return { price: 1500,  tier: "Solo",           tx: "≤ 50 txn/mois" }
-    if (estTx <= 200) return { price: 3500,  tier: txt.tierNames[1], tx: "≤ 200 txn/mois" }
-    if (estTx <= 500) return { price: 6500,  tier: "PME",            tx: "≤ 500 txn/mois" }
-    return            { price: 12000, tier: txt.tierNames[3], tx: t("uimkt.tarifs.unlimited_tx", locale) }
-  }
-
-  const BUNDLE_DISCOUNT = 0.20 // 20%
-
-  function computeBundlePrice(emp: number): { price: number; saving: number } {
-    const paie = computePaiePrice(emp)
-    const compta = computeComptaPrice(emp).price
-    const raw = paie + compta
-    const price = Math.round(raw * (1 - BUNDLE_DISCOUNT))
-    return { price, saving: raw - price }
-  }
-
-  const calcPaiePrice   = (): number => computePaiePrice(employees)
-  const calcComptaPrice = (): number => computeComptaPrice(employees).price
-  const calcBundlePrice = (): number => computeBundlePrice(employees).price
-
-  const calcPaieTier    = (): { price: number; tier: string; range: string } => ({
-    price: computePaiePrice(employees),
-    ...paieTierLabel(employees),
-  })
-  const calcComptaTier  = (): { price: number; tier: string } => {
-    const c = computeComptaPrice(employees)
-    return { price: c.price, tier: c.tier }
-  }
-  const calcBundleTier  = (): { price: number; saving: number } => computeBundlePrice(employees)
-
-  const getCalcPrice = (): number => {
-    const mp = calcTab === "paie" ? calcPaiePrice() : calcTab === "compta" ? calcComptaPrice() : calcBundlePrice()
-    return calcBilling === "annual" ? annualPrice(mp) : mp
-  }
-  const getCalcFeats = (): string[] => {
-    if (employees <= 15) return txt.calcFeatsSmall
-    if (employees <= 50) return txt.calcFeatsMed
-    return txt.calcFeatsLarge
-  }
-
-  /* Build a breakdown of the Paie price by volume tier, so the UI can
-   * show exactly how the total is composed (e.g.: 5 × Rs 250 + 10 × Rs 180). */
-  function paieBreakdown(emp: number): { label: string; count: number; rate: number; subtotal: number }[] {
-    if (emp <= 0) return []
-    const rows: { label: string; count: number; rate: number; subtotal: number }[] = []
-    let remaining = emp
-    let from = 1
-    for (const tier of PAIE_TIERS) {
-      if (remaining <= 0) break
-      const upToDisplay = tier.upTo === Infinity ? "+" : `${tier.upTo}`
-      const tierSize = tier.upTo - from + 1
-      const count = Math.min(remaining, tierSize)
-      const label = tier.upTo === Infinity ? `${from}${upToDisplay}` : `${from}–${upToDisplay}`
-      rows.push({ label, count, rate: tier.rate, subtotal: count * tier.rate })
-      remaining -= count
-      from = tier.upTo + 1
-    }
-    return rows
-  }
-
-  // Per-employee average (only meaningful for Paie/Bundle).
-  const perEmpPaie = employees > 0 ? Math.round(calcPaiePrice() / employees) : 0
-  const perEmpBundle = employees > 0 ? Math.round(calcBundlePrice() / employees) : 0
+  /** Effectif indicatif — n'entre PAS dans le calcul du prix. */
+  const estimatedHeadcount = Math.max(1, Math.round(transactions / 10))
 
   /* Slider fill % */
-  const sliderPercent = ((employees - 1) / 199) * 100
+  const sliderPercent = (txIdx / (TX_STEPS.length - 1)) * 100
 
   /* Modules data — Lucide icons */
   const modules: { name: string; feats: string[]; icon: React.ReactNode; color: string }[] = [
@@ -1522,22 +1421,21 @@ export default function TarifsPage() {
       </section>
 
       {/* ============================================================= */}
-      {/* 10. CALCULATOR SECTION                                         */}
+      {/* 10. CALCULATOR SECTION — un seul curseur : les transactions     */}
       {/* ============================================================= */}
       <section style={{ maxWidth: "1280px", margin: "0 auto", padding: "64px 24px" }}>
         <div style={{ textAlign: "center", marginBottom: "40px" }}>
           <h2 style={{ color: C.white, fontSize: "28px", fontWeight: 800, margin: "0 0 8px", fontFamily: FONT }}>
             {txt.calcTitle}
           </h2>
-          <p style={{ color: C.muted, fontSize: "15px" }}>{txt.calcSub}</p>
+          <p style={{ color: C.muted, fontSize: "15px", maxWidth: "680px", margin: "0 auto" }}>{txt.calcSub}</p>
         </div>
 
         {/* Calc tabs */}
         <div style={{ display: "flex", gap: "4px", justifyContent: "center", marginBottom: "32px", flexWrap: "wrap" }}>
           {([
-            { key: "paie" as const, label: txt.calcTabPaie },
-            { key: "compta" as const, label: txt.calcTabCompta },
-            { key: "bundle" as const, label: txt.calcTabBundle },
+            { key: "societe" as const, label: txt.calcTabSociete },
+            { key: "gbc" as const, label: txt.calcTabGbc },
           ]).map((ct) => (
             <button key={ct.key} onClick={() => setCalcTab(ct.key)} style={{
               padding: "10px 20px", borderRadius: "8px", fontSize: "13px",
@@ -1551,18 +1449,20 @@ export default function TarifsPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: "24px", alignItems: "start" }}>
-          {/* Left side: slider */}
+          {/* Left side: the single input that drives the price */}
           <div style={{
             backgroundColor: C.cardBg, border: `1px solid ${C.navyBorder}`,
             borderRadius: "16px", padding: "32px",
           }}>
-            <label style={{ display: "block", color: C.white, fontSize: "14px", fontWeight: 600, marginBottom: "8px" }}>
-              {txt.calcEmployees}: <span style={{ color: C.gold }}>{employees}</span>
+            <label htmlFor="calc-tx" style={{ display: "block", color: C.white, fontSize: "14px", fontWeight: 600, marginBottom: "8px" }}>
+              {txt.calcTransactions}: <span style={{ color: C.gold }}>{fmt(transactions)}</span>
             </label>
-            <div style={{ position: "relative", marginBottom: "24px" }}>
+            <div style={{ position: "relative", marginBottom: "8px" }}>
               <input
-                type="range" min={1} max={200} value={employees}
-                onChange={(e) => setEmployees(Number(e.target.value))}
+                id="calc-tx"
+                type="range" min={0} max={TX_STEPS.length - 1} step={1} value={txIdx}
+                onChange={(e) => setTransactions(TX_STEPS[Number(e.target.value)])}
+                aria-valuetext={`${fmt(transactions)} ${txt.calcTransactions}`}
                 style={{
                   width: "100%", height: "6px", borderRadius: "3px",
                   appearance: "none", WebkitAppearance: "none",
@@ -1571,109 +1471,70 @@ export default function TarifsPage() {
                 }}
               />
             </div>
+            <div style={{ display: "flex", justifyContent: "space-between", color: C.mutedAlpha, fontSize: "11px", marginBottom: "20px" }}>
+              <span>{fmt(TX_STEPS[0])}</span>
+              <span>{fmt(TX_STEPS[TX_STEPS.length - 1])}+</span>
+            </div>
 
-            {/* Tier indicator */}
+            {/* Entités à consolider — seulement pour le package GBC */}
+            {isGbcCalc && (
+              <>
+                <label htmlFor="calc-ent" style={{ display: "block", color: C.white, fontSize: "14px", fontWeight: 600, marginBottom: "8px" }}>
+                  {txt.calcEntites}: <span style={{ color: C.gold }}>{entites}</span>
+                </label>
+                <input
+                  id="calc-ent"
+                  type="range" min={1} max={10} step={1} value={entites}
+                  onChange={(e) => setEntites(Number(e.target.value))}
+                  style={{
+                    width: "100%", height: "6px", borderRadius: "3px", marginBottom: "20px",
+                    appearance: "none", WebkitAppearance: "none",
+                    background: `linear-gradient(to right, ${C.gold} 0%, ${C.gold} ${((entites - 1) / 9) * 100}%, ${C.navyBorder} ${((entites - 1) / 9) * 100}%, ${C.navyBorder} 100%)`,
+                    outline: "none", cursor: "pointer",
+                  }}
+                />
+              </>
+            )}
+
+            {/* Palier retenu */}
             <div style={{
               marginBottom: "16px", padding: "10px 14px", borderRadius: "8px",
               backgroundColor: `${C.gold}10`, border: `1px solid ${C.gold}25`,
-              display: "flex", justifyContent: "space-between", alignItems: "center",
+              display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px",
             }}>
-              <span style={{ color: C.gold, fontSize: "13px", fontWeight: 700 }}>
-                {calcTab === "paie" ? calcPaieTier().tier : calcTab === "compta" ? calcComptaTier().tier : t("uimkt.tarifs.pack_erp", locale)}
-              </span>
-              <span style={{ color: C.muted, fontSize: "12px" }}>
-                {calcTab === "paie"
-                  ? `${employees} ${employees > 1 ? t("uimkt.tarifs.salaries", locale) : t("uimkt.tarifs.salarie", locale)}`
-                  : calcTab === "compta"
-                    ? computeComptaPrice(employees).tx
-                    : (t("uimkt.tarifs.compta_rh_tibok", locale))}
-              </span>
+              <span style={{ color: C.gold, fontSize: "13px", fontWeight: 700 }}>{calcTierName}</span>
+              <span style={{ color: C.muted, fontSize: "12px", textAlign: "right" }}>{calcTierTx}</span>
             </div>
 
-            {/* Formula display */}
-            {calcTab === "paie" && (
-              <div style={{ color: C.muted, fontSize: "13px", lineHeight: 1.9 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span>
-                    {t("uimkt.tarifs.calc_per_emp_pre", locale)} <span style={{ color: C.white, fontWeight: 600 }}>{t("uimkt.tarifs.per_salarie", locale)}</span> {t("uimkt.tarifs.calc_per_emp_post", locale)}
-                  </span>
-                </div>
-                {paieBreakdown(employees).map((row) => (
-                  <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: "2px" }}>
-                    <span style={{ fontVariantNumeric: "tabular-nums" }}>
-                      {row.count} × {t("uimkt.tarifs.sal_short", locale)} <span style={{ opacity: 0.7 }}>({row.label})</span> @ MRs {row.rate}
-                    </span>
-                    <span style={{ color: C.white, fontVariantNumeric: "tabular-nums" }}>
-                      MRs {fmt(row.subtotal)}
-                    </span>
-                  </div>
-                ))}
-                <div style={{ height: "1px", backgroundColor: C.navyBorder, margin: "8px 0" }} />
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span style={{ fontWeight: 600, color: C.white }}>Total</span>
-                  <span style={{ color: C.gold, fontWeight: 700, fontSize: "18px", fontVariantNumeric: "tabular-nums" }}>
-                    MRs {fmt(calcPaiePrice())} <span style={{ fontSize: "13px", fontWeight: 400, color: C.muted }}>{txt.perMonth}</span>
-                  </span>
-                </div>
-                {employees > 0 && (
-                  <div style={{ fontSize: "12px", color: C.muted, marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
-                    ≈ MRs {fmt(perEmpPaie)} {t("uimkt.tarifs.per_sal_month", locale)} · {t("uimkt.tarifs.floor_tibok", locale)}
-                  </div>
-                )}
+            {/* Ce qui compte — et surtout ce qui ne compte pas */}
+            <div style={{
+              padding: "14px", borderRadius: "10px",
+              backgroundColor: `${C.blue}0C`, border: `1px solid ${C.blue}25`,
+              marginBottom: "16px",
+            }}>
+              <div style={{ color: C.blue, fontSize: "12px", fontWeight: 700, marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                {txt.calcWhatIsTx}
               </div>
-            )}
-            {calcTab === "compta" && (
-              <div style={{ color: C.muted, fontSize: "13px", lineHeight: 1.9 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span>
-                    {t("uimkt.tarifs.compta_est_pre", locale)} <span style={{ color: C.white, fontWeight: 600 }}>{t("uimkt.tarifs.per_tx_volume", locale)}</span>
-                  </span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: "2px" }}>
-                  <span>{t("uimkt.tarifs.est_per_emp", locale)}</span>
-                  <span style={{ color: C.white, fontVariantNumeric: "tabular-nums" }}>
-                    {fmt(Math.max(20, employees * 10))} {t("uimkt.tarifs.tx_month", locale)}
-                  </span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span>{t("uimkt.tarifs.plan", locale)}</span>
-                  <span style={{ color: C.white, fontWeight: 600 }}>{calcComptaTier().tier}</span>
-                </div>
-                <div style={{ height: "1px", backgroundColor: C.navyBorder, margin: "8px 0" }} />
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span style={{ fontWeight: 600, color: C.white }}>Total</span>
-                  <span style={{ color: C.gold, fontWeight: 700, fontSize: "18px", fontVariantNumeric: "tabular-nums" }}>
-                    MRs {fmt(calcComptaPrice())} <span style={{ fontSize: "13px", fontWeight: 400, color: C.muted }}>{txt.perMonth}</span>
-                  </span>
-                </div>
+              <p style={{ color: C.white, fontSize: "12.5px", lineHeight: 1.6, margin: "0 0 8px" }}>{txt.calcTxIncluded}</p>
+              <p style={{ color: C.green, fontSize: "12.5px", lineHeight: 1.6, margin: 0, fontWeight: 500 }}>{txt.calcTxExcluded}</p>
+            </div>
+
+            {/* Aide à l'estimation — l'effectif n'est qu'un repère */}
+            <div style={{ color: C.muted, fontSize: "12.5px", lineHeight: 1.7, marginBottom: "16px" }}>
+              <span style={{ color: C.white, fontWeight: 600 }}>{txt.calcEstimator}</span>{" "}
+              {txt.calcEstimatorHelp}
+              <div style={{ marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
+                ≈ {fmt(estimatedHeadcount)} {estimatedHeadcount > 1
+                  ? t("uimkt.tarifs.salaries", locale)
+                  : t("uimkt.tarifs.salarie", locale)}
               </div>
-            )}
-            {calcTab === "bundle" && (
-              <div style={{ color: C.muted, fontSize: "13px", lineHeight: 1.9 }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>
-                    RH & Paie ({employees} {t("uimkt.tarifs.sal_short", locale)})
-                  </span>
-                  <span style={{ color: C.white, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>MRs {fmt(calcPaiePrice())}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>{t("uimkt.tarifs.accounting", locale)}</span>
-                  <span style={{ color: C.white, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>MRs {fmt(calcComptaPrice())}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", color: C.green, fontWeight: 600, marginTop: "4px" }}>
-                  <span>{t("uimkt.tarifs.bundle_discount", locale)}</span>
-                  <span style={{ fontVariantNumeric: "tabular-nums" }}>− MRs {fmt(calcPaiePrice() + calcComptaPrice() - calcBundlePrice())}</span>
-                </div>
-                <div style={{ height: "1px", backgroundColor: C.navyBorder, margin: "8px 0" }} />
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span style={{ fontWeight: 600, color: C.white }}>Total</span>
-                  <span style={{ color: C.gold, fontWeight: 700, fontSize: "18px", fontVariantNumeric: "tabular-nums" }}>MRs {fmt(calcBundlePrice())} <span style={{ fontSize: "13px", fontWeight: 400, color: C.muted }}>{txt.perMonth}</span></span>
-                </div>
-                {employees > 0 && (
-                  <div style={{ fontSize: "12px", color: C.muted, marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
-                    ≈ MRs {fmt(perEmpBundle)} {t("uimkt.tarifs.per_sal_month", locale)}
-                  </div>
-                )}
+            </div>
+
+            {/* Dépassement */}
+            {!calcOnQuote && (
+              <div style={{ color: C.mutedAlpha, fontSize: "12px", lineHeight: 1.6 }}>
+                {txt.overageNote}
+                {isGbcCalc && <> {txt.gbcEntiteNote}</>}
               </div>
             )}
 
@@ -1701,22 +1562,23 @@ export default function TarifsPage() {
               borderRadius: "16px", padding: "28px",
             }}>
               <div style={{ color: C.muted, fontSize: "13px", fontWeight: 500, marginBottom: "8px" }}>{txt.calcResult}</div>
+              <div style={{ color: C.white, fontSize: "15px", fontWeight: 700, marginBottom: "6px" }}>{calcTierName}</div>
               <div style={{ color: C.gold, fontSize: "clamp(28px, 5vw, 42px)", fontWeight: 800, lineHeight: 1.1, fontFamily: FONT, wordBreak: "break-word" }}>
-                MRs {fmt(getCalcPrice())}
+                {calcOnQuote ? txt.quoteLabel : `MRs ${fmt(getCalcPrice())}`}
               </div>
-              <div style={{ color: C.muted, fontSize: "14px", marginTop: "4px" }}>
-                {calcBilling === "monthly" ? txt.perMonth : `${txt.perMonth} (${txt.annual.toLowerCase()})`}
-              </div>
-
-              {calcTab !== "compta" && (
-                <div style={{
-                  marginTop: "16px", padding: "8px 12px", borderRadius: "8px",
-                  backgroundColor: `${C.green}10`, border: `1px solid ${C.green}25`,
-                  fontSize: "12px", color: C.green, fontWeight: 500,
-                }}>
-                  {txt.calcTibokInfo}
+              {!calcOnQuote && (
+                <div style={{ color: C.muted, fontSize: "14px", marginTop: "4px" }}>
+                  {calcBilling === "monthly" ? txt.perMonth : `${txt.perMonth} (${txt.annual.toLowerCase()})`}
                 </div>
               )}
+
+              <div style={{
+                marginTop: "16px", padding: "8px 12px", borderRadius: "8px",
+                backgroundColor: `${C.green}10`, border: `1px solid ${C.green}25`,
+                fontSize: "12px", color: C.green, fontWeight: 500,
+              }}>
+                {txt.calcTibokInfo}
+              </div>
 
               <div className="flex flex-col sm:flex-row" style={{ gap: "12px", marginTop: "20px" }}>
                 <Link href="/auth/login" style={{
@@ -1749,15 +1611,15 @@ export default function TarifsPage() {
               </div>
             </div>
 
-            {/* Feature list card */}
+            {/* Feature list card — identique pour tous les paliers */}
             <div style={{
               backgroundColor: C.cardBg, border: `1px solid ${C.navyBorder}`,
               borderRadius: "12px", padding: "20px",
             }}>
               <div style={{ color: C.white, fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>{txt.calcFeatTitle}</div>
-              {getCalcFeats().map((f, i) => (
+              {[...txt.featAllIn, ...(isGbcCalc ? txt.featGbcExtra : [])].map((f, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px", fontSize: "13px", color: C.white }}>
-                  <Check className="w-4 h-4 inline-block" style={{ color: C.green }} /> {f}
+                  <Check className="w-4 h-4 inline-block" style={{ color: C.green, flexShrink: 0 }} /> {f}
                 </div>
               ))}
             </div>
