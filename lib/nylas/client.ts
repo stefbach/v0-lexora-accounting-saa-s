@@ -90,6 +90,45 @@ function authHeaders(): Record<string, string> {
   return { Authorization: `Bearer ${apiKey()}`, 'Content-Type': 'application/json' }
 }
 
+/** URL de callback attendue par Nylas — doit être déclarée à l'identique côté tableau de bord. */
+export function nylasRedirectUri(fallbackOrigin: string): string {
+  const base = (env('NEXT_PUBLIC_APP_URL') || fallbackOrigin).replace(/\/+$/, '')
+  return `${base}/api/auth/nylas/callback`
+}
+
+export type NylasGrantStatus = {
+  /** Code HTTP renvoyé par Nylas ; 200 = le grant est vivant. */
+  httpStatus: number
+  /** `valid`, `invalid`, … tel que renvoyé par Nylas. */
+  grantStatus: string | null
+  provider: string | null
+  email: string | null
+  /** Message d'erreur Nylas, tronqué, quand le grant est refusé. */
+  error: string | null
+}
+
+/**
+ * Interroge l'état d'un grant côté Nylas.
+ *
+ * Un grant peut mourir sans que Lexora en soit informé : mot de passe changé,
+ * accès révoqué depuis la console Google/Microsoft, application désinstallée.
+ * Le compte reste alors `active = true` en base et l'interface l'affiche comme
+ * connecté, alors que toute lecture échoue. C'est le seul appel qui tranche.
+ */
+export async function getNylasGrantStatus(grantId: string): Promise<NylasGrantStatus> {
+  const res = await nfetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}`, { headers: authHeaders() })
+  const raw = await res.text().catch(() => '')
+  let parsed: { data?: { grant_status?: string; provider?: string; email?: string }; error?: unknown } = {}
+  try { parsed = JSON.parse(raw) } catch { /* réponse non JSON : on garde le texte brut */ }
+  return {
+    httpStatus: res.status,
+    grantStatus: parsed.data?.grant_status || null,
+    provider: parsed.data?.provider || null,
+    email: parsed.data?.email || null,
+    error: res.ok ? null : raw.slice(0, 200),
+  }
+}
+
 /**
  * fetch avec retry/backoff sur 429 (rate limit) et 5xx — utile pendant la
  * synchro initiale d'une nouvelle boîte, ou avec plusieurs boîtes en parallèle.
