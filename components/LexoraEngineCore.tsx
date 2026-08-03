@@ -26,25 +26,25 @@ const LAYERS = [
     label: "PCM",
     subKey: "cmkt.eng.layer_pcm_sub",
     bodyKey: "cmkt.eng.layer_pcm_body",
-    color: "#4191FF",
+    color: "#2563EB",
   },
   {
     label: "SYSCOHADA",
     subKey: "cmkt.eng.layer_syscohada_sub",
     bodyKey: "cmkt.eng.layer_syscohada_body",
-    color: "#D4AF37",
+    color: "#8A6D1B",
   },
   {
     label: "Full IFRS",
     subKey: "cmkt.eng.layer_ifrs_sub",
     bodyKey: "cmkt.eng.layer_ifrs_body",
-    color: "#2ECC8A",
+    color: "#12804A",
   },
   {
     label: "GBC",
     subKey: "cmkt.eng.layer_gbc_sub",
     bodyKey: "cmkt.eng.layer_gbc_body",
-    color: "#4191FF",
+    color: "#2563EB",
   },
 ]
 
@@ -84,7 +84,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
     <section
       id="engine"
       className="relative overflow-hidden py-20 md:py-28"
-      style={{ backgroundColor: "#0B0F2E" }}
+      style={{ backgroundColor: "#FFFFFF" }}
     >
       {/* Cinematic backdrop */}
       <div
@@ -115,7 +115,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
             className="mb-6 inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-bold uppercase tracking-widest"
             style={{
               backgroundColor: "rgba(212,175,55,0.10)",
-              color: "#D4AF37",
+              color: "#8A6D1B",
               borderColor: "rgba(212,175,55,0.30)",
               fontFamily: "'Poppins', sans-serif",
             }}
@@ -126,7 +126,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
           <h2
             className="mb-5 text-4xl font-bold tracking-tight md:text-6xl"
             style={{
-              color: "#E8EAFC",
+              color: "#0B0F2E",
               fontFamily: "'Poppins', sans-serif",
               fontWeight: 700,
               letterSpacing: "-0.03em",
@@ -149,7 +149,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                 </span>
                 {t("cmkt.eng.title_post", locale)}
                 <br />
-                <span className="text-2xl md:text-4xl font-normal" style={{ color: "#A8AFC7" }}>
+                <span className="text-2xl md:text-4xl font-normal" style={{ color: "#4A5670" }}>
                   PCM · SYSCOHADA · Full IFRS · GBC
                 </span>
               </>
@@ -169,7 +169,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                 </span>
                 {t("cmkt.eng.title_post", locale)}
                 <br />
-                <span className="text-2xl md:text-4xl font-normal" style={{ color: "#A8AFC7" }}>
+                <span className="text-2xl md:text-4xl font-normal" style={{ color: "#4A5670" }}>
                   PCM · SYSCOHADA · Full IFRS · GBC
                 </span>
               </>
@@ -178,7 +178,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
           <p
             className="mx-auto max-w-2xl text-base md:text-lg"
             style={{
-              color: "#A8AFC7",
+              color: "#4A5670",
               fontFamily: "'Poppins', sans-serif",
               fontWeight: 400,
               lineHeight: 1.7,
@@ -197,7 +197,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                   className="group relative h-full overflow-hidden rounded-2xl p-6"
                   style={{
                     background:
-                      "linear-gradient(180deg, rgba(16,24,71,0.95) 0%, rgba(11,15,46,0.95) 100%)",
+                      "#FFFFFF",
                     border: `1px solid ${l.color}40`,
                     backdropFilter: "blur(6px)",
                     WebkitBackdropFilter: "blur(6px)",
@@ -231,7 +231,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                     <h3
                       className="mb-1 text-2xl font-bold"
                       style={{
-                        color: "#E8EAFC",
+                        color: "#0B0F2E",
                         fontFamily: "'Poppins', sans-serif",
                         fontWeight: 700,
                         letterSpacing: "-0.02em",
@@ -248,7 +248,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                     <p
                       className="text-sm"
                       style={{
-                        color: "#A8AFC7",
+                        color: "#4A5670",
                         fontFamily: "'Poppins', sans-serif",
                         fontWeight: 400,
                         lineHeight: 1.65,
@@ -269,7 +269,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
             className="mb-4 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest"
             style={{
               backgroundColor: "rgba(65,145,255,0.10)",
-              color: "#4191FF",
+              color: "#2563EB",
               borderColor: "rgba(65,145,255,0.30)",
               fontFamily: "'Poppins', sans-serif",
             }}
@@ -280,7 +280,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
           <h3
             className="text-3xl font-bold md:text-4xl"
             style={{
-              color: "#E8EAFC",
+              color: "#0B0F2E",
               fontFamily: "'Poppins', sans-serif",
               fontWeight: 700,
               letterSpacing: "-0.02em",
@@ -291,7 +291,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
           <p
             className="mx-auto mt-3 max-w-2xl text-base"
             style={{
-              color: "#A8AFC7",
+              color: "#4A5670",
               fontFamily: "'Poppins', sans-serif",
               fontWeight: 400,
               lineHeight: 1.7,
@@ -310,7 +310,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                   <article
                     className="group h-full rounded-2xl p-6"
                     style={{
-                      backgroundColor: "rgba(16,24,71,0.65)",
+                      backgroundColor: "#FFFFFF",
                       border: `1px solid ${accent}33`,
                       backdropFilter: "blur(6px)",
                       WebkitBackdropFilter: "blur(6px)",
@@ -336,7 +336,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                         </div>
                         <div
                           className="font-mono text-base font-bold"
-                          style={{ color: "#E8EAFC", fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}
+                          style={{ color: "#0B0F2E", fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}
                         >
                           {s.title}
                         </div>
@@ -345,7 +345,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                     <p
                       className="text-sm"
                       style={{
-                        color: "#A8AFC7",
+                        color: "#4A5670",
                         fontFamily: "'Poppins', sans-serif",
                         fontWeight: 400,
                         lineHeight: 1.7,
@@ -379,19 +379,19 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                     border: "1px solid rgba(212,175,55,0.40)",
                   }}
                 >
-                  <Layers className="h-5 w-5" style={{ color: "#D4AF37" }} />
+                  <Layers className="h-5 w-5" style={{ color: "#8A6D1B" }} />
                 </div>
                 <div>
                   <div
                     className="text-[10px] font-bold uppercase tracking-widest"
-                    style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
+                    style={{ color: "#8A6D1B", fontFamily: "'Poppins', sans-serif" }}
                   >
                     {t("cmkt.eng.mcp_kicker", locale)}
                   </div>
                   <h4
                     className="text-lg font-bold md:text-xl"
                     style={{
-                      color: "#E8EAFC",
+                      color: "#0B0F2E",
                       fontFamily: "'Poppins', sans-serif",
                       fontWeight: 700,
                     }}
@@ -400,7 +400,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                   </h4>
                 </div>
               </div>
-              <Shield className="h-6 w-6" style={{ color: "#D4AF37" }} />
+              <Shield className="h-6 w-6" style={{ color: "#8A6D1B" }} />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -409,14 +409,14 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                   key={tool.label}
                   className="rounded-xl p-3"
                   style={{
-                    backgroundColor: "rgba(11,15,46,0.55)",
-                    border: "1px solid rgba(232,234,252,0.08)",
+                    backgroundColor: "#F5F8FD",
+                    border: "1px solid rgba(11,15,46,0.08)",
                   }}
                 >
                   <div
                     className="mb-1 font-mono text-xs font-bold"
                     style={{
-                      color: "#D4AF37",
+                      color: "#8A6D1B",
                       fontFamily: "'JetBrains Mono', ui-monospace, monospace",
                     }}
                   >
@@ -425,7 +425,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                   <div
                     className="text-[11px]"
                     style={{
-                      color: "#A8AFC7",
+                      color: "#4A5670",
                       fontFamily: "'Poppins', sans-serif",
                       fontWeight: 400,
                     }}

@@ -171,39 +171,39 @@ export default function HomePage() {
           - §2 touch-target-size: mobile menu button is 44×44px.
           - §9 persistent-nav: menu items reachable on every breakpoint.
       */}
-      <header className="sticky top-0 z-50" style={{ backgroundColor: "#0B0F2E", borderBottom: "1px solid #1E2760" }}>
+      <header className="sticky top-0 z-50" style={{ backgroundColor: "rgba(255,255,255,0.92)", backdropFilter: "blur(12px)", borderBottom: "1px solid #E3E9F3" }}>
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6">
-          <LexoraLogo href="/" size="md" showBaseline />
+          <LexoraLogo href="/" size="md" showBaseline tone="light" />
 
           <nav aria-label={t("uimkt.home.nav_main", locale)} className="hidden gap-8 md:flex">
-            <a href="#features" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
+            <a href="#features" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5670", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.modules', locale)}
             </a>
-            <a href="#ai" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
+            <a href="#ai" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5670", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.ai_intelligence', locale)}
             </a>
-            <a href="#telegram" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
+            <a href="#telegram" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5670", fontFamily: "'Poppins', sans-serif" }}>
               Telegram
             </a>
-            <a href="#engine" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
+            <a href="#engine" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5670", fontFamily: "'Poppins', sans-serif" }}>
               {t("uimkt.home.nav_engine", locale)}
             </a>
-            <a href="#pcm-claude" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
+            <a href="#pcm-claude" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5670", fontFamily: "'Poppins', sans-serif" }}>
               PCM × Claude
             </a>
             {SHOW_PRICING && (
-            <a href="#offres" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
+            <a href="#offres" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5670", fontFamily: "'Poppins', sans-serif" }}>
               {t("uimkt.home.nav_offers", locale)}
             </a>
             )}
-            <a href="#compliance" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
+            <a href="#compliance" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5670", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.compliance', locale)}
             </a>
-            <Link href="/pilotage-telegram" className="text-sm font-medium transition-colors hover:text-[#E8EAFC] inline-flex items-center gap-1" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
+            <Link href="/pilotage-telegram" className="text-sm font-medium transition-colors hover:text-[#E8EAFC] inline-flex items-center gap-1" style={{ color: "#4A5670", fontFamily: "'Poppins', sans-serif" }}>
               {t('uimkt.home.nav_assistant', locale)}
             </Link>
             {SHOW_PRICING && (
-            <Link href="/tarifs" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}>
+            <Link href="/tarifs" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#8A6D1B", fontFamily: "'Poppins', sans-serif" }}>
               Tarifs
             </Link>
             )}
@@ -231,7 +231,7 @@ export default function HomePage() {
                   variant="ghost"
                   size="icon"
                   className="md:hidden h-11 w-11 hover:bg-white/5"
-                  style={{ color: "#E8EAFC" }}
+                  style={{ color: "#0B0F2E" }}
                   aria-label={t("uimkt.home.open_menu", locale)}
                 >
                   <Menu className="h-5 w-5" />
@@ -240,7 +240,7 @@ export default function HomePage() {
               <SheetContent
                 side="right"
                 className="w-[300px] border-l-0 p-0"
-                style={{ backgroundColor: "#0E1338", borderLeft: "1px solid #1E2760" }}
+                style={{ backgroundColor: "#FFFFFF", borderLeft: "1px solid #1E2760" }}
               >
                 <SheetTitle className="sr-only">
                   {t("uimkt.home.nav_menu", locale)}
@@ -258,7 +258,7 @@ export default function HomePage() {
                         href={link.href}
                         onClick={() => setMobileMenuOpen(false)}
                         className="flex min-h-11 items-center rounded-lg px-3 text-base font-medium transition-colors hover:bg-white/5"
-                        style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}
+                        style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif" }}
                       >
                         {link.label}
                       </a>
@@ -267,7 +267,7 @@ export default function HomePage() {
                       href="/pilotage-telegram"
                       onClick={() => setMobileMenuOpen(false)}
                       className="flex min-h-11 items-center rounded-lg px-3 text-base font-medium transition-colors hover:bg-white/5"
-                      style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}
+                      style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif" }}
                     >
                       {t('uimkt.home.nav_assistant', locale)}
                     </Link>
@@ -276,7 +276,7 @@ export default function HomePage() {
                       href="/tarifs"
                       onClick={() => setMobileMenuOpen(false)}
                       className="flex min-h-11 items-center rounded-lg px-3 text-base font-medium transition-colors hover:bg-white/5"
-                      style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
+                      style={{ color: "#8A6D1B", fontFamily: "'Poppins', sans-serif" }}
                     >
                       Tarifs
                     </Link>
@@ -313,7 +313,7 @@ export default function HomePage() {
         {/* HERO — dark, modern 2-column with live neural particle field bg */}
         <section
           className="relative overflow-hidden py-20 md:py-28"
-          style={{ backgroundColor: "#0B0F2E" }}
+          style={{ backgroundColor: "#FFFFFF" }}
         >
           {/* Live particle field — neurons constantly moving */}
           <div
@@ -323,8 +323,8 @@ export default function HomePage() {
           >
             <ParticleField
               density={0.9}
-              color="rgba(65,145,255,0.75)"
-              linkColor="rgba(65,145,255,0.22)"
+              color="rgba(37,99,235,0.28)"
+              linkColor="rgba(11,15,46,0.09)"
               linkDistance={140}
               speed={0.28}
             />
@@ -346,7 +346,7 @@ export default function HomePage() {
                 <FadeSlide delay={0} y={18}>
                   <Badge
                     className="mb-6 border-0 px-4 py-1.5 text-sm font-medium"
-                    style={{ backgroundColor: "rgba(212,175,55,0.12)", color: "#D4AF37", border: "1px solid rgba(212,175,55,0.25)", fontFamily: "'Poppins', sans-serif" }}
+                    style={{ backgroundColor: "rgba(212,175,55,0.12)", color: "#8A6D1B", border: "1px solid rgba(212,175,55,0.25)", fontFamily: "'Poppins', sans-serif" }}
                   >
                     <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" />
                     {t('home.hero_badge', locale)}
@@ -356,9 +356,9 @@ export default function HomePage() {
                 <FadeSlide delay={0.08} y={20}>
                   <h1
                     className="mb-6 text-4xl font-bold tracking-tight md:text-6xl lg:text-[64px] lg:leading-[1.05]"
-                    style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif", letterSpacing: "-0.02em" }}
+                    style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif", letterSpacing: "-0.02em" }}
                   >
-                    <span style={{ letterSpacing: "0.04em" }}>LE<span style={{ color: "#D4AF37" }}>X</span>ORA</span>
+                    <span style={{ letterSpacing: "0.04em" }}>LE<span style={{ color: "#8A6D1B" }}>X</span>ORA</span>
                     <br />
                     <span
                       className="block text-2xl md:text-4xl lg:text-[40px] lg:leading-[1.15]"
@@ -385,7 +385,7 @@ export default function HomePage() {
                 <FadeSlide delay={0.16} y={20}>
                   <p
                     className="mx-auto mb-8 max-w-2xl text-base md:text-lg lg:mx-0"
-                    style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}
+                    style={{ color: "#4A5670", fontFamily: "'Poppins', sans-serif", fontWeight: 300, lineHeight: 1.7 }}
                   >
                     {t("uimkt.home.hero_sub", locale)}
                   </p>
@@ -412,7 +412,7 @@ export default function HomePage() {
                           size="lg"
                           variant="outline"
                           className="w-full px-8 text-base font-semibold sm:w-auto"
-                          style={{ border: "1px solid rgba(65,145,255,0.45)", color: "#E8EAFC", backgroundColor: "rgba(232,234,252,0.04)", fontFamily: "'Poppins', sans-serif", fontWeight: 500, borderRadius: "8px" }}
+                          style={{ border: "1px solid rgba(65,145,255,0.45)", color: "#0B0F2E", backgroundColor: "rgba(11,15,46,0.04)", fontFamily: "'Poppins', sans-serif", fontWeight: 500, borderRadius: "8px" }}
                         >
                           {t('home.watch_demo', locale)}
                         </Button>
@@ -430,51 +430,51 @@ export default function HomePage() {
                     <li
                       className="rounded-xl px-4 py-3 text-center sm:text-left"
                       style={{
-                        backgroundColor: "rgba(232,234,252,0.04)",
-                        border: "1px solid rgba(232,234,252,0.08)",
+                        backgroundColor: "rgba(11,15,46,0.04)",
+                        border: "1px solid rgba(11,15,46,0.08)",
                       }}
                     >
                       <div
                         className="text-xl font-bold md:text-2xl"
-                        style={{ color: "#E8EAFC", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}
+                        style={{ color: "#0B0F2E", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}
                       >
                         <AnimatedCounter value={6} suffix="" duration={1.2} />
                       </div>
-                      <div className="text-xs" style={{ color: "#A8AFC7" }}>
+                      <div className="text-xs" style={{ color: "#4A5670" }}>
                         {t("uimkt.home.stat_agents", locale)}
                       </div>
                     </li>
                     <li
                       className="rounded-xl px-4 py-3 text-center sm:text-left"
                       style={{
-                        backgroundColor: "rgba(232,234,252,0.04)",
-                        border: "1px solid rgba(232,234,252,0.08)",
+                        backgroundColor: "rgba(11,15,46,0.04)",
+                        border: "1px solid rgba(11,15,46,0.08)",
                       }}
                     >
                       <div
                         className="text-xl font-bold md:text-2xl"
-                        style={{ color: "#E8EAFC", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}
+                        style={{ color: "#0B0F2E", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}
                       >
                         24/7
                       </div>
-                      <div className="text-xs" style={{ color: "#A8AFC7" }}>
+                      <div className="text-xs" style={{ color: "#4A5670" }}>
                         {t("uimkt.home.stat_realtime", locale)}
                       </div>
                     </li>
                     <li
                       className="rounded-xl px-4 py-3 text-center sm:text-left"
                       style={{
-                        backgroundColor: "rgba(232,234,252,0.04)",
-                        border: "1px solid rgba(232,234,252,0.08)",
+                        backgroundColor: "rgba(11,15,46,0.04)",
+                        border: "1px solid rgba(11,15,46,0.08)",
                       }}
                     >
                       <div
                         className="text-xl font-bold md:text-2xl"
-                        style={{ color: "#E8EAFC", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}
+                        style={{ color: "#0B0F2E", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}
                       >
                         <AnimatedCounter value={100} suffix="%" duration={1.4} />
                       </div>
-                      <div className="text-xs" style={{ color: "#A8AFC7" }}>
+                      <div className="text-xs" style={{ color: "#4A5670" }}>
                         MRA
                       </div>
                     </li>
@@ -497,15 +497,15 @@ export default function HomePage() {
           aria-label={t("uimkt.home.trust_aria", locale)}
           className="relative overflow-hidden py-8"
           style={{
-            backgroundColor: "#0B0F2E",
-            borderTop: "1px solid rgba(30,39,96,0.5)",
-            borderBottom: "1px solid rgba(30,39,96,0.5)",
+            backgroundColor: "#F5F8FD",
+            borderTop: "1px solid #E3E9F3",
+            borderBottom: "1px solid #E3E9F3",
           }}
         >
           <div className="mx-auto max-w-7xl px-4 sm:px-6">
             <div
               className="mb-5 text-center text-xs font-bold uppercase tracking-widest"
-              style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}
+              style={{ color: "#4A5670", fontFamily: "'Poppins', sans-serif" }}
             >
               {t("uimkt.home.trust_standards", locale)}
             </div>
@@ -719,7 +719,7 @@ export default function HomePage() {
                         <article
                           className="group relative flex h-full flex-col overflow-hidden rounded-2xl"
                           style={{
-                            backgroundColor: "#0B0F2E",
+                            backgroundColor: "#FFFFFF",
                             border: "1px solid #D4AF37",
                             boxShadow:
                               "0 30px 80px -30px rgba(212,175,55,0.35), 0 0 0 1px rgba(212,175,55,0.22)",
@@ -800,14 +800,14 @@ export default function HomePage() {
                               <div className="lg:hidden">
                                 <div
                                   className="text-[10px] font-bold uppercase tracking-widest"
-                                  style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
+                                  style={{ color: "#8A6D1B", fontFamily: "'Poppins', sans-serif" }}
                                 >
                                   {moduleNum} / {totalStr} · {t("uimkt.home.module_health", locale)}
                                 </div>
                                 <h3
                                   className="mt-1 text-xl font-bold leading-tight md:text-2xl"
                                   style={{
-                                    color: "#E8EAFC",
+                                    color: "#0B0F2E",
                                     fontFamily: "'Poppins', sans-serif",
                                     fontWeight: 700,
                                     letterSpacing: "-0.02em",
@@ -823,14 +823,14 @@ export default function HomePage() {
                               <div className="hidden lg:block">
                                 <div
                                   className="text-[10px] font-bold uppercase tracking-widest"
-                                  style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
+                                  style={{ color: "#8A6D1B", fontFamily: "'Poppins', sans-serif" }}
                                 >
                                   {moduleNum} / {totalStr} · {t("uimkt.home.module_health", locale)}
                                 </div>
                                 <h3
                                   className="mb-3 mt-1 text-2xl font-bold leading-tight md:text-3xl"
                                   style={{
-                                    color: "#E8EAFC",
+                                    color: "#0B0F2E",
                                     fontFamily: "'Poppins', sans-serif",
                                     fontWeight: 700,
                                     letterSpacing: "-0.02em",
@@ -842,7 +842,7 @@ export default function HomePage() {
                               <p
                                 className="mb-4 text-sm md:text-base"
                                 style={{
-                                  color: "#A8AFC7",
+                                  color: "#4A5670",
                                   fontFamily: "'Poppins', sans-serif",
                                   fontWeight: 300,
                                   lineHeight: 1.65,
@@ -866,7 +866,7 @@ export default function HomePage() {
                                     </span>
                                     <span
                                       style={{
-                                        color: "#E8EAFC",
+                                        color: "#0B0F2E",
                                         fontFamily: "'Poppins', sans-serif",
                                         lineHeight: 1.55,
                                       }}
@@ -896,7 +896,7 @@ export default function HomePage() {
                                 <div
                                   className="text-2xl font-bold"
                                   style={{
-                                    color: "#E8EAFC",
+                                    color: "#0B0F2E",
                                     fontFamily: "'Poppins', sans-serif",
                                     fontVariantNumeric: "tabular-nums",
                                     letterSpacing: "-0.02em",
@@ -907,7 +907,7 @@ export default function HomePage() {
                               </div>
                               <div
                                 className="text-right text-[10px] font-medium uppercase tracking-widest"
-                                style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}
+                                style={{ color: "#4A5670", fontFamily: "'Poppins', sans-serif" }}
                               >
                                 {t("uimkt.home.included_nocost", locale)}
                               </div>
@@ -1125,7 +1125,7 @@ export default function HomePage() {
         <section
           id="live-data"
           className="relative overflow-hidden py-16 md:py-20"
-          style={{ backgroundColor: "#0B0F2E" }}
+          style={{ backgroundColor: "#FFFFFF" }}
         >
           <div
             aria-hidden="true"
@@ -1147,7 +1147,7 @@ export default function HomePage() {
         <section
           id="ai"
           className="relative overflow-hidden py-20 md:py-28"
-          style={{ backgroundColor: "#0B0F2E" }}
+          style={{ backgroundColor: "#FFFFFF" }}
         >
           {/* Live particle field */}
           <div
@@ -1179,7 +1179,7 @@ export default function HomePage() {
                 className="mb-5 inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-bold uppercase tracking-widest"
                 style={{
                   backgroundColor: "rgba(212,175,55,0.08)",
-                  color: "#D4AF37",
+                  color: "#8A6D1B",
                   borderColor: "rgba(212,175,55,0.25)",
                   fontFamily: "'Poppins', sans-serif",
                 }}
@@ -1190,7 +1190,7 @@ export default function HomePage() {
               <h2
                 className="mb-4 text-3xl font-bold tracking-tight md:text-5xl"
                 style={{
-                  color: "#E8EAFC",
+                  color: "#0B0F2E",
                   fontFamily: "'Poppins', sans-serif",
                   fontWeight: 700,
                   letterSpacing: "-0.02em",
@@ -1213,7 +1213,7 @@ export default function HomePage() {
               <p
                 className="mx-auto max-w-2xl text-base md:text-lg"
                 style={{
-                  color: "#A8AFC7",
+                  color: "#4A5670",
                   fontFamily: "'Poppins', sans-serif",
                   fontWeight: 300,
                   lineHeight: 1.7,
@@ -1228,7 +1228,7 @@ export default function HomePage() {
               <div
                 className="relative"
                 style={{
-                  backgroundColor: "rgba(16,24,71,0.60)",
+                  backgroundColor: "#FFFFFF",
                   border: "1px solid rgba(65,145,255,0.18)",
                   borderRadius: "24px",
                   padding: "20px",
@@ -1266,8 +1266,9 @@ export default function HomePage() {
                       <article
                         className="group relative flex h-full flex-col overflow-hidden rounded-2xl p-6 md:p-7"
                         style={{
-                          backgroundColor: "#101847",
-                          border: "1px solid #1E2760",
+                          backgroundColor: "#FFFFFF",
+                          border: "1px solid #E3E9F3",
+                          boxShadow: "0 4px 6px -2px rgba(11,15,46,0.05), 0 12px 24px -8px rgba(11,15,46,0.10)",
                         }}
                       >
                         {/* Hover gradient ring */}
@@ -1314,7 +1315,7 @@ export default function HomePage() {
                           <span
                             className="text-3xl font-bold leading-none md:text-4xl"
                             style={{
-                              color: "rgba(232,234,252,0.08)",
+                              color: "rgba(11,15,46,0.08)",
                               fontFamily: "'Poppins', sans-serif",
                               fontVariantNumeric: "tabular-nums",
                               letterSpacing: "-0.04em",
@@ -1328,7 +1329,7 @@ export default function HomePage() {
                         <h3
                           className="relative mb-3 text-lg font-bold leading-tight"
                           style={{
-                            color: "#E8EAFC",
+                            color: "#0B0F2E",
                             fontFamily: "'Poppins', sans-serif",
                             fontWeight: 700,
                             letterSpacing: "-0.01em",
@@ -1341,7 +1342,7 @@ export default function HomePage() {
                         <p
                           className="relative flex-1 text-sm"
                           style={{
-                            color: "#A8AFC7",
+                            color: "#4A5670",
                             fontFamily: "'Poppins', sans-serif",
                             fontWeight: 300,
                             lineHeight: 1.7,
@@ -1358,7 +1359,7 @@ export default function HomePage() {
                           <span style={{ color: accent, fontFamily: "'Poppins', sans-serif" }}>
                             {t("uimkt.home.agent_online", locale)}
                           </span>
-                          <span style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
+                          <span style={{ color: "#4A5670", fontFamily: "'Poppins', sans-serif" }}>
                             AI · ML
                           </span>
                         </div>

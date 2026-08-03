@@ -275,7 +275,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
       className="relative overflow-hidden py-20 md:py-28"
       style={{
         background:
-          "linear-gradient(180deg, #0B0F2E 0%, #101847 40%, #0B0F2E 100%)",
+          "linear-gradient(180deg, #FFFFFF 0%, #F5F8FD 45%, #FFFFFF 100%)",
       }}
     >
       {/* Cinematic backdrop */}
@@ -309,7 +309,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
               className="mb-5 inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-bold uppercase tracking-widest"
               style={{
                 backgroundColor: "rgba(212,175,55,0.10)",
-                color: "#D4AF37",
+                color: "#8A6D1B",
                 borderColor: "rgba(212,175,55,0.30)",
                 fontFamily: "'Poppins', sans-serif",
               }}
@@ -320,7 +320,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
             <h2
               className="mb-5 text-4xl font-bold tracking-tight md:text-6xl"
               style={{
-                color: "#E8EAFC",
+                color: "#0B0F2E",
                 fontFamily: "'Poppins', sans-serif",
                 fontWeight: 700,
                 letterSpacing: "-0.03em",
@@ -358,7 +358,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
             <p
               className="mb-7 text-base md:text-lg"
               style={{
-                color: "#A8AFC7",
+                color: "#4A5670",
                 fontFamily: "'Poppins', sans-serif",
                 fontWeight: 400,
                 lineHeight: 1.7,
@@ -379,18 +379,18 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                   <div
                     className="rounded-xl px-4 py-3 text-center"
                     style={{
-                      backgroundColor: "rgba(232,234,252,0.04)",
+                      backgroundColor: "rgba(11,15,46,0.04)",
                       border: "1px solid rgba(212,175,55,0.22)",
                       fontFamily: "'Poppins', sans-serif",
                     }}
                   >
                     <div
                       className="text-xl font-bold md:text-2xl"
-                      style={{ color: "#D4AF37", letterSpacing: "-0.01em" }}
+                      style={{ color: "#8A6D1B", letterSpacing: "-0.01em" }}
                     >
                       {s.v}
                     </div>
-                    <div className="text-[11px] uppercase tracking-widest" style={{ color: "#A8AFC7" }}>
+                    <div className="text-[11px] uppercase tracking-widest" style={{ color: "#4A5670" }}>
                       {s.l}
                     </div>
                   </div>
@@ -422,8 +422,8 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                   className="w-full px-7 text-base font-semibold sm:w-auto"
                   style={{
                     border: "1px solid rgba(65,145,255,0.45)",
-                    color: "#E8EAFC",
-                    backgroundColor: "rgba(232,234,252,0.04)",
+                    color: "#0B0F2E",
+                    backgroundColor: "rgba(11,15,46,0.04)",
                     fontFamily: "'Poppins', sans-serif",
                     fontWeight: 500,
                     borderRadius: "8px",
@@ -444,14 +444,14 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
         <Reveal className="mt-20 mb-10 text-center">
           <span
             className="mb-4 inline-block text-[11px] font-bold uppercase tracking-[0.18em]"
-            style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
+            style={{ color: "#8A6D1B", fontFamily: "'Poppins', sans-serif" }}
           >
             {t("cmkt.pcm.caps_kicker", locale)}
           </span>
           <h3
             className="mb-3 text-3xl font-bold md:text-4xl"
             style={{
-              color: "#E8EAFC",
+              color: "#0B0F2E",
               fontFamily: "'Poppins', sans-serif",
               fontWeight: 700,
               letterSpacing: "-0.02em",
@@ -468,7 +468,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                 <article
                   className="group relative h-full overflow-hidden rounded-2xl p-7"
                   style={{
-                    backgroundColor: "rgba(16,24,71,0.70)",
+                    backgroundColor: "#FFFFFF",
                     border: `1px solid ${c.color}40`,
                     backdropFilter: "blur(8px)",
                     WebkitBackdropFilter: "blur(8px)",
@@ -514,7 +514,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                   <h4
                     className="mb-3 text-lg font-bold leading-tight md:text-xl"
                     style={{
-                      color: "#E8EAFC",
+                      color: "#0B0F2E",
                       fontFamily: "'Poppins', sans-serif",
                       fontWeight: 700,
                       letterSpacing: "-0.01em",
@@ -525,7 +525,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                   <p
                     className="text-sm"
                     style={{
-                      color: "#A8AFC7",
+                      color: "#4A5670",
                       fontFamily: "'Poppins', sans-serif",
                       fontWeight: 400,
                       lineHeight: 1.7,
@@ -561,19 +561,19 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                     boxShadow: "0 0 32px rgba(212,175,55,0.30)",
                   }}
                 >
-                  <InfinityIcon className="h-7 w-7" style={{ color: "#D4AF37" }} strokeWidth={1.8} />
+                  <InfinityIcon className="h-7 w-7" style={{ color: "#8A6D1B" }} strokeWidth={1.8} />
                 </div>
                 <div>
                   <div
                     className="text-[10px] font-bold uppercase tracking-widest"
-                    style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
+                    style={{ color: "#8A6D1B", fontFamily: "'Poppins', sans-serif" }}
                   >
                     {t("cmkt.pcm.roadmap_kicker", locale)}
                   </div>
                   <h3
                     className="text-2xl font-bold md:text-3xl"
                     style={{
-                      color: "#E8EAFC",
+                      color: "#0B0F2E",
                       fontFamily: "'Poppins', sans-serif",
                       fontWeight: 700,
                       letterSpacing: "-0.02em",
@@ -583,7 +583,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                   </h3>
                 </div>
               </div>
-              <TrendingUp className="hidden h-8 w-8 md:block" style={{ color: "#D4AF37" }} />
+              <TrendingUp className="hidden h-8 w-8 md:block" style={{ color: "#8A6D1B" }} />
             </div>
 
             <div className="relative grid gap-5 md:grid-cols-3">
@@ -628,7 +628,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                         key={item}
                         className="flex items-start gap-2 text-sm"
                         style={{
-                          color: "#E8EAFC",
+                          color: "#0B0F2E",
                           fontFamily: "'Poppins', sans-serif",
                           fontWeight: 400,
                           lineHeight: 1.55,
@@ -652,15 +652,15 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
               style={{
                 backgroundColor: "rgba(11,15,46,0.55)",
                 border: "1px solid rgba(212,175,55,0.22)",
-                color: "#A8AFC7",
+                color: "#4A5670",
                 fontFamily: "'Poppins', sans-serif",
               }}
             >
-              <Sparkles className="h-4 w-4" style={{ color: "#D4AF37" }} />
+              <Sparkles className="h-4 w-4" style={{ color: "#8A6D1B" }} />
               <span>
                 {t("cmkt.pcm.roadmap_footer", locale)}
               </span>
-              <ArrowRight className="h-4 w-4" style={{ color: "#D4AF37" }} />
+              <ArrowRight className="h-4 w-4" style={{ color: "#8A6D1B" }} />
             </div>
           </div>
         </Reveal>
