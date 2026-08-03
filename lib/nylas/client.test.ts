@@ -234,13 +234,16 @@ describe('checkNylasApplication', () => {
     expect(c.probleme).toBeNull()
   })
 
-  it('distingue un client_id d’une autre application', async () => {
+  it('distingue un client_id d’une autre application et donne la bonne valeur', async () => {
+    // Le message doit porter le correctif : sans l'application_id attendu,
+    // l'utilisateur sait que c'est faux sans savoir quoi mettre à la place.
     process.env.NYLAS_API_URI = NYLAS_REGIONS.us
     process.env.NYLAS_CLIENT_ID = 'app-autre'
     mockRegions('us', 'app-1')
     const c = await checkNylasApplication()
     expect(c.regionDetectee).toBe('us')
     expect(c.probleme).toContain('NYLAS_CLIENT_ID')
+    expect(c.probleme).toContain('app-1')
   })
 
   it('signale une clé serveur rejetée partout', async () => {
