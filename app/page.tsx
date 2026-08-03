@@ -38,6 +38,7 @@ import { NewFeatures2026 } from "@/components/NewFeatures2026"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcherLight } from "@/components/LanguageSwitcher"
 import { LexoraLogo } from "@/components/LexoraLogo"
+import { SOCIETE_TIERS } from "@/lib/pricing/packages"
 import {
   FileSearch,
   BookOpen,
@@ -1524,7 +1525,9 @@ export default function HomePage() {
                     className="text-3xl font-bold"
                     style={{ color: "#0B0F2E", fontFamily: "'Poppins', sans-serif" }}
                   >
-                    Rs 1 500
+                    {/* Prix d'entrée lu depuis la grille partagée : écrit en dur,
+                        il annonçait encore Rs 1 500 — l'ancien compta_solo. */}
+                    Rs {SOCIETE_TIERS[0].monthly.toLocaleString("fr-FR")}
                     <span
                       className="text-sm font-normal"
                       style={{ color: "#8B90B8" }}
