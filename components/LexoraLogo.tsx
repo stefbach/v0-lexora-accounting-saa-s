@@ -67,7 +67,9 @@ export function LexoraLogo({ href, subtitle, size = "md", showBaseline = false, 
       </div>
       {showBaseline && (
         <span
-          className={`${baselineSize} font-light mt-1 tracking-wider`}
+          // Masquée sous 640px : sur mobile la baseline se casse en trois
+          // lignes et triple la hauteur de l'en-tête collant.
+          className={`${baselineSize} font-light mt-1 tracking-wider hidden sm:block whitespace-nowrap`}
           style={{ color: t.baseline, fontFamily: "'Poppins', sans-serif" }}
         >
           INTELLIGENT ACCOUNTING &middot; POWERED BY AI
