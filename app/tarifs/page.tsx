@@ -10,7 +10,7 @@ import {
   OVERAGE_MUR_PER_TX,
   resolveTierIndex,
   annualMonthlyPrice,
-  SETUP_FEE_MUR,
+  SETUP_FEE_MUR_PAR_SOCIETE,
 } from "@/lib/pricing/packages"
 import {
   FileSearch, BookOpen, FileText, Users, Landmark, BellRing,
@@ -121,10 +121,10 @@ const frTexts = {
   // ---- Promesse commune aux deux packages -------------------------
   unlimitedTag: "Salariés & utilisateurs illimités",
   tibokPaygTag: "TIBOK : Rs 500 par téléconsultation, à l’acte",
-  setupTag: "+ Rs 8 000 de mise en service, une seule fois",
+  setupTag: "+ Rs 8 000 de mise en service, par société",
   setupTitle: "Mise en service",
-  setupNote: "Rs 8 000 facturés une seule fois à la souscription : paramétrage de votre société et 4 heures de formation. Identique sur tous les paliers. La reprise d’un historique comptable existant est devisée à part.",
-  calcSetupLabel: "Mise en service (une fois)",
+  setupNote: "Rs 8 000 par société, facturés une seule fois à la souscription : paramétrage et 4 heures de formation. Un groupe qui consolide plusieurs entités paie une mise en service par entité. La reprise d’un historique comptable existant est devisée à part.",
+  calcSetupLabel: "Mise en service",
   calcSubscriptionLabel: "Première échéance",
   calcFirstPaymentLabel: "À régler à la souscription",
   quoteLabel: "Sur devis",
@@ -361,10 +361,10 @@ const enTexts = {
   // ---- Shared promise across both packages ------------------------
   unlimitedTag: "Unlimited employees & users",
   tibokPaygTag: "TIBOK: Rs 500 per teleconsultation, pay as you go",
-  setupTag: "+ Rs 8,000 one-off setup",
+  setupTag: "+ Rs 8,000 setup, per company",
   setupTitle: "Setup",
-  setupNote: "Rs 8,000 billed once on subscription: company configuration and 4 hours of training. Identical across every tier. Migrating an existing accounting history is quoted separately.",
-  calcSetupLabel: "Setup (one-off)",
+  setupNote: "Rs 8,000 per company, billed once on subscription: configuration and 4 hours of training. A group consolidating several entities pays one setup per entity. Migrating an existing accounting history is quoted separately.",
+  calcSetupLabel: "Setup",
   calcSubscriptionLabel: "First instalment",
   calcFirstPaymentLabel: "Due on subscription",
   quoteLabel: "On quote",
@@ -966,6 +966,11 @@ export default function TarifsPage() {
 
   const getCalcPrice = (): number =>
     calcBilling === "annual" ? annualPrice(calcTier.monthly) : calcTier.monthly
+
+  /* Mise en service : une par société à paramétrer. Sur le package GBC, le
+   * périmètre consolidé donne directement le nombre de sociétés. */
+  const calcSocietes = isGbcCalc ? entites : 1
+  const calcSetupTotal = SETUP_FEE_MUR_PAR_SOCIETE * calcSocietes
 
   /** Effectif indicatif — n'entre PAS dans le calcul du prix. */
   const estimatedHeadcount = Math.max(1, Math.round(transactions / 10))
@@ -1597,8 +1602,11 @@ export default function TarifsPage() {
                     {txt.calcFirstPaymentLabel}
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: C.muted, marginBottom: "4px" }}>
-                    <span>{txt.calcSetupLabel}</span>
-                    <span style={{ color: C.white, fontVariantNumeric: "tabular-nums" }}>MRs {fmt(SETUP_FEE_MUR)}</span>
+                    <span>
+                      {txt.calcSetupLabel}
+                      {calcSocietes > 1 && <> · {calcSocietes} × MRs {fmt(SETUP_FEE_MUR_PAR_SOCIETE)}</>}
+                    </span>
+                    <span style={{ color: C.white, fontVariantNumeric: "tabular-nums" }}>MRs {fmt(calcSetupTotal)}</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: C.muted }}>
                     <span>{txt.calcSubscriptionLabel}</span>
@@ -1608,7 +1616,7 @@ export default function TarifsPage() {
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px", fontWeight: 700 }}>
                     <span style={{ color: C.white }}>Total</span>
                     <span style={{ color: C.gold, fontVariantNumeric: "tabular-nums" }}>
-                      MRs {fmt(SETUP_FEE_MUR + getCalcPrice())}
+                      MRs {fmt(calcSetupTotal + getCalcPrice())}
                     </span>
                   </div>
                   <p style={{ color: C.mutedAlpha, fontSize: "11.5px", lineHeight: 1.55, margin: "10px 0 0" }}>

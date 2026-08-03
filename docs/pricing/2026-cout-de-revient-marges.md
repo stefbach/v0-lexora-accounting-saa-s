@@ -119,18 +119,35 @@ sur le prix d'achat, pas fixé indépendamment. Le passage à l'acte a déjà
 supprimé le risque majeur (l'ancien forfait à Rs 1 200/mois exposait à une
 perte non bornée) ; il reste à sécuriser le taux.
 
-### Frais de mise en service — Rs 8 000 pour 4 h
+### Frais de mise en service — Rs 8 000 par société, 4 h
+
+L'unité de facturation est la **société**, pas l'abonnement : le travail
+d'onboarding est proportionnel au nombre de plans comptables à paramétrer et
+de jeux d'utilisateurs à former, pas au nombre de contrats signés.
 
 | Poste | Temps | Coût |
 |---|---|---|
 | Formation | 4 h × Rs 800 | 3 200 |
 | Paramétrage société (plan comptable, exercices, utilisateurs, connexion bancaire) | 2 h × Rs 800 | 1 600 |
-| **Total** | 6 h | **4 800** |
+| **Total par société** | 6 h | **4 800** |
 
-Marge Rs 3 200, soit **40 %**. Le montant est correct — il couvre le temps
-engagé sans être un centre de profit, ce qui est le bon calibrage pour un
-frais dont la fonction réelle est de financer l'onboarding et de filtrer les
-souscriptions non sérieuses.
+Marge Rs 3 200 par société, soit **40 %**. Le montant est correct — il couvre
+le temps engagé sans être un centre de profit, ce qui est le bon calibrage
+pour un frais dont la fonction réelle est de financer l'onboarding et de
+filtrer les souscriptions non sérieuses.
+
+Le compte par société est aussi ce qui rend le poste sain sur les structures
+multi-entités, où l'onboarding est le plus lourd :
+
+| Cas | Mises en service | Facturé | Temps réel | Marge |
+|---|---|---|---|---|
+| Société domestique | 1 | 8 000 | 6 h | 3 200 |
+| GBC groupe, 5 entités | 5 | 40 000 | 30 h | 16 000 |
+| Management company, 20 dossiers | 20 | 160 000 | 120 h | 64 000 |
+
+Un forfait unique par abonnement aurait fait payer Rs 8 000 les 30 heures
+d'onboarding d'un groupe de 5 entités — soit Rs 16 000 de perte sèche sur la
+signature la plus stratégique du portefeuille.
 
 Deux réserves, dans l'ordre d'importance :
 
@@ -142,7 +159,8 @@ peut devenir négatif, et elle est probable si rien n'est dit au client.
 
 **Point mort d'acquisition sur Essentiel.** Rs 8 000 représentent 3,2 mois
 d'abonnement à sortir avant la première utilisation, sur le palier où le
-prospect est le plus sensible au prix. Si le taux de transformation de ce
+prospect est le plus sensible au prix — et une société domestique n'a qu'une
+entité, donc aucun effet d'échelle pour l'amortir. Si le taux de transformation de ce
 palier déçoit, c'est le premier paramètre à bouger : offert en engagement
 annuel, ou ramené à Rs 4 000 sur Essentiel uniquement. Les paliers supérieurs
 absorbent les Rs 8 000 sans difficulté.

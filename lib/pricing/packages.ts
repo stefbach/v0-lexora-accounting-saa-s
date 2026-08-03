@@ -58,11 +58,16 @@ export const TIBOK_MUR_PER_CONSULTATION = 500
 export const ANNUAL_MONTHS_BILLED = 10
 
 /**
- * Frais de mise en service, facturés une seule fois à la souscription :
+ * Frais de mise en service, facturés une seule fois **par société** :
  * paramétrage de la société et 4 heures de formation.
  *
+ * L'unité est la société, pas l'abonnement. Un groupe GBC qui consolide
+ * 5 entités paie 5 mises en service, parce qu'il y a réellement 5 plans
+ * comptables à paramétrer et 5 jeux d'utilisateurs à former. Un cabinet qui
+ * embarque 10 dossiers clients de même.
+ *
  * Identique sur tous les paliers et sur les deux packages. Ce n'est pas un
- * centre de profit — il couvre à peine le temps humain engagé (voir
+ * centre de profit — il couvre le temps humain engagé, sans plus (voir
  * docs/pricing/2026-cout-de-revient-marges.md) : sa fonction est de financer
  * l'onboarding et de filtrer les souscriptions non sérieuses. Un client
  * formé reste ; c'est le poste qui pèse le plus sur le churn.
@@ -71,8 +76,8 @@ export const ANNUAL_MONTHS_BILLED = 10
  * plan comptable existant) n'est PAS couverte par ces 4 heures et doit être
  * devisée à part, sans quoi elle est absorbée à perte sur les gros paliers.
  */
-export const SETUP_FEE_MUR = 8000
-/** Heures de formation incluses dans le frais de mise en service. */
+export const SETUP_FEE_MUR_PAR_SOCIETE = 8000
+/** Heures de formation incluses dans chaque mise en service. */
 export const SETUP_HOURS = 4
 
 /**
@@ -167,22 +172,27 @@ export function monthlyBill(
 }
 
 /**
- * Montant dû à la souscription : le frais de mise en service, plus la
- * première échéance (un mois, ou l'année entière en cas d'engagement).
+ * Montant dû à la souscription : les frais de mise en service (Rs 8 000 par
+ * société à paramétrer), plus la première échéance — un mois, ou l'année
+ * entière en cas d'engagement annuel.
  *
- * Sur un palier négocié le montant récurrent vaut 0 : seul le frais de mise
- * en service est chiffrable tant que l'abonnement n'a pas été négocié.
+ * Sur un palier négocié le montant récurrent vaut 0 : seules les mises en
+ * service sont chiffrables tant que l'abonnement n'a pas été négocié.
  */
 export function initialPayment(
   tier: PricingTier,
   engagement: 'mensuel' | 'annuel' = 'mensuel',
-): { setup: number; premiereEcheance: number; total: number } {
+  nbSocietes = 1,
+): { setup: number; nbSocietes: number; premiereEcheance: number; total: number } {
+  const societes = Math.max(1, Math.floor(nbSocietes))
+  const setup = SETUP_FEE_MUR_PAR_SOCIETE * societes
   const premiereEcheance = engagement === 'annuel'
     ? annualPrice(tier.monthly)
     : tier.monthly
   return {
-    setup: SETUP_FEE_MUR,
+    setup,
+    nbSocietes: societes,
     premiereEcheance,
-    total: SETUP_FEE_MUR + premiereEcheance,
+    total: setup + premiereEcheance,
   }
 }

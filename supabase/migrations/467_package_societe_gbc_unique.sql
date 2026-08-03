@@ -55,11 +55,16 @@
 -- Rs 1 200/mois — expose à une perte non bornée dès qu'une société de 80
 -- salariés consomme normalement. À l'acte, la marge est invariante.
 --
--- FRAIS DE MISE EN SERVICE
--- ------------------------
--- Rs 8 000 facturés une seule fois à la souscription : paramétrage de la
--- société et 4 heures de formation. Identique sur tous les paliers et sur
--- les deux packages, porté par `limites.frais_setup_mur`.
+-- FRAIS DE MISE EN SERVICE — Rs 8 000 PAR SOCIÉTÉ
+-- -----------------------------------------------
+-- Facturés une seule fois : paramétrage de la société et 4 heures de
+-- formation. Identique sur tous les paliers et sur les deux packages, porté
+-- par `limites.frais_setup_mur_par_societe`.
+--
+-- L'unité est la SOCIÉTÉ, pas l'abonnement. Un groupe GBC qui consolide
+-- 5 entités paie 5 mises en service (Rs 40 000), parce qu'il y a réellement
+-- 5 plans comptables à paramétrer et 5 jeux d'utilisateurs à former. Un
+-- cabinet qui embarque 10 dossiers clients de même.
 --
 -- Ce n'est pas un centre de profit : il couvre le temps humain engagé, sans
 -- plus. Sa fonction est de financer l'onboarding et de filtrer les
@@ -145,7 +150,7 @@ INSERT INTO public.plans (
    'Tout compris pour freelances, professions libérales et micro-entreprises. Jusqu''à 50 transactions par mois. Salariés et utilisateurs illimités.',
    'dirigeant', 2500, 25000,
    '{"documents":true,"comptabilite":true,"facturation":true,"rh":true,"fiscal":true,"alertes_ia":true,"etats_financiers":true,"juridique":true,"tibok":true,"telegram":true,"employe_portal":true,"gbc":false,"ifrs_avance":false}'::jsonb,
-   '{"transactions_max":50,"salaries_max":null,"utilisateurs_max":null,"societes_max":1,"entites_consolidees_max":1,"depassement_mur_par_transaction":15,"tibok_mur_par_consultation":500,"frais_setup_mur":8000,"setup_heures_formation":4,"stockage_go":5}'::jsonb,
+   '{"transactions_max":50,"salaries_max":null,"utilisateurs_max":null,"societes_max":1,"entites_consolidees_max":1,"depassement_mur_par_transaction":15,"tibok_mur_par_consultation":500,"frais_setup_mur_par_societe":8000,"setup_heures_formation":4,"stockage_go":5}'::jsonb,
    FALSE, 110, TRUE, 'societe', 'solo', TRUE),
 
   ('societe_croissance',
@@ -153,7 +158,7 @@ INSERT INTO public.plans (
    'Tout compris pour les entreprises en croissance. Jusqu''à 200 transactions par mois. Salariés et utilisateurs illimités.',
    'dirigeant', 4900, 49000,
    '{"documents":true,"comptabilite":true,"facturation":true,"rh":true,"fiscal":true,"alertes_ia":true,"etats_financiers":true,"juridique":true,"tibok":true,"telegram":true,"employe_portal":true,"gbc":false,"ifrs_avance":false}'::jsonb,
-   '{"transactions_max":200,"salaries_max":null,"utilisateurs_max":null,"societes_max":1,"entites_consolidees_max":1,"depassement_mur_par_transaction":15,"tibok_mur_par_consultation":500,"frais_setup_mur":8000,"setup_heures_formation":4,"stockage_go":20}'::jsonb,
+   '{"transactions_max":200,"salaries_max":null,"utilisateurs_max":null,"societes_max":1,"entites_consolidees_max":1,"depassement_mur_par_transaction":15,"tibok_mur_par_consultation":500,"frais_setup_mur_par_societe":8000,"setup_heures_formation":4,"stockage_go":20}'::jsonb,
    TRUE, 120, TRUE, 'societe', 'petite', TRUE),
 
   ('societe_pme',
@@ -161,7 +166,7 @@ INSERT INTO public.plans (
    'Tout compris pour les PME établies. Jusqu''à 500 transactions par mois. Salariés et utilisateurs illimités.',
    'dirigeant', 9900, 99000,
    '{"documents":true,"comptabilite":true,"facturation":true,"rh":true,"fiscal":true,"alertes_ia":true,"etats_financiers":true,"juridique":true,"tibok":true,"telegram":true,"employe_portal":true,"gbc":false,"ifrs_avance":false}'::jsonb,
-   '{"transactions_max":500,"salaries_max":null,"utilisateurs_max":null,"societes_max":1,"entites_consolidees_max":1,"depassement_mur_par_transaction":15,"tibok_mur_par_consultation":500,"frais_setup_mur":8000,"setup_heures_formation":4,"stockage_go":100}'::jsonb,
+   '{"transactions_max":500,"salaries_max":null,"utilisateurs_max":null,"societes_max":1,"entites_consolidees_max":1,"depassement_mur_par_transaction":15,"tibok_mur_par_consultation":500,"frais_setup_mur_par_societe":8000,"setup_heures_formation":4,"stockage_go":100}'::jsonb,
    FALSE, 130, TRUE, 'societe', 'pme', TRUE),
 
   ('societe_corporate',
@@ -169,7 +174,7 @@ INSERT INTO public.plans (
    'Tout compris pour les grandes structures. Jusqu''à 1 500 transactions par mois. Salariés et utilisateurs illimités, support dédié.',
    'dirigeant', 18900, 189000,
    '{"documents":true,"comptabilite":true,"facturation":true,"rh":true,"fiscal":true,"alertes_ia":true,"etats_financiers":true,"juridique":true,"tibok":true,"telegram":true,"employe_portal":true,"gbc":false,"ifrs_avance":false}'::jsonb,
-   '{"transactions_max":1500,"salaries_max":null,"utilisateurs_max":null,"societes_max":1,"entites_consolidees_max":1,"depassement_mur_par_transaction":15,"tibok_mur_par_consultation":500,"frais_setup_mur":8000,"setup_heures_formation":4,"stockage_go":null}'::jsonb,
+   '{"transactions_max":1500,"salaries_max":null,"utilisateurs_max":null,"societes_max":1,"entites_consolidees_max":1,"depassement_mur_par_transaction":15,"tibok_mur_par_consultation":500,"frais_setup_mur_par_societe":8000,"setup_heures_formation":4,"stockage_go":null}'::jsonb,
    FALSE, 140, TRUE, 'societe', 'grande', TRUE),
 
   ('societe_enterprise',
@@ -177,7 +182,7 @@ INSERT INTO public.plans (
    'Volume de transactions illimité, engagement de service (SLA), API dédiée et accompagnement sur mesure. Tarif négocié.',
    'dirigeant', 0, NULL,
    '{"documents":true,"comptabilite":true,"facturation":true,"rh":true,"fiscal":true,"alertes_ia":true,"etats_financiers":true,"juridique":true,"tibok":true,"telegram":true,"employe_portal":true,"gbc":false,"ifrs_avance":false}'::jsonb,
-   '{"transactions_max":null,"salaries_max":null,"utilisateurs_max":null,"societes_max":null,"entites_consolidees_max":null,"depassement_mur_par_transaction":null,"tibok_mur_par_consultation":500,"frais_setup_mur":8000,"setup_heures_formation":4,"stockage_go":null}'::jsonb,
+   '{"transactions_max":null,"salaries_max":null,"utilisateurs_max":null,"societes_max":null,"entites_consolidees_max":null,"depassement_mur_par_transaction":null,"tibok_mur_par_consultation":500,"frais_setup_mur_par_societe":8000,"setup_heures_formation":4,"stockage_go":null}'::jsonb,
    FALSE, 150, TRUE, 'societe', 'enterprise', FALSE)
 
 ON CONFLICT (code) DO UPDATE
@@ -217,7 +222,7 @@ INSERT INTO public.plans (
    'Authorised Company ou GBC simple : IFRS complet, Partial Exemption Regime, substance (CIGA), bénéficiaires effectifs (UBO), CRS/FATCA. Une entité, jusqu''à 100 transactions par mois. Inclut tout le Package Société.',
    'dirigeant', 8500, 85000,
    '{"documents":true,"comptabilite":true,"facturation":true,"rh":true,"fiscal":true,"alertes_ia":true,"etats_financiers":true,"juridique":true,"tibok":true,"telegram":true,"employe_portal":true,"gbc":true,"ifrs_avance":false}'::jsonb,
-   '{"transactions_max":100,"salaries_max":null,"utilisateurs_max":null,"societes_max":1,"entites_consolidees_max":1,"depassement_mur_par_transaction":15,"depassement_mur_par_entite":4500,"tibok_mur_par_consultation":500,"frais_setup_mur":8000,"setup_heures_formation":4,"stockage_go":50}'::jsonb,
+   '{"transactions_max":100,"salaries_max":null,"utilisateurs_max":null,"societes_max":1,"entites_consolidees_max":1,"depassement_mur_par_transaction":15,"depassement_mur_par_entite":4500,"tibok_mur_par_consultation":500,"frais_setup_mur_par_societe":8000,"setup_heures_formation":4,"stockage_go":50}'::jsonb,
    FALSE, 210, TRUE, 'gbc', 'solo', TRUE),
 
   ('gbc_standard',
@@ -225,7 +230,7 @@ INSERT INTO public.plans (
    'GBC en régime d''exonération partielle : tout le palier Authorised, plus IFRS 9 (dépréciation ECL), IFRS 16 (contrats de location) et documentation prix de transfert simplifiée. Une entité, jusqu''à 500 transactions par mois.',
    'dirigeant', 15000, 150000,
    '{"documents":true,"comptabilite":true,"facturation":true,"rh":true,"fiscal":true,"alertes_ia":true,"etats_financiers":true,"juridique":true,"tibok":true,"telegram":true,"employe_portal":true,"gbc":true,"ifrs_avance":true}'::jsonb,
-   '{"transactions_max":500,"salaries_max":null,"utilisateurs_max":null,"societes_max":1,"entites_consolidees_max":1,"depassement_mur_par_transaction":15,"depassement_mur_par_entite":4500,"tibok_mur_par_consultation":500,"frais_setup_mur":8000,"setup_heures_formation":4,"stockage_go":200}'::jsonb,
+   '{"transactions_max":500,"salaries_max":null,"utilisateurs_max":null,"societes_max":1,"entites_consolidees_max":1,"depassement_mur_par_transaction":15,"depassement_mur_par_entite":4500,"tibok_mur_par_consultation":500,"frais_setup_mur_par_societe":8000,"setup_heures_formation":4,"stockage_go":200}'::jsonb,
    TRUE, 220, TRUE, 'gbc', 'pme', TRUE),
 
   ('gbc_groupe',
@@ -233,7 +238,7 @@ INSERT INTO public.plans (
    'Groupe multi-entités : consolidation IFRS 10, prix de transfert complet, BEPS Pillar Two (GloBE), monnaie fonctionnelle IAS 21. Jusqu''à 5 entités consolidées et 1 500 transactions par mois.',
    'dirigeant', 32000, 320000,
    '{"documents":true,"comptabilite":true,"facturation":true,"rh":true,"fiscal":true,"alertes_ia":true,"etats_financiers":true,"juridique":true,"tibok":true,"telegram":true,"employe_portal":true,"gbc":true,"ifrs_avance":true}'::jsonb,
-   '{"transactions_max":1500,"salaries_max":null,"utilisateurs_max":null,"societes_max":5,"entites_consolidees_max":5,"depassement_mur_par_transaction":15,"depassement_mur_par_entite":4500,"tibok_mur_par_consultation":500,"frais_setup_mur":8000,"setup_heures_formation":4,"stockage_go":null}'::jsonb,
+   '{"transactions_max":1500,"salaries_max":null,"utilisateurs_max":null,"societes_max":5,"entites_consolidees_max":5,"depassement_mur_par_transaction":15,"depassement_mur_par_entite":4500,"tibok_mur_par_consultation":500,"frais_setup_mur_par_societe":8000,"setup_heures_formation":4,"stockage_go":null}'::jsonb,
    FALSE, 230, TRUE, 'gbc', 'grande', TRUE),
 
   ('gbc_management_co',
@@ -241,7 +246,7 @@ INSERT INTO public.plans (
    'Pour les management companies administrant un portefeuille de GBC : entités et transactions illimitées, vue portefeuille, piste d''audit complète, API et SLA. Tarif négocié.',
    'comptable', 0, NULL,
    '{"documents":true,"comptabilite":true,"facturation":true,"rh":true,"fiscal":true,"alertes_ia":true,"etats_financiers":true,"juridique":true,"tibok":true,"telegram":true,"employe_portal":true,"gbc":true,"ifrs_avance":true}'::jsonb,
-   '{"transactions_max":null,"salaries_max":null,"utilisateurs_max":null,"societes_max":null,"entites_consolidees_max":null,"depassement_mur_par_transaction":null,"depassement_mur_par_entite":null,"tibok_mur_par_consultation":500,"frais_setup_mur":8000,"setup_heures_formation":4,"stockage_go":null}'::jsonb,
+   '{"transactions_max":null,"salaries_max":null,"utilisateurs_max":null,"societes_max":null,"entites_consolidees_max":null,"depassement_mur_par_transaction":null,"depassement_mur_par_entite":null,"tibok_mur_par_consultation":500,"frais_setup_mur_par_societe":8000,"setup_heures_formation":4,"stockage_go":null}'::jsonb,
    FALSE, 240, TRUE, 'gbc', 'enterprise', FALSE)
 
 ON CONFLICT (code) DO UPDATE

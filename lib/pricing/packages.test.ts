@@ -12,7 +12,7 @@ import {
   overageMur,
   monthlyBill,
   initialPayment,
-  SETUP_FEE_MUR,
+  SETUP_FEE_MUR_PAR_SOCIETE,
   SETUP_HOURS,
 } from './packages'
 
@@ -163,10 +163,27 @@ describe('engagement annuel', () => {
 describe('frais de mise en service', () => {
   it('est identique sur tous les paliers et les deux packages', () => {
     for (const tier of [...SOCIETE_TIERS, ...GBC_TIERS]) {
-      expect(initialPayment(tier).setup).toBe(SETUP_FEE_MUR)
+      expect(initialPayment(tier).setup).toBe(SETUP_FEE_MUR_PAR_SOCIETE)
     }
-    expect(SETUP_FEE_MUR).toBe(8000)
+    expect(SETUP_FEE_MUR_PAR_SOCIETE).toBe(8000)
     expect(SETUP_HOURS).toBe(4)
+  })
+
+  it('se compte par société à paramétrer, pas par abonnement', () => {
+    // Un groupe GBC consolidant 5 entités a 5 plans comptables à paramétrer
+    // et 5 jeux d'utilisateurs à former : 5 mises en service.
+    const groupe = GBC_TIERS[2]
+    const dû = initialPayment(groupe, 'mensuel', 5)
+    expect(dû.nbSocietes).toBe(5)
+    expect(dû.setup).toBe(5 * SETUP_FEE_MUR_PAR_SOCIETE)
+    expect(dû.total).toBe(40_000 + groupe.monthly)
+  })
+
+  it('facture au moins une mise en service', () => {
+    for (const n of [0, -3, 0.4]) {
+      expect(initialPayment(SOCIETE_TIERS[1], 'mensuel', n).setup)
+        .toBe(SETUP_FEE_MUR_PAR_SOCIETE)
+    }
   })
 
   it('s’ajoute à la première échéance mensuelle', () => {
@@ -186,7 +203,7 @@ describe('frais de mise en service', () => {
     const enterprise = SOCIETE_TIERS[SOCIETE_TIERS.length - 1]
     const dû = initialPayment(enterprise)
     expect(dû.premiereEcheance).toBe(0)
-    expect(dû.total).toBe(SETUP_FEE_MUR)
+    expect(dû.total).toBe(SETUP_FEE_MUR_PAR_SOCIETE)
   })
 
   it('ne s’applique pas aux échéances suivantes', () => {
