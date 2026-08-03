@@ -1,8 +1,13 @@
 /**
  * Client Nylas v3 (https://nylas.com) — API unifiée email + calendrier +
  * contacts multi-provider (Gmail, Microsoft/Outlook, IMAP, …) avec auth
- * hébergée (apps Google/Microsoft de Nylas déjà vérifiées → pas de procédure
- * de vérification côté Lexora).
+ * hébergée.
+ *
+ * ATTENTION — contrairement à la v2, la v3 ne fournit AUCUNE application
+ * Google/Microsoft partagée et pré-vérifiée. Chaque connecteur porte les
+ * identifiants OAuth d'une application créée par nous chez le fournisseur, et
+ * les scopes restreints (gmail.modify) imposent la vérification Google.
+ * Voir https://developer.nylas.com/docs/provider-guides/google/create-google-app/
  *
  * Modèle v3 :
  *  - Auth hébergée → on récupère un `grant_id` PAR compte connecté.
@@ -88,6 +93,171 @@ export async function exchangeNylasCode(code: string, redirectUri: string): Prom
 
 function authHeaders(): Record<string, string> {
   return { Authorization: `Bearer ${apiKey()}`, 'Content-Type': 'application/json' }
+}
+
+/** URL de callback attendue par Nylas — doit être déclarée à l'identique côté tableau de bord. */
+export function nylasRedirectUri(fallbackOrigin: string): string {
+  const base = (env('NEXT_PUBLIC_APP_URL') || fallbackOrigin).replace(/\/+$/, '')
+  return `${base}/api/auth/nylas/callback`
+}
+
+/** Hôtes régionaux Nylas v3. Une application n'existe que dans UNE région. */
+export const NYLAS_REGIONS = {
+  us: 'https://api.us.nylas.com',
+  eu: 'https://api.eu.nylas.com',
+} as const
+
+export type NylasApplicationProbe = {
+  region: keyof typeof NYLAS_REGIONS
+  host: string
+  httpStatus: number
+  /** `application_id` renvoyé par Nylas — c'est le client_id de l'application. */
+  applicationId: string | null
+  /** true si cet `application_id` est bien celui configuré en NYLAS_CLIENT_ID. */
+  correspondAuClientId: boolean | null
+  error: string | null
+}
+
+/**
+ * Interroge `/v3/applications` dans une région donnée avec la clé serveur.
+ *
+ * C'est le seul test qui distingue les deux causes de
+ * « Application not found: 404/50002 » renvoyé par `/v3/connect/auth` :
+ *   - l'application vit dans l'autre région (NYLAS_API_URI mal réglée) ;
+ *   - le NYLAS_CLIENT_ID configuré n'est pas celui de l'application à
+ *     laquelle appartient la clé serveur.
+ *
+ * Les deux régions renvoient un 50002 identique face à un client_id inconnu :
+ * le message d'erreur seul ne permet pas de trancher.
+ */
+export async function probeNylasApplication(region: keyof typeof NYLAS_REGIONS): Promise<NylasApplicationProbe> {
+  const host = NYLAS_REGIONS[region]
+  const cid = clientId()
+  try {
+    const res = await fetch(`${host}/v3/applications`, { headers: authHeaders() })
+    const raw = await res.text().catch(() => '')
+    let parsed: { data?: { application_id?: string } } = {}
+    try { parsed = JSON.parse(raw) } catch { /* réponse non JSON */ }
+    const applicationId = parsed.data?.application_id || null
+    return {
+      region,
+      host,
+      httpStatus: res.status,
+      applicationId,
+      correspondAuClientId: applicationId && cid ? applicationId === cid : null,
+      error: res.ok ? null : raw.slice(0, 200),
+    }
+  } catch (e) {
+    return {
+      region, host, httpStatus: 0, applicationId: null, correspondAuClientId: null,
+      error: e instanceof Error ? e.message : 'appel impossible',
+    }
+  }
+}
+
+export type NylasConnectors = {
+  /** Providers configurés (`google`, `microsoft`, `imap`, …). */
+  providers: string[]
+  httpStatus: number
+  error: string | null
+}
+
+/**
+ * Liste les connecteurs de l'application (`GET /v3/connectors`).
+ *
+ * Une application Nylas v3 démarre SANS connecteur : chacun doit être créé et
+ * porte les identifiants OAuth du fournisseur. Sans connecteur `google`, un
+ * `/v3/connect/auth?provider=google` s'interrompt chez Nylas — le navigateur
+ * n'est jamais redirigé vers le `redirect_uri`, donc `/callback` ne s'exécute
+ * pas et Lexora n'a aucun moyen de voir l'échec. D'où ce contrôle en amont.
+ */
+export async function listNylasConnectors(): Promise<NylasConnectors> {
+  try {
+    const res = await fetch(`${apiBase()}/v3/connectors`, { headers: authHeaders() })
+    const raw = await res.text().catch(() => '')
+    let parsed: { data?: Array<{ provider?: string }> } = {}
+    try { parsed = JSON.parse(raw) } catch { /* réponse non JSON */ }
+    const providers = Array.isArray(parsed.data)
+      ? parsed.data.map((c) => (c?.provider || '').trim()).filter(Boolean)
+      : []
+    return {
+      providers,
+      httpStatus: res.status,
+      error: res.ok ? null : (raw.slice(0, 200) || `HTTP ${res.status}`),
+    }
+  } catch (e) {
+    return { providers: [], httpStatus: 0, error: e instanceof Error ? e.message : 'injoignable' }
+  }
+}
+
+export type NylasApplicationCheck = {
+  /** Région où la clé serveur est reconnue. null = aucune. */
+  regionDetectee: keyof typeof NYLAS_REGIONS | null
+  /** Hôte effectivement configuré via NYLAS_API_URI. */
+  hoteConfigure: string
+  sondes: NylasApplicationProbe[]
+  /** null quand tout concorde ; sinon la cause et le geste correctif. */
+  probleme: string | null
+}
+
+/**
+ * Vérifie que l'application Nylas est joignable à l'adresse configurée.
+ *
+ * Sonde les deux régions plutôt qu'une seule : `/v3/connect/auth` renvoie le
+ * même « Application not found: 404/50002 » que le client_id soit faux ou
+ * que l'application vive dans l'autre région. Sans les deux sondes, on ne
+ * peut pas distinguer les deux causes.
+ */
+export async function checkNylasApplication(): Promise<NylasApplicationCheck> {
+  const hoteConfigure = (env('NYLAS_API_URI') || NYLAS_REGIONS.us).replace(/\/+$/, '')
+  const sondes = await Promise.all(
+    (Object.keys(NYLAS_REGIONS) as Array<keyof typeof NYLAS_REGIONS>).map(probeNylasApplication),
+  )
+  const reconnue = sondes.find((s) => s.httpStatus === 200) || null
+
+  let probleme: string | null = null
+  if (!reconnue) {
+    probleme = 'Aucune région Nylas ne reconnaît la clé serveur : NYLAS_API_KEY est invalide, ou l’application a été supprimée.'
+  } else if (reconnue.host !== hoteConfigure) {
+    probleme = `L’application Nylas est dans la région « ${reconnue.region} », mais NYLAS_API_URI pointe sur ${hoteConfigure}. Régler NYLAS_API_URI sur ${reconnue.host} côté Vercel, puis redéployer.`
+  } else if (reconnue.correspondAuClientId === false) {
+    probleme = 'NYLAS_CLIENT_ID ne correspond pas à l’application à laquelle appartient NYLAS_API_KEY. Reprendre les deux valeurs dans le tableau de bord Nylas.'
+  }
+
+  return { regionDetectee: reconnue?.region ?? null, hoteConfigure, sondes, probleme }
+}
+
+export type NylasGrantStatus = {
+  /** Code HTTP renvoyé par Nylas ; 200 = le grant est vivant. */
+  httpStatus: number
+  /** `valid`, `invalid`, … tel que renvoyé par Nylas. */
+  grantStatus: string | null
+  provider: string | null
+  email: string | null
+  /** Message d'erreur Nylas, tronqué, quand le grant est refusé. */
+  error: string | null
+}
+
+/**
+ * Interroge l'état d'un grant côté Nylas.
+ *
+ * Un grant peut mourir sans que Lexora en soit informé : mot de passe changé,
+ * accès révoqué depuis la console Google/Microsoft, application désinstallée.
+ * Le compte reste alors `active = true` en base et l'interface l'affiche comme
+ * connecté, alors que toute lecture échoue. C'est le seul appel qui tranche.
+ */
+export async function getNylasGrantStatus(grantId: string): Promise<NylasGrantStatus> {
+  const res = await nfetch(`${apiBase()}/v3/grants/${encodeURIComponent(grantId)}`, { headers: authHeaders() })
+  const raw = await res.text().catch(() => '')
+  let parsed: { data?: { grant_status?: string; provider?: string; email?: string }; error?: unknown } = {}
+  try { parsed = JSON.parse(raw) } catch { /* réponse non JSON : on garde le texte brut */ }
+  return {
+    httpStatus: res.status,
+    grantStatus: parsed.data?.grant_status || null,
+    provider: parsed.data?.provider || null,
+    email: parsed.data?.email || null,
+    error: res.ok ? null : raw.slice(0, 200),
+  }
 }
 
 /**

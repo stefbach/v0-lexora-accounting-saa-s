@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { verifyOAuthState } from '@/lib/google/oauth-state'
 import { encryptSecret } from '@/lib/crypto/symmetric'
-import { exchangeNylasCode } from '@/lib/nylas/client'
+import { exchangeNylasCode, nylasRedirectUri } from '@/lib/nylas/client'
 
 /**
  * GET /api/auth/nylas/callback?code=...&state=...
@@ -37,9 +37,9 @@ export async function GET(req: NextRequest) {
   const returnTo = meta.r || '/client/email-accounts'
 
   try {
-    const base = (process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).replace(/\/+$/, '')
-    const redirectUri = `${base}/api/auth/nylas/callback`
-    const { grantId, email } = await exchangeNylasCode(code, redirectUri)
+    // Doit être rigoureusement identique à celle envoyée par /init : Nylas
+    // compare la chaîne, pas l'URL normalisée. D'où la fonction partagée.
+    const { grantId, email } = await exchangeNylasCode(code, nylasRedirectUri(req.nextUrl.origin))
 
     const admin = getAdminClient()
     const { data: existing } = await admin

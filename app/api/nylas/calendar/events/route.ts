@@ -22,7 +22,24 @@ export async function GET(req: NextRequest) {
 
   const all = await listNylasAccounts(admin, user.id)
   const accounts = filterAccountId ? all.filter((a) => a.id === filterAccountId) : all
-  if (accounts.length === 0) return NextResponse.json({ error: 'Aucune boîte connectée' }, { status: 404 })
+  if (accounts.length === 0) {
+    // `listNylasAccounts` écarte silencieusement toute boîte dont le grant_id
+    // ne se déchiffre plus. Sans cette distinction, une CRYPT_KEY changée
+    // s'affiche comme « aucune boîte connectée » alors que la boîte est bien
+    // enregistrée — et l'utilisateur la reconnecte en boucle sans comprendre.
+    const { count } = await admin
+      .from('user_oauth_accounts')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('provider', 'nylas')
+      .eq('active', true)
+    if (count && count > 0) {
+      return NextResponse.json({
+        error: 'Boîte connectée mais inutilisable — le jeton d’accès stocké est illisible. Voir /api/nylas/diag, puis reconnecter la boîte.',
+      }, { status: 409 })
+    }
+    return NextResponse.json({ error: 'Aucune boîte connectée' }, { status: 404 })
+  }
 
   const now = Math.floor(Date.now() / 1000)
   const start = Number(sp.get('start')) || now - 7 * 86400

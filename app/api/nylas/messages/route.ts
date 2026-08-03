@@ -19,7 +19,26 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams
   const admin = getAdminClient()
   const account = await resolveNylasAccount(admin, user.id, sp.get('societe_id'), sp.get('account_id'))
-  if (!account) return NextResponse.json({ account: null, messages: [] })
+  if (!account) {
+    // `resolveNylasAccount` renvoie null aussi bien quand aucune boîte n'est
+    // connectée que quand le grant_id stocké ne se déchiffre plus (CRYPT_KEY
+    // changée). Renvoyer une liste vide dans le second cas fait passer une
+    // panne pour une boîte de réception vide. On distingue les deux.
+    const { count } = await admin
+      .from('user_oauth_accounts')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('provider', 'nylas')
+      .eq('active', true)
+    if (count && count > 0) {
+      return NextResponse.json({
+        account: null,
+        messages: [],
+        error: 'Boîte connectée mais inutilisable — le jeton d’accès stocké est illisible. Voir /api/nylas/diag, puis reconnecter la boîte.',
+      }, { status: 409 })
+    }
+    return NextResponse.json({ account: null, messages: [] })
+  }
 
   try {
     // Vue Envoyés : on résout le dossier "sent" via ses attributs.
