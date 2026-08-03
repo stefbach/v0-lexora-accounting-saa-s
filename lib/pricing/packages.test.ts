@@ -116,6 +116,24 @@ describe('dépassement', () => {
   })
 })
 
+describe('robustesse', () => {
+  it('retombe sur le dernier palier si aucune grille ne couvre l’usage', () => {
+    // Garde-fou : une grille mal formée (sans palier illimité) ne doit pas
+    // renvoyer -1 et faire planter l'affichage.
+    const grilleIncomplete = [
+      { code: 'a', monthly: 1000, txMax: 10, entitesMax: 1 },
+      { code: 'b', monthly: 2000, txMax: 20, entitesMax: 1 },
+    ]
+    expect(resolveTierIndex(grilleIncomplete, 999)).toBe(1)
+    expect(resolveTier(grilleIncomplete, 999).code).toBe('b')
+  })
+
+  it('ne facture aucune entité supplémentaire sur un périmètre illimité', () => {
+    const { overageEntites } = monthlyBill(GBC_TIERS, 3, 10_000, 42)
+    expect(overageEntites).toBe(0)
+  })
+})
+
 describe('engagement annuel', () => {
   it('offre deux mois : 12 mois d’usage, 10 facturés', () => {
     expect(annualPrice(4900)).toBe(49000)
