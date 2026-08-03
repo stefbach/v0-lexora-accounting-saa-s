@@ -150,6 +150,43 @@ export async function probeNylasApplication(region: keyof typeof NYLAS_REGIONS):
   }
 }
 
+export type NylasApplicationCheck = {
+  /** Région où la clé serveur est reconnue. null = aucune. */
+  regionDetectee: keyof typeof NYLAS_REGIONS | null
+  /** Hôte effectivement configuré via NYLAS_API_URI. */
+  hoteConfigure: string
+  sondes: NylasApplicationProbe[]
+  /** null quand tout concorde ; sinon la cause et le geste correctif. */
+  probleme: string | null
+}
+
+/**
+ * Vérifie que l'application Nylas est joignable à l'adresse configurée.
+ *
+ * Sonde les deux régions plutôt qu'une seule : `/v3/connect/auth` renvoie le
+ * même « Application not found: 404/50002 » que le client_id soit faux ou
+ * que l'application vive dans l'autre région. Sans les deux sondes, on ne
+ * peut pas distinguer les deux causes.
+ */
+export async function checkNylasApplication(): Promise<NylasApplicationCheck> {
+  const hoteConfigure = (env('NYLAS_API_URI') || NYLAS_REGIONS.us).replace(/\/+$/, '')
+  const sondes = await Promise.all(
+    (Object.keys(NYLAS_REGIONS) as Array<keyof typeof NYLAS_REGIONS>).map(probeNylasApplication),
+  )
+  const reconnue = sondes.find((s) => s.httpStatus === 200) || null
+
+  let probleme: string | null = null
+  if (!reconnue) {
+    probleme = 'Aucune région Nylas ne reconnaît la clé serveur : NYLAS_API_KEY est invalide, ou l’application a été supprimée.'
+  } else if (reconnue.host !== hoteConfigure) {
+    probleme = `L’application Nylas est dans la région « ${reconnue.region} », mais NYLAS_API_URI pointe sur ${hoteConfigure}. Régler NYLAS_API_URI sur ${reconnue.host} côté Vercel, puis redéployer.`
+  } else if (reconnue.correspondAuClientId === false) {
+    probleme = 'NYLAS_CLIENT_ID ne correspond pas à l’application à laquelle appartient NYLAS_API_KEY. Reprendre les deux valeurs dans le tableau de bord Nylas.'
+  }
+
+  return { regionDetectee: reconnue?.region ?? null, hoteConfigure, sondes, probleme }
+}
+
 export type NylasGrantStatus = {
   /** Code HTTP renvoyé par Nylas ; 200 = le grant est vivant. */
   httpStatus: number

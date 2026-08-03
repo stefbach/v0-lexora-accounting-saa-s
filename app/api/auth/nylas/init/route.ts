@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 import { signOAuthState } from '@/lib/google/oauth-state'
-import { buildNylasAuthUrl, isNylasConfigured, nylasRedirectUri } from '@/lib/nylas/client'
+import { buildNylasAuthUrl, isNylasConfigured, nylasRedirectUri, checkNylasApplication } from '@/lib/nylas/client'
 
 /**
  * GET /api/auth/nylas/init?provider=google&societe_id=...&return_to=...
@@ -39,6 +39,19 @@ export async function GET(req: NextRequest) {
     const provider = sp.get('provider') || undefined
     const societeId = sp.get('societe_id') || ''
     const returnTo = sp.get('return_to') || '/client/email-accounts'
+
+    // Sans ce contrôle, une application injoignable (mauvaise région, ou
+    // client_id d'une autre application) envoie l'utilisateur sur une page
+    // Nylas qui affiche du JSON brut :
+    //   {"error":{"message":"Application not found: 404/50002: …"}}
+    // Il n'a alors aucun moyen de savoir ce qui cloche ni quoi corriger. On
+    // préfère le renvoyer sur sa page avec la cause et le geste à faire.
+    const app = await checkNylasApplication()
+    if (app.probleme) {
+      const url = new URL(returnTo, req.nextUrl.origin)
+      url.searchParams.set('nylas_error', app.probleme)
+      return NextResponse.redirect(url)
+    }
 
     const state = signOAuthState(user.id, JSON.stringify({ s: societeId, r: returnTo }))
     const url = buildNylasAuthUrl({ redirectUri: nylasRedirectUri(req.nextUrl.origin), state, provider })

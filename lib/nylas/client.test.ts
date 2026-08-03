@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { nylasRedirectUri, getNylasGrantStatus, probeNylasApplication, NYLAS_REGIONS } from './client'
+import {
+  nylasRedirectUri, getNylasGrantStatus, probeNylasApplication,
+  checkNylasApplication, NYLAS_REGIONS,
+} from './client'
 
 /**
- * Ces deux fonctions portent le diagnostic de /api/nylas/diag.
+ * Ces fonctions portent le diagnostic de /api/nylas/diag et le garde-fou de
+ * /api/auth/nylas/init.
  *
  * `nylasRedirectUri` produit l'URL qui doit être déclarée à l'identique dans
  * le tableau de bord Nylas : un slash de trop et l'échange du code échoue en
@@ -11,6 +15,11 @@ import { nylasRedirectUri, getNylasGrantStatus, probeNylasApplication, NYLAS_REG
  * `getNylasGrantStatus` est le seul appel capable de distinguer une boîte
  * vivante d'une boîte dont l'accès a été révoqué — la base, elle, continue de
  * la marquer `active`.
+ *
+ * `probeNylasApplication` et `checkNylasApplication` tranchent les deux causes
+ * de « Application not found: 404/50002 » : mauvaise région, ou client_id
+ * étranger à l'application de la clé serveur. Les deux hôtes régionaux
+ * renvoient un message rigoureusement identique, d'où la double sonde.
  */
 
 const ENV_KEYS = ['NEXT_PUBLIC_APP_URL', 'NYLAS_API_KEY', 'NYLAS_API_URI', 'NYLAS_CLIENT_ID'] as const
@@ -174,5 +183,71 @@ describe('probeNylasApplication', () => {
     const p = await probeNylasApplication('eu')
     expect(p.httpStatus).toBe(0)
     expect(p.error).toContain('ENOTFOUND')
+  })
+})
+
+describe('checkNylasApplication', () => {
+  /** Répond 200 sur l'hôte de `regionVivante`, 404 sur l'autre. */
+  function mockRegions(regionVivante: 'us' | 'eu', applicationId = 'app-1') {
+    const hoteVivant = NYLAS_REGIONS[regionVivante]
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => (
+      url.startsWith(hoteVivant)
+        ? new Response(JSON.stringify({ data: { application_id: applicationId } }), { status: 200 })
+        : new Response(JSON.stringify({ error: { message: 'not found' } }), { status: 404 })
+    )))
+  }
+
+  it('ne signale rien quand région et client_id concordent', async () => {
+    process.env.NYLAS_API_URI = NYLAS_REGIONS.us
+    process.env.NYLAS_CLIENT_ID = 'app-1'
+    mockRegions('us')
+    const c = await checkNylasApplication()
+    expect(c.regionDetectee).toBe('us')
+    expect(c.probleme).toBeNull()
+  })
+
+  it('nomme la bonne région quand NYLAS_API_URI pointe sur la mauvaise', async () => {
+    // Le cas qui produit « Application not found: 404/50002 » en production :
+    // l'application est en EU, la configuration interroge les États-Unis.
+    process.env.NYLAS_API_URI = NYLAS_REGIONS.us
+    process.env.NYLAS_CLIENT_ID = 'app-1'
+    mockRegions('eu')
+    const c = await checkNylasApplication()
+    expect(c.regionDetectee).toBe('eu')
+    expect(c.probleme).toContain('eu')
+    expect(c.probleme).toContain(NYLAS_REGIONS.eu)
+  })
+
+  it('tolère un NYLAS_API_URI avec slash final', async () => {
+    process.env.NYLAS_API_URI = `${NYLAS_REGIONS.us}/`
+    process.env.NYLAS_CLIENT_ID = 'app-1'
+    mockRegions('us')
+    expect((await checkNylasApplication()).probleme).toBeNull()
+  })
+
+  it('prend api.us par défaut quand NYLAS_API_URI est absente', async () => {
+    delete process.env.NYLAS_API_URI
+    process.env.NYLAS_CLIENT_ID = 'app-1'
+    mockRegions('us')
+    const c = await checkNylasApplication()
+    expect(c.hoteConfigure).toBe(NYLAS_REGIONS.us)
+    expect(c.probleme).toBeNull()
+  })
+
+  it('distingue un client_id d’une autre application', async () => {
+    process.env.NYLAS_API_URI = NYLAS_REGIONS.us
+    process.env.NYLAS_CLIENT_ID = 'app-autre'
+    mockRegions('us', 'app-1')
+    const c = await checkNylasApplication()
+    expect(c.regionDetectee).toBe('us')
+    expect(c.probleme).toContain('NYLAS_CLIENT_ID')
+  })
+
+  it('signale une clé serveur rejetée partout', async () => {
+    process.env.NYLAS_API_URI = NYLAS_REGIONS.us
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 401 })))
+    const c = await checkNylasApplication()
+    expect(c.regionDetectee).toBeNull()
+    expect(c.probleme).toContain('NYLAS_API_KEY')
   })
 })

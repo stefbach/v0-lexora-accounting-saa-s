@@ -34,8 +34,7 @@ import {
   nylasRedirectUri,
   getNylasGrantStatus,
   listNylasCalendars,
-  probeNylasApplication,
-  NYLAS_REGIONS,
+  checkNylasApplication,
 } from '@/lib/nylas/client'
 
 export const dynamic = 'force-dynamic'
@@ -83,30 +82,17 @@ export async function GET(req: NextRequest) {
     cle_state_oauth_definie: !!(process.env.TELEGRAM_WEBHOOK_SECRET || process.env.CRYPT_KEY),
   }
 
-  // Région de l'application. `/v3/connect/auth` renvoie
-  // « Application not found: 404/50002 » aussi bien quand le client_id est
-  // faux que quand l'application vit dans l'AUTRE région — les deux hôtes
-  // rendent un message identique. On sonde donc les deux avec la clé serveur.
-  const sondes = await Promise.all(
-    (Object.keys(NYLAS_REGIONS) as Array<keyof typeof NYLAS_REGIONS>).map(probeNylasApplication),
-  )
-  const regionReconnue = sondes.find((s) => s.httpStatus === 200)
-  const hoteConfigure = (process.env.NYLAS_API_URI || NYLAS_REGIONS.us).trim().replace(/\/+$/, '')
+  // Même contrôle que celui qui garde /api/auth/nylas/init, pour que le
+  // diagnostic et le parcours de connexion ne puissent pas se contredire.
+  const check = await checkNylasApplication()
   const application = {
-    hote_configure: hoteConfigure,
-    region_detectee: regionReconnue?.region ?? null,
-    client_id_correspond: regionReconnue?.correspondAuClientId ?? null,
-    sondes: sondes.map((s) => ({
+    hote_configure: check.hoteConfigure,
+    region_detectee: check.regionDetectee,
+    sondes: check.sondes.map((s) => ({
       region: s.region, http: s.httpStatus,
       client_id_correspond: s.correspondAuClientId, erreur: s.error,
     })),
-    verdict: !regionReconnue
-      ? 'Aucune région ne reconnaît la clé serveur : NYLAS_API_KEY est invalide ou l’application a été supprimée.'
-      : regionReconnue.host !== hoteConfigure
-        ? `L’application vit dans la région « ${regionReconnue.region} » mais NYLAS_API_URI pointe sur ${hoteConfigure}. C’est la cause de « Application not found: 404/50002 ». Régler NYLAS_API_URI sur ${regionReconnue.host}.`
-        : regionReconnue.correspondAuClientId === false
-          ? 'La région est la bonne, mais NYLAS_CLIENT_ID ne correspond pas à l’application à laquelle appartient la clé serveur. Reprendre le client_id dans le tableau de bord Nylas.'
-          : 'Application et région cohérentes.',
+    verdict: check.probleme ?? 'Application et région cohérentes.',
   }
 
   const admin = getAdminClient()
@@ -188,8 +174,8 @@ export async function GET(req: NextRequest) {
   // n'est pas résolue, personne ne peut même lancer une connexion.
   const resume = !env.nylas_configure
     ? 'Nylas n’est pas configuré : NYLAS_API_KEY et/ou NYLAS_CLIENT_ID manquent côté Vercel.'
-    : application.verdict !== 'Application et région cohérentes.'
-      ? application.verdict
+    : check.probleme
+      ? check.probleme
       : comptes.length === 0
         ? 'Aucune boîte Nylas enregistrée pour cet utilisateur. Connecter une boîte depuis /client/email-accounts.'
         : utilisables === 0
