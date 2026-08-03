@@ -26,6 +26,8 @@ type PublicSettings = {
 type Slot = { start_iso: string; end_iso: string; label: string }
 
 const NAVY = '#0B0F2E'
+/** Fond de page — aligné sur la palette claire du site public. */
+const PAGE_BG = '#F5F8FD'
 const GOLD = '#D4AF37'
 
 function toLocalDateStr(d: Date): string {
@@ -184,12 +186,12 @@ export default function RdvPage() {
     }
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: NAVY }}><Loader2 className="animate-spin h-8 w-8 text-white" /></div>
-  if (error && !settings) return <div className="min-h-screen flex items-center justify-center text-white p-8" style={{ background: NAVY }}>{error}</div>
+  if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: PAGE_BG }}><Loader2 className="animate-spin h-8 w-8" style={{ color: NAVY }} /></div>
+  if (error && !settings) return <div className="min-h-screen flex items-center justify-center p-8" style={{ background: PAGE_BG, color: NAVY }}>{error}</div>
   if (!settings) return null
 
   return (
-    <div className="min-h-screen" style={{ background: `linear-gradient(180deg, ${NAVY} 0%, #1a1f4a 100%)` }}>
+    <div className="min-h-screen" style={{ background: `linear-gradient(180deg, #FFFFFF 0%, ${PAGE_BG} 100%)` }}>
       {/* Google Identity Services (Sign in with Google) */}
       {googleClientId && (
         <Script

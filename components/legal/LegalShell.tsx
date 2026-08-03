@@ -159,8 +159,9 @@ export function LegalShell({
           position: "sticky",
           top: 0,
           zIndex: 50,
-          backgroundColor: C.dark,
-          borderBottom: `1px solid ${C.borderDark}`,
+          backgroundColor: "rgba(255,255,255,0.92)",
+          backdropFilter: "blur(12px)",
+          borderBottom: `1px solid ${C.border}`,
         }}
       >
         <div
@@ -174,7 +175,7 @@ export function LegalShell({
             justifyContent: "space-between",
           }}
         >
-          <LexoraLogo href="/" size="md" showBaseline />
+          <LexoraLogo href="/" size="md" showBaseline tone="light" />
           <Link
             href="/"
             style={{
@@ -183,11 +184,11 @@ export function LegalShell({
               gap: "8px",
               fontSize: "14px",
               fontWeight: 500,
-              color: "#A8AFC7",
+              color: C.muted,
               textDecoration: "none",
               padding: "8px 14px",
               borderRadius: "8px",
-              border: `1px solid ${C.borderDark}`,
+              border: `1px solid ${C.border}`,
               transition: "color 0.2s",
             }}
           >
