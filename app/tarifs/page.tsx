@@ -10,6 +10,7 @@ import {
   OVERAGE_MUR_PER_TX,
   resolveTierIndex,
   annualMonthlyPrice,
+  SETUP_FEE_MUR,
 } from "@/lib/pricing/packages"
 import {
   FileSearch, BookOpen, FileText, Users, Landmark, BellRing,
@@ -120,6 +121,12 @@ const frTexts = {
   // ---- Promesse commune aux deux packages -------------------------
   unlimitedTag: "Salariés & utilisateurs illimités",
   tibokPaygTag: "TIBOK : Rs 500 par téléconsultation, à l’acte",
+  setupTag: "+ Rs 8 000 de mise en service, une seule fois",
+  setupTitle: "Mise en service",
+  setupNote: "Rs 8 000 facturés une seule fois à la souscription : paramétrage de votre société et 4 heures de formation. Identique sur tous les paliers. La reprise d’un historique comptable existant est devisée à part.",
+  calcSetupLabel: "Mise en service (une fois)",
+  calcSubscriptionLabel: "Première échéance",
+  calcFirstPaymentLabel: "À régler à la souscription",
   quoteLabel: "Sur devis",
   allInTitle: "Tout compris — identique sur tous les paliers",
   overageNote: "Au-delà du plafond : Rs 15 par transaction, sans jamais dépasser le prix du palier supérieur.",
@@ -354,6 +361,12 @@ const enTexts = {
   // ---- Shared promise across both packages ------------------------
   unlimitedTag: "Unlimited employees & users",
   tibokPaygTag: "TIBOK: Rs 500 per teleconsultation, pay as you go",
+  setupTag: "+ Rs 8,000 one-off setup",
+  setupTitle: "Setup",
+  setupNote: "Rs 8,000 billed once on subscription: company configuration and 4 hours of training. Identical across every tier. Migrating an existing accounting history is quoted separately.",
+  calcSetupLabel: "Setup (one-off)",
+  calcSubscriptionLabel: "First instalment",
+  calcFirstPaymentLabel: "Due on subscription",
   quoteLabel: "On quote",
   allInTitle: "All included — identical across every tier",
   overageNote: "Above the cap: Rs 15 per transaction, never more than the price of the next tier.",
@@ -707,6 +720,8 @@ function TierCard({
       {billing === "annual" && !onQuote && (
         <span style={{ color: C.green, fontSize: "12px", fontWeight: 600 }}>{txt.annualLabel}</span>
       )}
+      {/* Mise en service — même montant sur tous les paliers */}
+      <span style={{ color: C.mutedAlpha, fontSize: "12px", marginTop: "6px" }}>{txt.setupTag}</span>
 
       {/* ROI tag */}
       <div style={{ marginTop: "14px", padding: "8px 12px", borderRadius: "8px", backgroundColor: `${C.green}12`, border: `1px solid ${C.green}30` }}>
@@ -1569,6 +1584,36 @@ export default function TarifsPage() {
               {!calcOnQuote && (
                 <div style={{ color: C.muted, fontSize: "14px", marginTop: "4px" }}>
                   {calcBilling === "monthly" ? txt.perMonth : `${txt.perMonth} (${txt.annual.toLowerCase()})`}
+                </div>
+              )}
+
+              {/* Ce qu'il faut sortir le premier mois : mise en service + 1re échéance */}
+              {!calcOnQuote && (
+                <div style={{
+                  marginTop: "16px", padding: "12px 14px", borderRadius: "10px",
+                  backgroundColor: C.bg, border: `1px solid ${C.navyBorder}`,
+                }}>
+                  <div style={{ color: C.muted, fontSize: "12px", fontWeight: 700, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    {txt.calcFirstPaymentLabel}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: C.muted, marginBottom: "4px" }}>
+                    <span>{txt.calcSetupLabel}</span>
+                    <span style={{ color: C.white, fontVariantNumeric: "tabular-nums" }}>MRs {fmt(SETUP_FEE_MUR)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: C.muted }}>
+                    <span>{txt.calcSubscriptionLabel}</span>
+                    <span style={{ color: C.white, fontVariantNumeric: "tabular-nums" }}>MRs {fmt(getCalcPrice())}</span>
+                  </div>
+                  <div style={{ height: "1px", backgroundColor: C.navyBorder, margin: "8px 0" }} />
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px", fontWeight: 700 }}>
+                    <span style={{ color: C.white }}>Total</span>
+                    <span style={{ color: C.gold, fontVariantNumeric: "tabular-nums" }}>
+                      MRs {fmt(SETUP_FEE_MUR + getCalcPrice())}
+                    </span>
+                  </div>
+                  <p style={{ color: C.mutedAlpha, fontSize: "11.5px", lineHeight: 1.55, margin: "10px 0 0" }}>
+                    {txt.setupNote}
+                  </p>
                 </div>
               )}
 

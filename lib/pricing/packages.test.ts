@@ -11,6 +11,9 @@ import {
   annualPrice,
   overageMur,
   monthlyBill,
+  initialPayment,
+  SETUP_FEE_MUR,
+  SETUP_HOURS,
 } from './packages'
 
 describe('grille Package Société', () => {
@@ -154,6 +157,42 @@ describe('engagement annuel', () => {
       if (tier.monthly === 0) continue
       expect(annualPrice(tier.monthly)).toBe(attendus[tier.code])
     }
+  })
+})
+
+describe('frais de mise en service', () => {
+  it('est identique sur tous les paliers et les deux packages', () => {
+    for (const tier of [...SOCIETE_TIERS, ...GBC_TIERS]) {
+      expect(initialPayment(tier).setup).toBe(SETUP_FEE_MUR)
+    }
+    expect(SETUP_FEE_MUR).toBe(8000)
+    expect(SETUP_HOURS).toBe(4)
+  })
+
+  it('s’ajoute à la première échéance mensuelle', () => {
+    const croissance = SOCIETE_TIERS[1]
+    const dû = initialPayment(croissance)
+    expect(dû.premiereEcheance).toBe(4900)
+    expect(dû.total).toBe(8000 + 4900)
+  })
+
+  it('s’ajoute à l’année entière en cas d’engagement annuel', () => {
+    const dû = initialPayment(SOCIETE_TIERS[1], 'annuel')
+    expect(dû.premiereEcheance).toBe(49000)
+    expect(dû.total).toBe(57000)
+  })
+
+  it('reste seul chiffrable sur un palier négocié', () => {
+    const enterprise = SOCIETE_TIERS[SOCIETE_TIERS.length - 1]
+    const dû = initialPayment(enterprise)
+    expect(dû.premiereEcheance).toBe(0)
+    expect(dû.total).toBe(SETUP_FEE_MUR)
+  })
+
+  it('ne s’applique pas aux échéances suivantes', () => {
+    // Le frais est one-shot : la facture récurrente ne le porte jamais.
+    const { total } = monthlyBill(SOCIETE_TIERS, 1, 150)
+    expect(total).toBe(SOCIETE_TIERS[1].monthly)
   })
 })
 

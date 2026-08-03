@@ -58,6 +58,24 @@ export const TIBOK_MUR_PER_CONSULTATION = 500
 export const ANNUAL_MONTHS_BILLED = 10
 
 /**
+ * Frais de mise en service, facturés une seule fois à la souscription :
+ * paramétrage de la société et 4 heures de formation.
+ *
+ * Identique sur tous les paliers et sur les deux packages. Ce n'est pas un
+ * centre de profit — il couvre à peine le temps humain engagé (voir
+ * docs/pricing/2026-cout-de-revient-marges.md) : sa fonction est de financer
+ * l'onboarding et de filtrer les souscriptions non sérieuses. Un client
+ * formé reste ; c'est le poste qui pèse le plus sur le churn.
+ *
+ * La reprise d'historique (balance d'ouverture, import du parc salarié,
+ * plan comptable existant) n'est PAS couverte par ces 4 heures et doit être
+ * devisée à part, sans quoi elle est absorbée à perte sur les gros paliers.
+ */
+export const SETUP_FEE_MUR = 8000
+/** Heures de formation incluses dans le frais de mise en service. */
+export const SETUP_HOURS = 4
+
+/**
  * Index du premier palier dont les plafonds couvrent l'usage donné.
  * Retourne le dernier palier (négocié) si aucun ne couvre.
  */
@@ -146,4 +164,25 @@ export function monthlyBill(
 
   const base = tier?.monthly ?? 0
   return { base, overageTx, overageEntites, total: base + overageTx + overageEntites }
+}
+
+/**
+ * Montant dû à la souscription : le frais de mise en service, plus la
+ * première échéance (un mois, ou l'année entière en cas d'engagement).
+ *
+ * Sur un palier négocié le montant récurrent vaut 0 : seul le frais de mise
+ * en service est chiffrable tant que l'abonnement n'a pas été négocié.
+ */
+export function initialPayment(
+  tier: PricingTier,
+  engagement: 'mensuel' | 'annuel' = 'mensuel',
+): { setup: number; premiereEcheance: number; total: number } {
+  const premiereEcheance = engagement === 'annuel'
+    ? annualPrice(tier.monthly)
+    : tier.monthly
+  return {
+    setup: SETUP_FEE_MUR,
+    premiereEcheance,
+    total: SETUP_FEE_MUR + premiereEcheance,
+  }
 }
