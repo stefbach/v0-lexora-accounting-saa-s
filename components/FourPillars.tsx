@@ -113,7 +113,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
     <section
       id="dispositif"
       className="relative overflow-hidden py-20 md:py-28"
-      style={{ backgroundColor: "#0B0F2E" }}
+      style={{ backgroundColor: "#F5F8FD" }}
     >
       {/* Ambient backdrop */}
       <div
@@ -141,7 +141,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
             className="mb-5 inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-bold uppercase tracking-widest"
             style={{
               backgroundColor: "rgba(212,175,55,0.10)",
-              color: "#D4AF37",
+              color: "#8A6D1B",
               borderColor: "rgba(212,175,55,0.28)",
               fontFamily: "'Poppins', sans-serif",
             }}
@@ -152,7 +152,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
           <h2
             className="mb-4 text-3xl font-bold tracking-tight md:text-5xl"
             style={{
-              color: "#E8EAFC",
+              color: "#0B0F2E",
               fontFamily: "'Poppins', sans-serif",
               fontWeight: 700,
               letterSpacing: "-0.02em",
@@ -174,7 +174,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
           <p
             className="text-base md:text-lg"
             style={{
-              color: "#A8AFC7",
+              color: "#4A5670",
               fontFamily: "'Poppins', sans-serif",
               fontWeight: 300,
               lineHeight: 1.7,
@@ -253,10 +253,10 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
                   fontWeight: 800,
                   fontSize: "18px",
                   letterSpacing: "0.15em",
-                  color: "#E8EAFC",
+                  color: "#0B0F2E",
                 }}
               >
-                LE<span style={{ color: "#D4AF37" }}>X</span>ORA
+                LE<span style={{ color: "#8A6D1B" }}>X</span>ORA
               </div>
               {/* Outer pulse ring */}
               <motion.div
@@ -290,7 +290,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
                     <article
                       className="group relative flex h-full flex-col overflow-hidden rounded-2xl p-6 md:p-7"
                       style={{
-                        backgroundColor: "rgba(16,24,71,0.70)",
+                        backgroundColor: "#FFFFFF",
                         border: `1px solid ${p.accent}55`,
                         backdropFilter: "blur(8px)",
                         WebkitBackdropFilter: "blur(8px)",
@@ -350,7 +350,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
                           <div
                             className="text-3xl font-bold leading-none md:text-4xl"
                             style={{
-                              color: "rgba(232,234,252,0.10)",
+                              color: "rgba(11,15,46,0.10)",
                               fontFamily: "'Poppins', sans-serif",
                               fontVariantNumeric: "tabular-nums",
                               letterSpacing: "-0.04em",
@@ -365,7 +365,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
                       <h3
                         className="relative mb-1 text-2xl font-bold leading-tight"
                         style={{
-                          color: "#E8EAFC",
+                          color: "#0B0F2E",
                           fontFamily: "'Poppins', sans-serif",
                           fontWeight: 700,
                           letterSpacing: "-0.02em",
@@ -390,7 +390,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
                           <li
                             key={j}
                             className="flex items-start gap-2.5 text-sm"
-                            style={{ color: "#A8AFC7", lineHeight: 1.55 }}
+                            style={{ color: "#4A5670", lineHeight: 1.55 }}
                           >
                             <span
                               aria-hidden="true"
@@ -408,7 +408,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
                       {/* Status footer */}
                       <div
                         className="relative mt-5 flex items-center justify-between pt-4 text-[11px] font-medium uppercase tracking-widest"
-                        style={{ borderTop: "1px solid rgba(30,39,96,0.7)" }}
+                        style={{ borderTop: "1px solid rgba(203,213,232,0.7)" }}
                       >
                         <span
                           style={{
@@ -428,7 +428,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
                         </span>
                         <span
                           style={{
-                            color: "#A8AFC7",
+                            color: "#4A5670",
                             fontFamily: "'Poppins', sans-serif",
                           }}
                         >
@@ -448,7 +448,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
           <p
             className="mx-auto max-w-2xl text-sm md:text-base"
             style={{
-              color: "#A8AFC7",
+              color: "#4A5670",
               fontFamily: "'Poppins', sans-serif",
               fontWeight: 300,
               lineHeight: 1.7,

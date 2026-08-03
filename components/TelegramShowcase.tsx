@@ -59,7 +59,7 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
       className="relative overflow-hidden py-20 md:py-28"
       style={{
         background:
-          "linear-gradient(180deg, #0B0F2E 0%, #101847 50%, #0B0F2E 100%)",
+          "linear-gradient(180deg, #FFFFFF 0%, #F5F8FD 50%, #FFFFFF 100%)",
       }}
     >
       {/* Soft cinematic backdrop */}
@@ -77,7 +77,7 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
         className="pointer-events-none absolute inset-0 opacity-[0.18]"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(232,234,252,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(232,234,252,0.07) 1px, transparent 1px)",
+            "linear-gradient(rgba(11,15,46,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(11,15,46,0.07) 1px, transparent 1px)",
           backgroundSize: "48px 48px",
           maskImage:
             "radial-gradient(ellipse 70% 60% at 50% 50%, black 30%, transparent 80%)",
@@ -94,7 +94,7 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
               className="mb-5 inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-bold uppercase tracking-widest"
               style={{
                 backgroundColor: "rgba(212,175,55,0.10)",
-                color: "#D4AF37",
+                color: "#8A6D1B",
                 borderColor: "rgba(212,175,55,0.30)",
                 fontFamily: "'Poppins', sans-serif",
               }}
@@ -105,7 +105,7 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
             <h2
               className="mb-5 text-4xl font-bold tracking-tight md:text-6xl"
               style={{
-                color: "#E8EAFC",
+                color: "#0B0F2E",
                 fontFamily: "'Poppins', sans-serif",
                 fontWeight: 700,
                 letterSpacing: "-0.03em",
@@ -128,7 +128,7 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
             <p
               className="mb-7 text-base md:text-lg"
               style={{
-                color: "#A8AFC7",
+                color: "#4A5670",
                 fontFamily: "'Poppins', sans-serif",
                 fontWeight: 400,
                 lineHeight: 1.7,
@@ -149,18 +149,18 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
                   <div
                     className="rounded-xl px-4 py-3 text-center"
                     style={{
-                      backgroundColor: "rgba(232,234,252,0.04)",
+                      backgroundColor: "rgba(11,15,46,0.04)",
                       border: "1px solid rgba(212,175,55,0.22)",
                       fontFamily: "'Poppins', sans-serif",
                     }}
                   >
                     <div
                       className="text-xl font-bold md:text-2xl"
-                      style={{ color: "#D4AF37", letterSpacing: "-0.01em" }}
+                      style={{ color: "#8A6D1B", letterSpacing: "-0.01em" }}
                     >
                       {s.v}
                     </div>
-                    <div className="text-[11px] uppercase tracking-widest" style={{ color: "#A8AFC7" }}>
+                    <div className="text-[11px] uppercase tracking-widest" style={{ color: "#4A5670" }}>
                       {s.l}
                     </div>
                   </div>
@@ -192,8 +192,8 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
                   className="w-full px-7 text-base font-semibold sm:w-auto"
                   style={{
                     border: "1px solid rgba(65,145,255,0.45)",
-                    color: "#E8EAFC",
-                    backgroundColor: "rgba(232,234,252,0.04)",
+                    color: "#0B0F2E",
+                    backgroundColor: "rgba(11,15,46,0.04)",
                     fontFamily: "'Poppins', sans-serif",
                     fontWeight: 500,
                     borderRadius: "8px",
@@ -226,7 +226,7 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
                 className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest"
                 style={{
                   backgroundColor: "rgba(11,15,46,0.75)",
-                  color: "#D4AF37",
+                  color: "#8A6D1B",
                   border: "1px solid rgba(212,175,55,0.35)",
                   fontFamily: "'Poppins', sans-serif",
                 }}
@@ -242,14 +242,14 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
         <Reveal className="mt-20 mb-10 text-center">
           <span
             className="mb-4 inline-block text-[11px] font-bold uppercase tracking-[0.18em]"
-            style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
+            style={{ color: "#8A6D1B", fontFamily: "'Poppins', sans-serif" }}
           >
             {t("cmkt.tg.stories_eyebrow", locale)}
           </span>
           <h3
             className="text-3xl font-bold md:text-4xl"
             style={{
-              color: "#E8EAFC",
+              color: "#0B0F2E",
               fontFamily: "'Poppins', sans-serif",
               fontWeight: 700,
               letterSpacing: "-0.02em",
@@ -266,7 +266,7 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
                 <article
                   className="group relative h-full overflow-hidden rounded-2xl p-7"
                   style={{
-                    backgroundColor: "rgba(16,24,71,0.65)",
+                    backgroundColor: "#FFFFFF",
                     border: `1px solid ${s.accent}40`,
                     backdropFilter: "blur(8px)",
                     WebkitBackdropFilter: "blur(8px)",
@@ -299,7 +299,7 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
                   <h4
                     className="mb-3 text-xl font-bold"
                     style={{
-                      color: "#E8EAFC",
+                      color: "#0B0F2E",
                       fontFamily: "'Poppins', sans-serif",
                       fontWeight: 700,
                       letterSpacing: "-0.01em",
@@ -310,7 +310,7 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
                   <p
                     className="text-sm"
                     style={{
-                      color: "#A8AFC7",
+                      color: "#4A5670",
                       fontFamily: "'Poppins', sans-serif",
                       fontWeight: 400,
                       lineHeight: 1.7,
@@ -330,7 +330,7 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
           <h3
             className="mb-3 text-3xl font-bold md:text-4xl"
             style={{
-              color: "#E8EAFC",
+              color: "#0B0F2E",
               fontFamily: "'Poppins', sans-serif",
               fontWeight: 700,
               letterSpacing: "-0.02em",
@@ -341,7 +341,7 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
           <p
             className="mx-auto max-w-2xl text-base"
             style={{
-              color: "#A8AFC7",
+              color: "#4A5670",
               fontFamily: "'Poppins', sans-serif",
               fontWeight: 400,
               lineHeight: 1.7,
@@ -360,7 +360,7 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
                   <article
                     className="h-full rounded-2xl p-6"
                     style={{
-                      backgroundColor: "rgba(11,15,46,0.55)",
+                      backgroundColor: "#F5F8FD",
                       border: `1px solid ${accent}33`,
                     }}
                   >
@@ -377,7 +377,7 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
                       <h4
                         className="text-base font-bold"
                         style={{
-                          color: "#E8EAFC",
+                          color: "#0B0F2E",
                           fontFamily: "'Poppins', sans-serif",
                           fontWeight: 700,
                         }}
@@ -391,7 +391,7 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
                           key={itKey}
                           className="flex items-start gap-2 text-sm"
                           style={{
-                            color: "#A8AFC7",
+                            color: "#4A5670",
                             fontFamily: "'Poppins', sans-serif",
                             fontWeight: 400,
                             lineHeight: 1.55,

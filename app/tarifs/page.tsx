@@ -32,23 +32,37 @@ import { ParticleField } from "@/components/ParticleField"
 import { ScrollProgress } from "@/components/ScrollProgress"
 import { AnimatedCounter } from "@/components/AnimatedCounter"
 import { PricingOrb3DLazy } from "@/components/3d/PricingOrb3DLoader"
+import { BRAND } from "@/lib/theme/brand"
 
 /* ------------------------------------------------------------------ */
 /*  Design tokens                                                      */
 /* ------------------------------------------------------------------ */
+/**
+ * Jeton de couleur local, adossé à la palette de marque claire
+ * (lib/theme/brand.ts). Les noms restent proches de l'ancien nuancier pour
+ * limiter le bruit dans le diff, mais les valeurs sont désormais celles
+ * d'une surface claire : `white` est l'encre foncée des titres, `bg` le
+ * canevas blanc.
+ */
 const C = {
-  bg: "#0F1B2D",
-  navy: "#162236",
-  navyBorder: "#1E3050",
-  gold: "#D4AF37",
-  goldLight: "#E8C97A",
-  white: "#F8F6F1",
-  green: "#2ECC8A",
-  blue: "#5B9BD5",
-  orange: "#E8A84C",
-  muted: "#8A99B4",
-  mutedAlpha: "rgba(248,246,241,.45)",
-  cardBg: "#162236",
+  bg: BRAND.canvas,
+  bgAlt: BRAND.canvasAlt,
+  navy: BRAND.surfaceAlt,
+  navyBorder: BRAND.border,
+  gold: BRAND.gold,
+  goldLight: BRAND.goldLight,
+  goldText: BRAND.goldText,
+  goldSoft: BRAND.goldSoft,
+  /** Encre principale — anciennement le blanc cassé sur fond nuit. */
+  white: BRAND.ink,
+  /** Texte posé sur un aplat or ou vert. */
+  onAccent: BRAND.onAccent,
+  green: BRAND.green,
+  blue: BRAND.blue,
+  orange: BRAND.orange,
+  muted: BRAND.inkMuted,
+  mutedAlpha: BRAND.inkFaint,
+  cardBg: BRAND.surface,
 }
 
 const FONT = "'Poppins', sans-serif"
@@ -634,8 +648,8 @@ function TierCard({
       display: "flex", flexDirection: "column",
       position: "relative", overflow: "hidden",
       boxShadow: ctaPrimary
-        ? `0 24px 60px -24px ${C.gold}66, 0 0 0 1px ${C.gold}40`
-        : "0 1px 3px rgba(0,0,0,0.20)",
+        ? `${BRAND.shadowLg}, 0 0 0 1px ${C.gold}55`
+        : BRAND.shadowSm,
     }}>
       {/* Gradient accent stripe at top */}
       <div
@@ -655,13 +669,13 @@ function TierCard({
           style={{
             position: "absolute", top: 0, left: 0, right: 0, height: "60%",
             pointerEvents: "none",
-            background: `radial-gradient(ellipse 100% 50% at 50% 0%, ${C.gold}12 0%, transparent 70%)`,
+            background: `radial-gradient(ellipse 100% 50% at 50% 0%, ${C.gold}1F 0%, transparent 70%)`,
           }}
         />
       )}
 
       {/* Shine sweep on popular tier — continuous premium feel */}
-      {ctaPrimary && <ShineSweep color="rgba(212,175,55,0.14)" duration={4} />}
+      {ctaPrimary && <ShineSweep color="rgba(201,162,39,0.20)" duration={4} />}
 
       {/* Crown on popular tier */}
       {ctaPrimary && (
@@ -670,7 +684,7 @@ function TierCard({
           display: "inline-flex", alignItems: "center", gap: "4px",
           fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em",
           textTransform: "uppercase",
-          backgroundColor: C.gold, color: C.bg,
+          backgroundColor: C.gold, color: C.onAccent,
           padding: "4px 10px", borderRadius: "999px",
           fontFamily: FONT,
         }}>
@@ -702,7 +716,7 @@ function TierCard({
       {/* Price — count-up animation when scrolled into view */}
       <div style={{ position: "relative", marginBottom: "6px", display: "flex", alignItems: "baseline", gap: "6px" }}>
         <span style={{
-          color: C.gold, fontSize: onQuote ? "32px" : "40px", fontWeight: 800, lineHeight: 1,
+          color: C.white, fontSize: onQuote ? "32px" : "40px", fontWeight: 800, lineHeight: 1,
           fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em",
         }}>
           {onQuote ? txt.quoteLabel : (
@@ -793,7 +807,7 @@ function TierCard({
         backgroundColor: ctaPrimary ? C.gold : "transparent",
         color: ctaPrimary ? C.bg : C.white,
         transition: "transform 0.18s ease-out, box-shadow 0.18s ease-out",
-        boxShadow: ctaPrimary ? `0 8px 20px -8px ${C.gold}80` : "none",
+        boxShadow: ctaPrimary ? BRAND.shadowGold : "none",
         fontFamily: FONT,
       }}
       onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.02)" }}
@@ -827,7 +841,7 @@ function MatrixTable({ txt }: { txt: Txt }) {
           <tr>
             <th style={{ textAlign: "left", padding: "12px 16px", color: C.muted, fontWeight: 600, borderBottom: `1px solid ${C.navyBorder}` }}>{txt.matrixCol}</th>
             {txt.tierNamesShort.map((t) => (
-              <th key={t} style={{ textAlign: "center", padding: "12px 8px", color: C.gold, fontWeight: 700, borderBottom: `1px solid ${C.navyBorder}` }}>{t}</th>
+              <th key={t} style={{ textAlign: "center", padding: "12px 8px", color: C.goldText, fontWeight: 700, borderBottom: `1px solid ${C.navyBorder}` }}>{t}</th>
             ))}
           </tr>
         </thead>
@@ -1006,12 +1020,12 @@ export default function TarifsPage() {
           height: "64px", display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
-            <LexoraLogo href="/" size="md" showBaseline />
+            <LexoraLogo href="/" size="md" showBaseline tone="light" />
             <div className="hidden md:flex" style={{ gap: "4px" }}>
               {navLinks.map((nl) => (
                 <Link key={nl.label} href={nl.href} style={{
                   padding: "8px 14px", fontSize: "13px", fontWeight: nl.active ? 700 : 500,
-                  color: nl.active ? C.gold : C.muted,
+                  color: nl.active ? C.goldText : C.muted,
                   textDecoration: "none", borderRadius: "6px",
                   transition: "color 0.2s",
                 }}>{nl.label}</Link>
@@ -1054,8 +1068,8 @@ export default function TarifsPage() {
         >
           <ParticleField
             density={0.8}
-            color="rgba(212,175,55,0.55)"
-            linkColor="rgba(212,175,55,0.18)"
+            color="rgba(37,99,235,0.30)"
+            linkColor="rgba(11,15,46,0.10)"
             linkDistance={140}
             speed={0.22}
           />
@@ -1066,7 +1080,7 @@ export default function TarifsPage() {
           style={{
             position: "absolute", inset: 0, pointerEvents: "none",
             backgroundImage:
-              `radial-gradient(ellipse 50% 40% at 50% 0%, ${C.gold}18 0%, transparent 70%), radial-gradient(ellipse 40% 30% at 50% 100%, ${C.blue}14 0%, transparent 70%)`,
+              `radial-gradient(ellipse 55% 45% at 50% 0%, ${C.gold}1A 0%, transparent 70%), radial-gradient(ellipse 45% 35% at 50% 100%, ${C.blue}10 0%, transparent 70%)`,
           }}
         />
 
@@ -1090,7 +1104,7 @@ export default function TarifsPage() {
             <span style={{
               display: "inline-flex", alignItems: "center", gap: "8px",
               fontSize: "11px", fontWeight: 700,
-              color: C.gold, backgroundColor: `${C.gold}14`,
+              color: C.goldText, backgroundColor: C.goldSoft,
               border: `1px solid ${C.gold}35`,
               padding: "6px 16px", borderRadius: "999px",
               letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "24px",
@@ -1113,7 +1127,9 @@ export default function TarifsPage() {
               fontSize: "clamp(22px, 3.2vw, 38px)", fontWeight: 700,
               lineHeight: 1.2, margin: "0 auto 22px", maxWidth: "820px", fontFamily: FONT,
               letterSpacing: "-0.01em",
-              backgroundImage: `linear-gradient(90deg, ${C.gold} 0%, ${C.goldLight} 50%, ${C.blue} 100%)`,
+              // Le dégradé or clair → bleu ne tenait que sur fond nuit ; sur blanc
+              // il descendait sous 3:1. Encres foncées, la lisibilité prime.
+              backgroundImage: `linear-gradient(90deg, ${C.goldText} 0%, ${BRAND.ink} 55%, ${C.blue} 100%)`,
               WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
             }}>
               {txt.heroTitle2}
@@ -1146,7 +1162,7 @@ export default function TarifsPage() {
                   backgroundColor: billing === mode ? C.gold : "transparent",
                   color: billing === mode ? C.bg : C.muted,
                   transition: "all 0.25s ease-out", fontFamily: FONT,
-                  boxShadow: billing === mode ? `0 4px 12px -4px ${C.gold}60` : "none",
+                  boxShadow: billing === mode ? BRAND.shadowGold : "none",
                 }}
               >
                 {mode === "monthly" ? txt.monthly : txt.annual}
@@ -1159,7 +1175,7 @@ export default function TarifsPage() {
                 transition={{ duration: 0.25, ease: "easeOut" }}
                 style={{
                   position: "absolute", top: "-11px", right: "-12px",
-                  backgroundColor: C.green, color: C.bg, fontSize: "10px",
+                  backgroundColor: C.green, color: BRAND.onInk, fontSize: "10px",
                   fontWeight: 700, padding: "3px 10px", borderRadius: "999px",
                   boxShadow: `0 4px 12px -2px ${C.green}60`,
                 }}
@@ -1353,7 +1369,7 @@ export default function TarifsPage() {
               fontSize: "14px", fontWeight: 600,
               color: i === 3 ? C.green : C.white,
             }}>
-              <span style={{ color: C.gold }}>{"\u2022"}</span>
+              <span style={{ color: C.gold }} aria-hidden="true">{"\u2022"}</span>
               {t}
             </div>
           ))}
@@ -1374,7 +1390,7 @@ export default function TarifsPage() {
               padding: "12px 20px", fontSize: "14px",
               fontWeight: activeTab === tab.key ? 700 : 500,
               cursor: "pointer", border: "none", backgroundColor: "transparent",
-              color: activeTab === tab.key ? C.gold : C.muted,
+              color: activeTab === tab.key ? C.goldText : C.muted,
               borderBottom: activeTab === tab.key ? `2px solid ${C.gold}` : "2px solid transparent",
               whiteSpace: "nowrap", transition: "all 0.2s", fontFamily: FONT,
             }}>{tab.label}</button>
@@ -1462,7 +1478,7 @@ export default function TarifsPage() {
               fontWeight: calcTab === ct.key ? 700 : 500,
               cursor: "pointer", border: `1px solid ${calcTab === ct.key ? C.gold : C.navyBorder}`,
               backgroundColor: calcTab === ct.key ? `${C.gold}15` : "transparent",
-              color: calcTab === ct.key ? C.gold : C.muted,
+              color: calcTab === ct.key ? C.goldText : C.muted,
               transition: "all 0.2s", fontFamily: FONT,
             }}>{ct.label}</button>
           ))}
@@ -1475,7 +1491,7 @@ export default function TarifsPage() {
             borderRadius: "16px", padding: "32px",
           }}>
             <label htmlFor="calc-tx" style={{ display: "block", color: C.white, fontSize: "14px", fontWeight: 600, marginBottom: "8px" }}>
-              {txt.calcTransactions}: <span style={{ color: C.gold }}>{fmt(transactions)}</span>
+              {txt.calcTransactions}: <span style={{ color: C.goldText }}>{fmt(transactions)}</span>
             </label>
             <div style={{ position: "relative", marginBottom: "8px" }}>
               <input
@@ -1500,7 +1516,7 @@ export default function TarifsPage() {
             {isGbcCalc && (
               <>
                 <label htmlFor="calc-ent" style={{ display: "block", color: C.white, fontSize: "14px", fontWeight: 600, marginBottom: "8px" }}>
-                  {txt.calcEntites}: <span style={{ color: C.gold }}>{entites}</span>
+                  {txt.calcEntites}: <span style={{ color: C.goldText }}>{entites}</span>
                 </label>
                 <input
                   id="calc-ent"
@@ -1522,7 +1538,7 @@ export default function TarifsPage() {
               backgroundColor: `${C.gold}10`, border: `1px solid ${C.gold}25`,
               display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px",
             }}>
-              <span style={{ color: C.gold, fontSize: "13px", fontWeight: 700 }}>{calcTierName}</span>
+              <span style={{ color: C.goldText, fontSize: "13px", fontWeight: 700 }}>{calcTierName}</span>
               <span style={{ color: C.muted, fontSize: "12px", textAlign: "right" }}>{calcTierTx}</span>
             </div>
 
@@ -1583,7 +1599,7 @@ export default function TarifsPage() {
             }}>
               <div style={{ color: C.muted, fontSize: "13px", fontWeight: 500, marginBottom: "8px" }}>{txt.calcResult}</div>
               <div style={{ color: C.white, fontSize: "15px", fontWeight: 700, marginBottom: "6px" }}>{calcTierName}</div>
-              <div style={{ color: C.gold, fontSize: "clamp(28px, 5vw, 42px)", fontWeight: 800, lineHeight: 1.1, fontFamily: FONT, wordBreak: "break-word" }}>
+              <div style={{ color: C.white, fontSize: "clamp(28px, 5vw, 42px)", fontWeight: 800, lineHeight: 1.1, fontFamily: FONT, wordBreak: "break-word" }}>
                 {calcOnQuote ? txt.quoteLabel : `MRs ${fmt(getCalcPrice())}`}
               </div>
               {!calcOnQuote && (
@@ -1615,7 +1631,7 @@ export default function TarifsPage() {
                   <div style={{ height: "1px", backgroundColor: C.navyBorder, margin: "8px 0" }} />
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px", fontWeight: 700 }}>
                     <span style={{ color: C.white }}>Total</span>
-                    <span style={{ color: C.gold, fontVariantNumeric: "tabular-nums" }}>
+                    <span style={{ color: C.white, fontVariantNumeric: "tabular-nums" }}>
                       MRs {fmt(calcSetupTotal + getCalcPrice())}
                     </span>
                   </div>
@@ -1637,7 +1653,7 @@ export default function TarifsPage() {
                 <Link href="/auth/login" style={{
                   flex: 1, display: "block", textAlign: "center",
                   padding: "12px", borderRadius: "10px", fontWeight: 700, fontSize: "13px",
-                  backgroundColor: C.gold, color: C.bg, textDecoration: "none", fontFamily: FONT,
+                  backgroundColor: C.gold, color: C.onAccent, textDecoration: "none", fontFamily: FONT,
                 }}>{txt.calcCta1}</Link>
                 <Link href="/auth/login" style={{
                   flex: 1, display: "block", textAlign: "center",
@@ -1690,8 +1706,8 @@ export default function TarifsPage() {
         >
           <ParticleField
             density={0.6}
-            color="rgba(65,145,255,0.55)"
-            linkColor="rgba(65,145,255,0.18)"
+            color="rgba(37,99,235,0.26)"
+            linkColor="rgba(11,15,46,0.09)"
             linkDistance={150}
             speed={0.22}
           />
@@ -1700,7 +1716,7 @@ export default function TarifsPage() {
           aria-hidden="true"
           style={{
             position: "absolute", inset: 0, pointerEvents: "none",
-            backgroundImage: `radial-gradient(ellipse 50% 50% at 50% 50%, ${C.gold}12 0%, transparent 70%)`,
+            backgroundImage: `radial-gradient(ellipse 50% 50% at 50% 50%, ${C.gold}16 0%, transparent 70%)`,
           }}
         />
         <div style={{ position: "relative" }}>
@@ -1716,9 +1732,9 @@ export default function TarifsPage() {
               <PressableWrap>
                 <Link href="/auth/login" style={{
                   display: "inline-block", padding: "15px 34px", borderRadius: "12px",
-                  fontWeight: 700, fontSize: "15px", backgroundColor: C.gold, color: C.bg,
+                  fontWeight: 700, fontSize: "15px", backgroundColor: C.gold, color: C.onAccent,
                   textDecoration: "none", fontFamily: FONT,
-                  boxShadow: `0 12px 28px -10px ${C.gold}80`,
+                  boxShadow: BRAND.shadowGold,
                 }}>{txt.ctaBtn1}</Link>
               </PressableWrap>
               <PressableWrap>
@@ -1749,7 +1765,7 @@ export default function TarifsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" style={{ gap: "32px", marginBottom: "40px" }}>
             {/* Logo + tagline */}
             <div>
-              <LexoraLogo size="md" />
+              <LexoraLogo size="md" tone="light" />
               <p style={{ color: C.muted, fontSize: "13px", marginTop: "12px", lineHeight: 1.6 }}>
                 {txt.footerTagline}
               </p>
