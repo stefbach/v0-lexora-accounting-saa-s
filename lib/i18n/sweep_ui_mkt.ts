@@ -154,24 +154,8 @@ export const sweepUiMktChunk = {
 
     /* ---- tarifs/page.tsx — inline strings ---- */
     'uimkt.tarifs.all_included': 'Tout inclus',
-    'uimkt.tarifs.pack_erp': 'Pack ERP',
     'uimkt.tarifs.salaries': 'salariés',
     'uimkt.tarifs.salarie': 'salarié',
-    'uimkt.tarifs.compta_rh_tibok': 'Compta + RH + TIBOK',
-    'uimkt.tarifs.unlimited_tx': 'Transactions illimitées',
-    'uimkt.tarifs.calc_per_emp_pre': 'Calcul',
-    'uimkt.tarifs.per_salarie': 'par salarié',
-    'uimkt.tarifs.calc_per_emp_post': '— tarif dégressif au volume',
-    'uimkt.tarifs.sal_short': 'sal.',
-    'uimkt.tarifs.per_sal_month': '/ salarié / mois',
-    'uimkt.tarifs.floor_tibok': 'plancher MRs 250 · TIBOK inclus',
-    'uimkt.tarifs.compta_est_pre': 'Estimation',
-    'uimkt.tarifs.per_tx_volume': 'par volume de transactions',
-    'uimkt.tarifs.est_per_emp': 'Estimation (≈10 txn / salarié)',
-    'uimkt.tarifs.tx_month': 'txn/mois',
-    'uimkt.tarifs.plan': 'Formule',
-    'uimkt.tarifs.accounting': 'Comptabilité',
-    'uimkt.tarifs.bundle_discount': 'Remise Pack −20%',
 
     /* ---- DashboardPreview.tsx ---- */
     'uimkt.dash.monthly_revenue': 'Revenus du mois',
@@ -336,24 +320,8 @@ export const sweepUiMktChunk = {
 
     /* ---- tarifs/page.tsx — inline strings ---- */
     'uimkt.tarifs.all_included': 'All included',
-    'uimkt.tarifs.pack_erp': 'ERP Pack',
     'uimkt.tarifs.salaries': 'employees',
     'uimkt.tarifs.salarie': 'employee',
-    'uimkt.tarifs.compta_rh_tibok': 'Accounting + HR + TIBOK',
-    'uimkt.tarifs.unlimited_tx': 'Unlimited transactions',
-    'uimkt.tarifs.calc_per_emp_pre': 'Priced',
-    'uimkt.tarifs.per_salarie': 'per employee',
-    'uimkt.tarifs.calc_per_emp_post': '— volume discount',
-    'uimkt.tarifs.sal_short': 'emp.',
-    'uimkt.tarifs.per_sal_month': '/ employee / month',
-    'uimkt.tarifs.floor_tibok': 'floor MRs 250 · TIBOK included',
-    'uimkt.tarifs.compta_est_pre': 'Based on',
-    'uimkt.tarifs.per_tx_volume': 'transaction volume',
-    'uimkt.tarifs.est_per_emp': 'Estimate (~10 tx / emp)',
-    'uimkt.tarifs.tx_month': 'tx/mo',
-    'uimkt.tarifs.plan': 'Plan',
-    'uimkt.tarifs.accounting': 'Accounting',
-    'uimkt.tarifs.bundle_discount': 'Bundle discount −20%',
 
     /* ---- DashboardPreview.tsx ---- */
     'uimkt.dash.monthly_revenue': 'Monthly revenue',
