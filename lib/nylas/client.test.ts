@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import {
   nylasRedirectUri, getNylasGrantStatus, probeNylasApplication,
-  checkNylasApplication, NYLAS_REGIONS,
+  checkNylasApplication, listNylasConnectors, NYLAS_REGIONS,
 } from './client'
 
 /**
@@ -249,5 +249,47 @@ describe('checkNylasApplication', () => {
     const c = await checkNylasApplication()
     expect(c.regionDetectee).toBeNull()
     expect(c.probleme).toContain('NYLAS_API_KEY')
+  })
+})
+
+describe('listNylasConnectors', () => {
+  it('interroge l’hôte configuré et remonte les providers', async () => {
+    process.env.NYLAS_API_URI = NYLAS_REGIONS.eu
+    const fn = mockFetch(200, { data: [{ provider: 'google' }, { provider: 'microsoft' }] })
+    const c = await listNylasConnectors()
+    expect(fn.mock.calls[0][0]).toBe(`${NYLAS_REGIONS.eu}/v3/connectors`)
+    expect(c.providers).toEqual(['google', 'microsoft'])
+    expect(c.httpStatus).toBe(200)
+    expect(c.error).toBeNull()
+  })
+
+  it('rend une liste vide sur une application neuve', async () => {
+    // Cas réel : application fraîchement créée — aucun connecteur. L'auth
+    // s'interrompt alors chez Nylas sans jamais rappeler /callback.
+    mockFetch(200, { data: [] })
+    const c = await listNylasConnectors()
+    expect(c.httpStatus).toBe(200)
+    expect(c.providers).toEqual([])
+    expect(c.error).toBeNull()
+  })
+
+  it('ignore les entrées sans provider exploitable', async () => {
+    mockFetch(200, { data: [{ provider: '  google ' }, {}, { provider: '' }] })
+    expect((await listNylasConnectors()).providers).toEqual(['google'])
+  })
+
+  it('signale une clé serveur refusée sans jeter', async () => {
+    mockFetch(401, { error: { message: 'unauthorized' } })
+    const c = await listNylasConnectors()
+    expect(c.httpStatus).toBe(401)
+    expect(c.providers).toEqual([])
+    expect(c.error).toContain('unauthorized')
+  })
+
+  it('ne jette pas si l’hôte est injoignable', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('ENOTFOUND') }))
+    const c = await listNylasConnectors()
+    expect(c.httpStatus).toBe(0)
+    expect(c.error).toContain('ENOTFOUND')
   })
 })

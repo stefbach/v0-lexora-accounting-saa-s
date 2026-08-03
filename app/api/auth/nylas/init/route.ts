@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 import { signOAuthState } from '@/lib/google/oauth-state'
-import { buildNylasAuthUrl, isNylasConfigured, nylasRedirectUri, checkNylasApplication } from '@/lib/nylas/client'
+import { buildNylasAuthUrl, isNylasConfigured, nylasRedirectUri, checkNylasApplication, listNylasConnectors } from '@/lib/nylas/client'
+
+/** Renvoie l'utilisateur sur sa page avec la cause, plutôt qu'une page muette. */
+function errorRedirect(req: NextRequest, returnTo: string, message: string) {
+  const url = new URL(returnTo, req.nextUrl.origin)
+  url.searchParams.set('nylas_error', message.slice(0, 300))
+  return NextResponse.redirect(url)
+}
 
 /**
  * GET /api/auth/nylas/init?provider=google&societe_id=...&return_to=...
@@ -47,10 +54,25 @@ export async function GET(req: NextRequest) {
     // Il n'a alors aucun moyen de savoir ce qui cloche ni quoi corriger. On
     // préfère le renvoyer sur sa page avec la cause et le geste à faire.
     const app = await checkNylasApplication()
-    if (app.probleme) {
-      const url = new URL(returnTo, req.nextUrl.origin)
-      url.searchParams.set('nylas_error', app.probleme)
-      return NextResponse.redirect(url)
+    if (app.probleme) return errorRedirect(req, returnTo, app.probleme)
+
+    // Un provider sans connecteur produit la panne la plus opaque du parcours :
+    // Nylas interrompt l'auth chez lui, ne redirige jamais vers redirect_uri,
+    // et /callback ne s'exécute pas — l'utilisateur revient à une page muette.
+    // On ne bloque que sur une certitude (liste obtenue ET provider absent) :
+    // si /v3/connectors est injoignable, mieux vaut tenter la connexion que
+    // refuser à tort sur un diagnostic en échec.
+    if (provider) {
+      const connecteurs = await listNylasConnectors()
+      if (connecteurs.httpStatus === 200 && !connecteurs.providers.includes(provider)) {
+        const dispo = connecteurs.providers.length
+          ? `Connecteurs disponibles : ${connecteurs.providers.join(', ')}.`
+          : 'Aucun connecteur n’est configuré sur cette application.'
+        return errorRedirect(
+          req, returnTo,
+          `L’application Nylas n’a pas de connecteur « ${provider} ». ${dispo} Ajoute-le dans le tableau de bord Nylas (Connectors) avec les identifiants OAuth du fournisseur, puis réessaie.`,
+        )
+      }
     }
 
     const state = signOAuthState(user.id, JSON.stringify({ s: societeId, r: returnTo }))

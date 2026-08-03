@@ -1,8 +1,13 @@
 /**
  * Client Nylas v3 (https://nylas.com) — API unifiée email + calendrier +
  * contacts multi-provider (Gmail, Microsoft/Outlook, IMAP, …) avec auth
- * hébergée (apps Google/Microsoft de Nylas déjà vérifiées → pas de procédure
- * de vérification côté Lexora).
+ * hébergée.
+ *
+ * ATTENTION — contrairement à la v2, la v3 ne fournit AUCUNE application
+ * Google/Microsoft partagée et pré-vérifiée. Chaque connecteur porte les
+ * identifiants OAuth d'une application créée par nous chez le fournisseur, et
+ * les scopes restreints (gmail.modify) imposent la vérification Google.
+ * Voir https://developer.nylas.com/docs/provider-guides/google/create-google-app/
  *
  * Modèle v3 :
  *  - Auth hébergée → on récupère un `grant_id` PAR compte connecté.
@@ -147,6 +152,41 @@ export async function probeNylasApplication(region: keyof typeof NYLAS_REGIONS):
       region, host, httpStatus: 0, applicationId: null, correspondAuClientId: null,
       error: e instanceof Error ? e.message : 'appel impossible',
     }
+  }
+}
+
+export type NylasConnectors = {
+  /** Providers configurés (`google`, `microsoft`, `imap`, …). */
+  providers: string[]
+  httpStatus: number
+  error: string | null
+}
+
+/**
+ * Liste les connecteurs de l'application (`GET /v3/connectors`).
+ *
+ * Une application Nylas v3 démarre SANS connecteur : chacun doit être créé et
+ * porte les identifiants OAuth du fournisseur. Sans connecteur `google`, un
+ * `/v3/connect/auth?provider=google` s'interrompt chez Nylas — le navigateur
+ * n'est jamais redirigé vers le `redirect_uri`, donc `/callback` ne s'exécute
+ * pas et Lexora n'a aucun moyen de voir l'échec. D'où ce contrôle en amont.
+ */
+export async function listNylasConnectors(): Promise<NylasConnectors> {
+  try {
+    const res = await fetch(`${apiBase()}/v3/connectors`, { headers: authHeaders() })
+    const raw = await res.text().catch(() => '')
+    let parsed: { data?: Array<{ provider?: string }> } = {}
+    try { parsed = JSON.parse(raw) } catch { /* réponse non JSON */ }
+    const providers = Array.isArray(parsed.data)
+      ? parsed.data.map((c) => (c?.provider || '').trim()).filter(Boolean)
+      : []
+    return {
+      providers,
+      httpStatus: res.status,
+      error: res.ok ? null : (raw.slice(0, 200) || `HTTP ${res.status}`),
+    }
+  } catch (e) {
+    return { providers: [], httpStatus: 0, error: e instanceof Error ? e.message : 'injoignable' }
   }
 }
 

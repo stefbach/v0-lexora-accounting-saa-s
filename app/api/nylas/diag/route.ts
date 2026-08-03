@@ -35,6 +35,7 @@ import {
   getNylasGrantStatus,
   listNylasCalendars,
   checkNylasApplication,
+  listNylasConnectors,
 } from '@/lib/nylas/client'
 
 export const dynamic = 'force-dynamic'
@@ -85,7 +86,20 @@ export async function GET(req: NextRequest) {
   // Même contrôle que celui qui garde /api/auth/nylas/init, pour que le
   // diagnostic et le parcours de connexion ne puissent pas se contredire.
   const check = await checkNylasApplication()
+  const connecteurs = await listNylasConnectors()
   const application = {
+    connecteurs: {
+      providers: connecteurs.providers,
+      http: connecteurs.httpStatus,
+      erreur: connecteurs.error,
+      // Sans connecteur, l'auth s'interrompt chez Nylas sans jamais rappeler
+      // /callback : la panne est invisible côté Lexora. On la nomme ici.
+      verdict: connecteurs.httpStatus !== 200
+        ? 'Liste des connecteurs illisible.'
+        : connecteurs.providers.length === 0
+          ? 'Aucun connecteur configuré : toute tentative de connexion s’interrompra chez Nylas sans revenir sur Lexora.'
+          : `Connecteurs configurés : ${connecteurs.providers.join(', ')}.`,
+    },
     hote_configure: check.hoteConfigure,
     region_detectee: check.regionDetectee,
     sondes: check.sondes.map((s) => ({
@@ -176,6 +190,10 @@ export async function GET(req: NextRequest) {
     ? 'Nylas n’est pas configuré : NYLAS_API_KEY et/ou NYLAS_CLIENT_ID manquent côté Vercel.'
     : check.probleme
       ? check.probleme
+      // Sans connecteur, aucune connexion ne peut aboutir — ce constat prime
+      // sur « aucune boîte enregistrée », qui en est seulement la conséquence.
+      : connecteurs.httpStatus === 200 && connecteurs.providers.length === 0
+        ? 'Aucun connecteur n’est configuré sur l’application Nylas : toute tentative de connexion s’interrompt chez Nylas sans revenir sur Lexora. Ajouter un connecteur (Google, Microsoft, …) dans le tableau de bord Nylas.'
       : comptes.length === 0
         ? 'Aucune boîte Nylas enregistrée pour cet utilisateur. Connecter une boîte depuis /client/email-accounts.'
         : utilisables === 0
