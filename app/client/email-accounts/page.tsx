@@ -63,9 +63,32 @@ export default function EmailAccountsPage() {
     const u = `/api/auth/nylas/init?provider=${encodeURIComponent(provider)}${societeId ? `&societe_id=${societeId}` : ''}&return_to=${encodeURIComponent('/client/email-accounts')}`
     window.location.href = u
   }
+  // Diagnostic : une boîte peut être listée ici comme connectée alors que son
+  // jeton est illisible ou que l'accès a été révoqué côté fournisseur. Cette
+  // liste ne le voit pas — elle ne déchiffre rien et n'appelle jamais Nylas.
+  // /api/nylas/diag interroge Nylas et rend un verdict par boîte.
+  const [diagBusy, setDiagBusy] = useState(false)
+  const [diagResume, setDiagResume] = useState<string | null>(null)
+  const [diagVerdicts, setDiagVerdicts] = useState<Record<string, string>>({})
+  const runNylasDiag = async () => {
+    setDiagBusy(true); setDiagResume(null)
+    try {
+      const r = await fetch('/api/nylas/diag', { cache: 'no-store' })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Diagnostic indisponible')
+      setDiagResume(j.resume || null)
+      setDiagVerdicts(Object.fromEntries(
+        (j.comptes || []).map((c: { id: string; verdict: string }) => [c.id, c.verdict]),
+      ))
+    } catch (e) {
+      setDiagResume(e instanceof Error ? e.message : 'Diagnostic indisponible')
+    } finally { setDiagBusy(false) }
+  }
+
   const disconnectNylas = async (id: string) => {
     if (!confirm(locale === 'en' ? 'Disconnect this mailbox?' : 'Déconnecter cette boîte ?')) return
     await fetch(`/api/auth/nylas/accounts?id=${id}`, { method: 'DELETE' })
+    setDiagVerdicts({}); setDiagResume(null)
     loadNylas()
   }
 
@@ -252,13 +275,36 @@ export default function EmailAccountsPage() {
             </div>
             {nylasAccounts.length > 0 && (
               <div className="border-t pt-3 space-y-1.5">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{locale === 'en' ? 'Connected mailboxes' : 'Boîtes connectées'}</div>
-                {nylasAccounts.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between text-sm bg-slate-50 rounded px-3 py-2">
-                    <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> {a.account_email}</span>
-                    <button onClick={() => disconnectNylas(a.id)} className="text-xs text-red-600 hover:underline">{locale === 'en' ? 'Disconnect' : 'Déconnecter'}</button>
-                  </div>
-                ))}
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{locale === 'en' ? 'Connected mailboxes' : 'Boîtes connectées'}</div>
+                  <button onClick={runNylasDiag} disabled={diagBusy}
+                    className="text-xs text-primary hover:underline disabled:opacity-50">
+                    {diagBusy
+                      ? (locale === 'en' ? 'Checking…' : 'Vérification…')
+                      : (locale === 'en' ? 'Check connection' : 'Vérifier la connexion')}
+                  </button>
+                </div>
+                {diagResume && <div className="text-xs text-slate-600">{diagResume}</div>}
+                {nylasAccounts.map((a) => {
+                  const verdict = diagVerdicts[a.id]
+                  // Tant que le diagnostic n'a pas tourné, on n'affirme rien :
+                  // la pastille verte d'origine mentait sur les boîtes mortes.
+                  const ok = verdict === undefined ? null : verdict === 'Boîte opérationnelle.'
+                  return (
+                    <div key={a.id} className="bg-slate-50 rounded px-3 py-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-2">
+                          <CheckCircle2 className={`h-4 w-4 ${ok === false ? 'text-red-500' : ok === true ? 'text-emerald-500' : 'text-slate-400'}`} />
+                          {a.account_email}
+                        </span>
+                        <button onClick={() => disconnectNylas(a.id)} className="text-xs text-red-600 hover:underline">{locale === 'en' ? 'Disconnect' : 'Déconnecter'}</button>
+                      </div>
+                      {verdict && (
+                        <div className={`text-xs mt-1 ${ok ? 'text-emerald-700' : 'text-red-600'}`}>{verdict}</div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </CardContent>
