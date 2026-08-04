@@ -40,6 +40,9 @@ Documentation associée :
 - [`docs/benchmark/2026-08-benchmark-maurice.md`](docs/benchmark/2026-08-benchmark-maurice.md)
   — benchmark marché Maurice : Lexora vs QuickBooks, Zoho, Xero, Sage, Odoo
   et éditeurs locaux (matrice fonctionnelle, tarifs MUR, coût total de conformité)
+- [`docs/benchmark/2026-08-matrice-fonctionnelle-tarifs.md`](docs/benchmark/2026-08-matrice-fonctionnelle-tarifs.md)
+  — annexe : inventaire exhaustif des fonctionnalités Lexora vérifiées dans
+  le code, matrice complète × 8 produits, grilles tarifaires au plan près
 
 ## Learn More
 

@@ -4,6 +4,11 @@ _Août 2026 — source de vérité : liste officielle MRA des fournisseurs EBS
 au 15 juillet 2026, grilles tarifaires publiques, et inventaire du code de
 ce repo._
 
+> **Annexe** — l'inventaire exhaustif des fonctionnalités Lexora (150+
+> lignes vérifiées dans le code), la matrice complète face aux huit
+> alternatives et les grilles tarifaires au plan près figurent dans
+> [`2026-08-matrice-fonctionnelle-tarifs.md`](./2026-08-matrice-fonctionnelle-tarifs.md).
+
 ---
 
 ## 1. Résumé exécutif
