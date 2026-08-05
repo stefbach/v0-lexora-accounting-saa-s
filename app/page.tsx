@@ -38,6 +38,8 @@ import { NewFeatures2026 } from "@/components/NewFeatures2026"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcherLight } from "@/components/LanguageSwitcher"
 import { LexoraLogo } from "@/components/LexoraLogo"
+import InstallCallout from "@/components/pwa/install-callout"
+import InstallDialog from "@/components/pwa/install-dialog"
 import { SOCIETE_TIERS } from "@/lib/pricing/packages"
 import {
   FileSearch,
@@ -1750,6 +1752,16 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* INSTALLATION — encart « application installable ».
+            Se retire de lui-même quand Lexora tourne déjà en mode autonome. */}
+        <section className="py-16 md:py-20" style={{ backgroundColor: "#FFFFFF" }}>
+          <div className="mx-auto max-w-6xl px-4 sm:px-6">
+            <Reveal>
+              <InstallCallout />
+            </Reveal>
+          </div>
+        </section>
+
         {/* CTA — dark with live particles + floating gold accent */}
         <section
           className="relative overflow-hidden py-20 md:py-28"
@@ -1913,6 +1925,10 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
+
+      {/* Invitation à installer, différée de quelques secondes et muette
+          pendant trente jours après un refus. */}
+      <InstallDialog />
     </div>
   )
 }

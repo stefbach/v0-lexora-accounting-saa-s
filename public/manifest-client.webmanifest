@@ -1,0 +1,80 @@
+{
+  "id": "/client",
+  "name": "Lexora Client",
+  "short_name": "Lexora Client",
+  "description": "Espace client Lexora : factures, trésorerie, bilan, échéances fiscales et documents de la société.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "/client?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0B0F2E",
+  "categories": [
+    "business",
+    "finance",
+    "productivity"
+  ],
+  "icons": [
+    {
+      "src": "/icons/client/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/client/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/client/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/client/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Tableau de bord",
+      "short_name": "Tableau de bord",
+      "url": "/client/tableau-de-bord?source=pwa",
+      "icons": [
+        {
+          "src": "/icons/client/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Mes factures",
+      "short_name": "Factures",
+      "url": "/client/factures?source=pwa",
+      "icons": [
+        {
+          "src": "/icons/client/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Échéances fiscales",
+      "short_name": "Échéances",
+      "url": "/client/echeances?source=pwa",
+      "icons": [
+        {
+          "src": "/icons/client/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

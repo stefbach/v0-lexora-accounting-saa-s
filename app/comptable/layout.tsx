@@ -2,6 +2,15 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { ComptableSidebarNew } from "@/components/layout/ComptableSidebarNew"
 import { FloatingPageHelp } from "@/components/help/FloatingPageHelp"
+import { APP_SPACES, appSpaceMetadata, appSpaceViewport } from "@/lib/pwa-spaces"
+
+/**
+ * Installable comme application distincte : le navigateur retient le manifeste
+ * de la page affichée, donc une installation lancée depuis cet espace produit
+ * « Lexora Comptable » et non l'application publique. Voir lib/pwa-spaces.ts.
+ */
+export const metadata = appSpaceMetadata(APP_SPACES.comptable)
+export const viewport = appSpaceViewport()
 
 const ALLOWED_ROLES = ['comptable', 'comptable_dedie', 'admin', 'super_admin']
 

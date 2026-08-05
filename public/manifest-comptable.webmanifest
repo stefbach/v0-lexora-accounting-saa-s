@@ -1,0 +1,80 @@
+{
+  "id": "/comptable",
+  "name": "Lexora Comptable",
+  "short_name": "Lexora Compta",
+  "description": "Espace comptable Lexora : dossiers clients, rapprochement bancaire, plan comptable mauricien, TVA et clôture.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "/comptable?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0B0F2E",
+  "categories": [
+    "business",
+    "finance",
+    "productivity"
+  ],
+  "icons": [
+    {
+      "src": "/icons/comptable/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/comptable/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/comptable/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/comptable/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Mes clients",
+      "short_name": "Clients",
+      "url": "/comptable/mes-clients?source=pwa",
+      "icons": [
+        {
+          "src": "/icons/comptable/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Rapprochement bancaire",
+      "short_name": "Rapprochement",
+      "url": "/comptable/rapprochement?source=pwa",
+      "icons": [
+        {
+          "src": "/icons/comptable/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Déclarations TVA",
+      "short_name": "TVA",
+      "url": "/comptable/tva?source=pwa",
+      "icons": [
+        {
+          "src": "/icons/comptable/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}
