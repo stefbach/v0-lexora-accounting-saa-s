@@ -10,6 +10,10 @@ import {
 } from '@/lib/supabase/assert-societe-access'
 import { resolveInternalAuth } from '@/lib/lexora-internal-auth'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
+import { cleanUuid, cleanUuidFields, isUuid } from '@/lib/db/uuid'
+
+/** Colonnes uuid nullables alimentées par le formulaire de facturation. */
+const NULLABLE_UUID_COLUMNS = ['template_id', 'contact_id', 'facture_reference_id'] as const
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +29,16 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
     const factureId = searchParams.get('id')
+
+    // Un paramètre uuid mal formé (sentinelle "none" d'un <Select>, id legacy)
+    // ferait échouer la requête Postgres avec une erreur SQL brute : on répond
+    // 400 explicitement.
+    if (societe_id && !isUuid(societe_id)) {
+      return NextResponse.json({ error: 'societe_id invalide' }, { status: 400 })
+    }
+    if (factureId && !isUuid(factureId)) {
+      return NextResponse.json({ error: 'id de facture invalide' }, { status: 400 })
+    }
 
     // Tenant isolation — verify user has access to the requested societe_id
     // (unified helper, includes user_societes + dossiers + created_by branches)
@@ -158,18 +172,28 @@ export async function POST(request: Request) {
       date_facture, date_echeance, devise = 'MUR', taux_change = 1,
       montant_ht = 0, montant_tva = 0, montant_ttc,
       taux_tva = 0, statut: statutIn = 'brouillon', notes, notes_internes,
-      lignes = [], conditions_paiement = 30, termes, template = 'standard', template_id = null,
+      lignes = [], conditions_paiement = 30, termes, template = 'standard',
+      template_id: templateIdFromBody = null,
       client_offshore = false, remise_pct = 0, remise_montant = 0,
       recurrent = false, recurrent_frequence, logo_url,
       mode_paiement = 'banque', paye_par, contact_id: contactIdFromBody,
-      type_document = 'facture', facture_reference_id,
+      type_document = 'facture', facture_reference_id: factureReferenceIdFromBody,
       recurrence_jour_du_mois, recurrence_date_debut, recurrence_date_fin,
       client,
     } = body
-    let contact_id: string | null = contactIdFromBody || null
+
+    // Les liens optionnels arrivent d'un <Select> : une sentinelle "none" ou un
+    // id legacy non-uuid doit devenir NULL, pas partir tel quel en base (sinon
+    // `invalid input syntax for type uuid` remonte brut jusqu'à l'utilisateur).
+    const template_id = cleanUuid(templateIdFromBody)
+    const facture_reference_id = cleanUuid(factureReferenceIdFromBody)
+    let contact_id: string | null = cleanUuid(contactIdFromBody)
 
     if (!societe_id || !date_facture) {
       return NextResponse.json({ error: 'societe_id et date_facture requis' }, { status: 400 })
+    }
+    if (!isUuid(societe_id)) {
+      return NextResponse.json({ error: 'societe_id invalide — sélectionnez une société.' }, { status: 400 })
     }
 
     // Garde-fou conversion devise : si la facture est en devise étrangère mais
@@ -561,6 +585,11 @@ export async function PATCH(request: Request) {
     const { id, ...updates } = body
 
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
+    if (!isUuid(id)) return NextResponse.json({ error: 'id de facture invalide' }, { status: 400 })
+
+    // Mêmes sentinelles de <Select> qu'au POST — nettoyées uniquement sur les
+    // clés réellement envoyées, pour ne pas écraser un lien existant.
+    cleanUuidFields(updates, NULLABLE_UUID_COLUMNS)
 
     // Fetch existing invoice for status transition check + access verification
     const { data: existing } = await supabase
@@ -590,6 +619,9 @@ export async function PATCH(request: Request) {
     // orphelines sur la société d'origine → déséquilibre + contamination visuelle
     // d'une société par les factures d'une autre.
     if (updates.societe_id && updates.societe_id !== existing.societe_id) {
+      if (!isUuid(updates.societe_id)) {
+        return NextResponse.json({ error: 'societe_id invalide' }, { status: 400 })
+      }
       // Tenant isolation sur la société CIBLE aussi
       await assertSocieteAccess(supabase, user.id, updates.societe_id)
 
@@ -747,6 +779,7 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id')
     const force = searchParams.get('force') === '1'
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
+    if (!isUuid(id)) return NextResponse.json({ error: 'id de facture invalide' }, { status: 400 })
 
     const { data: existing } = await supabase
       .from('factures')
