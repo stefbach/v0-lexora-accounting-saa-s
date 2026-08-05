@@ -169,7 +169,7 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
             </StaggerGroup>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link href="/pilotage-telegram">
+              <Link href="/rdv">
                 <Button
                   size="lg"
                   className="w-full px-7 text-base font-semibold sm:w-auto"
@@ -185,7 +185,7 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
-              <a href="#telegram-tools">
+              <Link href="/rdv">
                 <Button
                   size="lg"
                   variant="outline"
@@ -201,7 +201,7 @@ export function TelegramShowcase({ locale = "fr" }: { locale?: Locale }) {
                 >
                   {t("cmkt.tg.cta_tools", locale)}
                 </Button>
-              </a>
+              </Link>
             </div>
           </Reveal>
 

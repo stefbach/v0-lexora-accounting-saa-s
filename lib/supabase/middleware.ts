@@ -59,6 +59,9 @@ export async function updateSession(request: NextRequest) {
     '/signer-contrat',
     // Public booking page (prise de RDV prospect)
     '/rdv',
+    // Guide d'installation de l'application. Consulté avant toute connexion —
+    // et scanné depuis un téléphone via le QR code, où aucune session n'existe.
+    '/installer',
   ]
   // API routes explicitly whitelisted as public (no auth required).
   // All other /api/* routes require an authenticated user (see below).

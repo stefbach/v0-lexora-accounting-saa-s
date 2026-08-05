@@ -51,6 +51,19 @@ const nextConfig = {
       // complète (CRUD flux + reconciliation paire-à-paire). On supprime
       // la V1 et on redirige les anciens liens (bookmarks, docs) en 308.
       { source: '/comptable/inter-societes', destination: '/comptable/interco', permanent: true },
+
+      // Août 2026 — le formulaire d'inscription en trois étapes (profil,
+      // infos, plan) est retiré du parcours public : un prospect ne remplit
+      // plus un formulaire en attendant une activation sous 24-48 h, il prend
+      // directement rendez-vous. Tous les appels à l'action pointent
+      // désormais sur /rdv ; ce redirect rattrape le reste — liens en
+      // signature d'email, bookmarks, pages indexées, campagnes déjà parties.
+      //
+      // 307 et NON 308 : c'est une décision commerciale, pas un renommage de
+      // route. Un permanent est mis en cache durablement par les navigateurs
+      // et resterait actif après un éventuel retour en arrière, sur les
+      // postes qui l'ont vu passer.
+      { source: '/inscription', destination: '/rdv', permanent: false },
     ]
   },
 }

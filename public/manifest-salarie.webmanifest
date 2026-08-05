@@ -1,0 +1,57 @@
+{
+  "id": "/salarie",
+  "name": "Lexora Salarié",
+  "short_name": "Lexora Salarié",
+  "description": "Espace salarié Lexora : bulletins de paie, demandes de congés, pointage et documents personnels.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "/salarie?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0B0F2E",
+  "categories": [
+    "business",
+    "productivity"
+  ],
+  "icons": [
+    {
+      "src": "/icons/salarie/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/salarie/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/salarie/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/salarie/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Mon espace",
+      "short_name": "Mon espace",
+      "url": "/salarie?source=pwa",
+      "icons": [
+        {
+          "src": "/icons/salarie/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

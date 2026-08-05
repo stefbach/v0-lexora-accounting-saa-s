@@ -92,7 +92,7 @@ export default function PilotageTelegramPage() {
           <div className="flex items-center gap-4 text-sm">
             <Link href="/tarifs" className="text-[#42506B] hover:text-[#0B0F2E]">{t('tg.land.nav.pricing', locale)}</Link>
             <Link
-              href="/inscription"
+              href="/rdv"
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg font-semibold hover:opacity-95"
               style={{ backgroundColor: GOLD, color: NAVY }}
             >
@@ -177,7 +177,7 @@ export default function PilotageTelegramPage() {
 
             <div className="mt-10 flex items-center justify-center gap-3 flex-wrap">
               <Link
-                href="/inscription"
+                href="/rdv"
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-bold hover:opacity-95 shadow-2xl"
                 style={{ backgroundColor: GOLD, color: NAVY, boxShadow: `0 10px 40px -10px ${GOLD}80` }}
               >
@@ -348,7 +348,7 @@ export default function PilotageTelegramPage() {
           </p>
           <div className="mt-10 flex items-center justify-center gap-3 flex-wrap">
             <Link
-              href="/inscription"
+              href="/rdv"
               className="inline-flex items-center gap-2 px-8 py-3.5 rounded-lg font-bold text-base hover:opacity-95"
               style={{ background: `linear-gradient(135deg, ${GOLD}, #f5d061)`, color: NAVY }}
             >

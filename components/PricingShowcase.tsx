@@ -203,7 +203,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
             const Icon = tier.icon
             const defaultCta = {
               key: "cmkt.pr.cta_default",
-              href: "/tarifs",
+              href: "/rdv",
             }
             const cta = tier.cta ?? defaultCta
             const ctaLabel = t(cta.key, locale)
@@ -477,7 +477,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
             <span>{t("cmkt.pr.footnote", locale)}</span>
             <span aria-hidden="true" style={{ color: "#D4AF37" }}>·</span>
             <Link
-              href="/tarifs"
+              href="/rdv"
               className="inline-flex items-center gap-1 font-medium transition-colors"
               style={{ color: "#4191FF" }}
             >
