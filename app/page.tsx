@@ -198,11 +198,12 @@ export default function HomePage() {
             <a href="#pcm-claude" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5670", fontFamily: "'Poppins', sans-serif" }}>
               PCM × Claude
             </a>
-            {SHOW_PRICING && (
-            <a href="#offres" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5670", fontFamily: "'Poppins', sans-serif" }}>
-              {t("uimkt.home.nav_offers", locale)}
-            </a>
-            )}
+            {/* Pas d'entrée « Offres » : le menu portait deux libellés pour la
+                même intention d'achat, « Offres » et « Tarifs », l'un menant à
+                une ancre de la page et l'autre à /tarifs. La section #offres
+                reste en place — elle explique les deux modes d'accès (direct
+                ou partenaire expert-comptable), pas les prix — mais on ne
+                l'annonce plus dans la navigation. */}
             <a href="#compliance" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#4A5670", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.compliance', locale)}
             </a>
@@ -257,7 +258,6 @@ export default function HomePage() {
                     {[
                       { href: "#features", label: t('home.modules', locale) },
                       { href: "#ai", label: t('home.ai_intelligence', locale) },
-                      ...(SHOW_PRICING ? [{ href: "#offres", label: t("uimkt.home.nav_offers", locale) }] : []),
                       { href: "#compliance", label: t('home.compliance', locale) },
                     ].map((link) => (
                       <a
@@ -401,7 +401,7 @@ export default function HomePage() {
                 <FadeSlide delay={0.24} y={12}>
                   <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center lg:justify-start">
                     <PressableWrap>
-                      <Link href="/inscription">
+                      <Link href="/rdv">
                         <Button
                           size="lg"
                           className="w-full px-8 text-base font-semibold sm:w-auto"
@@ -1798,7 +1798,7 @@ export default function HomePage() {
                 {t('home.cta_subtitle', locale)}
               </p>
               <PressableWrap>
-                <Link href="/inscription">
+                <Link href="/rdv">
                   <Button
                     size="lg"
                     className="px-10 text-base font-semibold"
@@ -1842,9 +1842,6 @@ export default function HomePage() {
                 <li><a href="#features" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t("uimkt.home.footer_modules", locale)}</a></li>
                 <li><a href="#ai" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t("uimkt.home.footer_ai_agents", locale)}</a></li>
                 {SHOW_PRICING && (
-                <li><a href="#offres" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t("uimkt.home.nav_offers", locale)}</a></li>
-                )}
-                {SHOW_PRICING && (
                 <li><Link href="/tarifs" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>Tarifs</Link></li>
                 )}
                 <li><Link href="/pilotage-telegram" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{t('uimkt.home.nav_assistant', locale)}</Link></li>
@@ -1870,7 +1867,7 @@ export default function HomePage() {
                 </li>
                 <li>
                   <Link
-                    href="/inscription"
+                    href="/rdv"
                     className="transition-colors hover:text-[#E8EAFC]"
                     style={{ color: "#A8AFC7", textDecoration: "none" }}
                   >
@@ -1888,7 +1885,7 @@ export default function HomePage() {
                 </li>
                 <li>
                   <Link
-                    href="/inscription?role=expert"
+                    href="/rdv"
                     className="transition-colors hover:text-[#FFE8A3]"
                     style={{ color: "#D4AF37", textDecoration: "none", fontWeight: 500 }}
                   >

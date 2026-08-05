@@ -605,10 +605,10 @@ function footerLinkHref(label: string): string {
     "Santé salariés": "/#features",
     "Téléconsultation": "/#features",
     "Bien-être": "/#features",
-    "Partenaires": "/inscription?role=expert",
+    "Partenaires": "/rdv",
     "Support": "mailto:sbach@digital-data-solutions.net?subject=Support",
-    "Démo": "/inscription",
-    "Partenariats": "/inscription?role=expert",
+    "Démo": "/rdv",
+    "Partenariats": "/rdv",
     "Presse": "mailto:sbach@digital-data-solutions.net?subject=Presse",
     // EN
     "Pricing": "/tarifs",
@@ -616,9 +616,9 @@ function footerLinkHref(label: string): string {
     "Employee health": "/#features",
     "Teleconsultation": "/#features",
     "Wellbeing": "/#features",
-    "Partners": "/inscription?role=expert",
-    "Demo": "/inscription",
-    "Partnerships": "/inscription?role=expert",
+    "Partners": "/rdv",
+    "Demo": "/rdv",
+    "Partnerships": "/rdv",
     "Press": "mailto:sbach@digital-data-solutions.net?subject=Press",
   }
   return map[label] || "/#features"
@@ -943,7 +943,7 @@ export default function TarifsPage() {
         storage={storages[i]}
         features={txt.featAllIn.map((label) => ({ label, included: true }))}
         ctaLabel={ctas[i]}
-        ctaHref={tiers[i].monthly === 0 ? "/inscription?role=enterprise" : "/inscription"}
+        ctaHref="/rdv"
         ctaPrimary={i === populaire}
         billing={billing}
         txt={txt}

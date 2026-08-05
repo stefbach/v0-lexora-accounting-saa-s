@@ -26,7 +26,10 @@ const DELAY_MS = 8000
 const MUTED_PREFIXES = [
   '/auth',
   '/login',
-  '/inscription',
+  // Prise de rendez-vous : c'est le tunnel de conversion du site public,
+  // rien ne doit venir s'intercaler entre le choix du créneau et la
+  // confirmation.
+  '/rdv',
   '/onboarding',
   '/signer-contrat',
   '/installer',
