@@ -3,6 +3,15 @@ import { createClient } from "@/lib/supabase/server"
 import { SalarieSidebar } from "@/components/layout/SalarieSidebar"
 import { FloatingPageHelp } from "@/components/help/FloatingPageHelp"
 import { ClientErrorReporter } from "./_components/ClientErrorReporter"
+import { APP_SPACES, appSpaceMetadata, appSpaceViewport } from "@/lib/pwa-spaces"
+
+/**
+ * Installable comme application distincte : le navigateur retient le manifeste
+ * de la page affichée, donc une installation lancée depuis cet espace produit
+ * « Lexora Salarié » et non l'application publique. Voir lib/pwa-spaces.ts.
+ */
+export const metadata = appSpaceMetadata(APP_SPACES.salarie)
+export const viewport = appSpaceViewport()
 
 /**
  * Layout for the Espace Salarié (employee self-service portal).

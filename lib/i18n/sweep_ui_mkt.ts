@@ -45,10 +45,10 @@ export const sweepUiMktChunk = {
     'uimkt.home.feat.tax_3': 'Annual Return ROC : pré-remplissage intelligent',
     'uimkt.home.feat.tax_4': 'FAR (Fixed Asset Register) avec amortissement automatique',
     'uimkt.home.feat.tibok_title': 'TIBOK · Santé salariés',
-    'uimkt.home.feat.tibok_1': 'Téléconsultation illimitée pour vos salariés',
+    'uimkt.home.feat.tibok_1': 'Téléconsultation à Rs 500 par consultation',
     'uimkt.home.feat.tibok_2': 'Médecins partenaires agréés à Maurice',
     'uimkt.home.feat.tibok_3': 'Ordonnances digitales et suivi médical',
-    'uimkt.home.feat.tibok_4': 'Intégré dans la paie — aucun coût additionnel par salarié',
+    'uimkt.home.feat.tibok_4': "Facturé à l'usage, prélevé via la paie — sans abonnement",
 
     /* ---- page.tsx — aiCapabilities ---- */
     'uimkt.home.ai.ocr': 'Agent OCR — Analyse vos documents, extrait les données et crée automatiquement les écritures comptables. Factures, relevés bancaires, reçus : tout est digitalisé en secondes.',
@@ -88,10 +88,10 @@ export const sweepUiMktChunk = {
     'uimkt.home.module': 'Module',
     'uimkt.home.module_health': 'Module Santé',
     'uimkt.home.tibok_exclusive': 'Exclusif · Unique à Maurice',
-    'uimkt.home.tibok_desc': 'Le seul ERP mauricien qui intègre un dispositif de téléconsultation pour vos salariés. TIBOK Santé est inclus dans toutes les formules, sans coût supplémentaire.',
+    'uimkt.home.tibok_desc': "Le seul ERP mauricien qui intègre un dispositif de téléconsultation pour vos salariés. Chaque consultation est facturée Rs 500 — aucun abonnement, aucun coût fixe par salarié.",
     'uimkt.home.teleconsult': 'Téléconsultation',
-    'uimkt.home.unlimited': 'Illimitée',
-    'uimkt.home.included_nocost': 'Inclus · Aucun coût',
+    'uimkt.home.tibok_price': 'Rs 500',
+    'uimkt.home.tibok_per_consult': 'Par consultation',
     'uimkt.home.included_every_plan': 'Inclus dans chaque formule',
 
     /* ---- page.tsx — AI section ---- */
@@ -211,10 +211,10 @@ export const sweepUiMktChunk = {
     'uimkt.home.feat.tax_3': 'ROC Annual Return: intelligent pre-filling',
     'uimkt.home.feat.tax_4': 'FAR with automatic depreciation',
     'uimkt.home.feat.tibok_title': 'TIBOK · Employee Health',
-    'uimkt.home.feat.tibok_1': 'Unlimited telemedicine for your employees',
+    'uimkt.home.feat.tibok_1': 'Telemedicine at Rs 500 per consultation',
     'uimkt.home.feat.tibok_2': 'Licensed partner doctors in Mauritius',
     'uimkt.home.feat.tibok_3': 'Digital prescriptions and medical follow-up',
-    'uimkt.home.feat.tibok_4': 'Integrated in payroll — no extra cost per employee',
+    'uimkt.home.feat.tibok_4': 'Billed per use, collected through payroll — no subscription',
 
     /* ---- page.tsx — aiCapabilities ---- */
     'uimkt.home.ai.ocr': 'OCR Agent — Analyzes your documents, extracts data and automatically creates journal entries. Invoices, bank statements, receipts: everything digitized in seconds.',
@@ -254,10 +254,10 @@ export const sweepUiMktChunk = {
     'uimkt.home.module': 'Module',
     'uimkt.home.module_health': 'Health Module',
     'uimkt.home.tibok_exclusive': 'Exclusive · Unique in Mauritius',
-    'uimkt.home.tibok_desc': 'The only Mauritian ERP that bundles a telemedicine platform for your employees. TIBOK Health is included in every plan, at no extra cost.',
+    'uimkt.home.tibok_desc': 'The only Mauritian ERP that bundles a telemedicine platform for your employees. Each consultation is billed at Rs 500 — no subscription, no fixed cost per employee.',
     'uimkt.home.teleconsult': 'Telemedicine',
-    'uimkt.home.unlimited': 'Unlimited',
-    'uimkt.home.included_nocost': 'Included · No cost',
+    'uimkt.home.tibok_price': 'Rs 500',
+    'uimkt.home.tibok_per_consult': 'Per consultation',
     'uimkt.home.included_every_plan': 'Included in every plan',
 
     /* ---- page.tsx — AI section ---- */

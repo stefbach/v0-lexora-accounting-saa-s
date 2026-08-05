@@ -124,7 +124,7 @@ const frTexts = {
   trust1: "40+ fonctionnalit\u00e9s",
   trust2: "4 modules fiscaux MRA",
   trust3: "< 2h prise en main",
-  trust4: "TIBOK sant\u00e9 incluse",
+  trust4: "Acc\u00e8s TIBOK inclus",
   trust5: "0 concurrent ERP+Sant\u00e9",
 
   // Tabs
@@ -295,7 +295,7 @@ const frTexts = {
 
   // Bottom CTA
   ctaTitle: "L\u2019ERP mauricien complet. RH, Paie, Sant\u00e9 & Compta.",
-  ctaTrust: ["Facturation MRA agr\u00e9\u00e9e", "TIBOK Corporate inclus", "40+ fonctionnalit\u00e9s", "Made in Mauritius", "Sans engagement"],
+  ctaTrust: ["Facturation MRA agr\u00e9\u00e9e", "Acc\u00e8s TIBOK inclus", "40+ fonctionnalit\u00e9s", "Made in Mauritius", "Sans engagement"],
   ctaBtn1: "D\u00e9marrer l\u2019essai gratuit",
   ctaBtn2: "Demander une d\u00e9mo",
 
@@ -364,7 +364,7 @@ const enTexts = {
   trust1: "40+ features",
   trust2: "4 MRA tax modules",
   trust3: "< 2h onboarding",
-  trust4: "TIBOK health included",
+  trust4: "TIBOK access included",
   trust5: "0 ERP+Health competitor",
 
   // Tabs
@@ -531,7 +531,7 @@ const enTexts = {
   calcFeatTitle: "Included in your tier",
 
   ctaTitle: "The complete Mauritian ERP. HR, Payroll, Health & Accounting.",
-  ctaTrust: ["MRA-approved invoicing", "TIBOK Corporate included", "40+ features", "Made in Mauritius", "No commitment"],
+  ctaTrust: ["MRA-approved invoicing", "TIBOK access included", "40+ features", "Made in Mauritius", "No commitment"],
   ctaBtn1: "Start free trial",
   ctaBtn2: "Request a demo",
 
@@ -605,10 +605,10 @@ function footerLinkHref(label: string): string {
     "Santé salariés": "/#features",
     "Téléconsultation": "/#features",
     "Bien-être": "/#features",
-    "Partenaires": "/inscription?role=expert",
+    "Partenaires": "/rdv",
     "Support": "mailto:sbach@digital-data-solutions.net?subject=Support",
-    "Démo": "/inscription",
-    "Partenariats": "/inscription?role=expert",
+    "Démo": "/rdv",
+    "Partenariats": "/rdv",
     "Presse": "mailto:sbach@digital-data-solutions.net?subject=Presse",
     // EN
     "Pricing": "/tarifs",
@@ -616,9 +616,9 @@ function footerLinkHref(label: string): string {
     "Employee health": "/#features",
     "Teleconsultation": "/#features",
     "Wellbeing": "/#features",
-    "Partners": "/inscription?role=expert",
-    "Demo": "/inscription",
-    "Partnerships": "/inscription?role=expert",
+    "Partners": "/rdv",
+    "Demo": "/rdv",
+    "Partnerships": "/rdv",
     "Press": "mailto:sbach@digital-data-solutions.net?subject=Press",
   }
   return map[label] || "/#features"
@@ -943,7 +943,7 @@ export default function TarifsPage() {
         storage={storages[i]}
         features={txt.featAllIn.map((label) => ({ label, included: true }))}
         ctaLabel={ctas[i]}
-        ctaHref={tiers[i].monthly === 0 ? "/inscription?role=enterprise" : "/inscription"}
+        ctaHref="/rdv"
         ctaPrimary={i === populaire}
         billing={billing}
         txt={txt}

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0B0F2E" />
+    <title>Hors ligne — Lexora</title>
+    <!--
+      Page de repli affichée par le service worker quand le réseau est coupé.
+      Volontairement autonome : aucun script, aucune police et aucune feuille
+      de style externe, pour qu'elle s'affiche même sans la moindre connexion.
+      Le bouton « Réessayer » est un lien de rechargement, pas un gestionnaire
+      JavaScript, afin de fonctionner même si les scripts sont bloqués.
+    -->
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: #ffffff;
+        color: #0b0f2e;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .card {
+        width: 100%;
+        max-width: 420px;
+        text-align: center;
+      }
+      .badge {
+        width: 76px;
+        height: 76px;
+        margin: 0 auto 26px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 22px;
+        background: #0b0f2e;
+        box-shadow: 0 18px 34px -14px rgba(11, 15, 46, 0.5);
+      }
+      .badge svg {
+        width: 34px;
+        height: 34px;
+        stroke: #e8eafc;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 22px;
+        line-height: 1.3;
+        color: #0b0f2e;
+      }
+      p {
+        margin: 0 0 10px;
+        font-size: 14.5px;
+        line-height: 1.6;
+        color: #64708c;
+      }
+      .retry {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 22px;
+        padding: 13px 30px;
+        border-radius: 999px;
+        background: #4191ff;
+        color: #ffffff;
+        font-size: 14.5px;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .note {
+        margin-top: 26px;
+        font-size: 12.5px;
+        color: #8b90b8;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #0b0f2e;
+          color: #e8eafc;
+        }
+        .badge {
+          background: #0e1338;
+        }
+        h1 {
+          color: #e8eafc;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="badge" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 1l22 22" />
+          <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+          <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+          <path d="M10.71 5.05A16 16 0 0 1 22.58 9" />
+          <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+          <path d="M12 20h.01" />
+        </svg>
+      </div>
+
+      <h1>Pas de connexion</h1>
+      <p>
+        Lexora a besoin du réseau : votre comptabilité, vos bulletins et vos
+        déclarations sont conservés sur nos serveurs, jamais sur cet appareil.
+      </p>
+      <p>Vérifiez le Wi-Fi ou les données mobiles, puis réessayez.</p>
+
+      <a class="retry" href="/">Réessayer</a>
+
+      <p class="note">Aucune donnée n'a été perdue — rien n'était en cours d'envoi.</p>
+    </main>
+  </body>
+</html>
