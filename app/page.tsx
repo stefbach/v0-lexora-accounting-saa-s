@@ -909,14 +909,14 @@ export default function HomePage() {
                                     letterSpacing: "-0.02em",
                                   }}
                                 >
-                                  {t("uimkt.home.unlimited", locale)}
+                                  {t("uimkt.home.tibok_price", locale)}
                                 </div>
                               </div>
                               <div
                                 className="text-right text-[10px] font-medium uppercase tracking-widest"
                                 style={{ color: "#4A5670", fontFamily: "'Poppins', sans-serif" }}
                               >
-                                {t("uimkt.home.included_nocost", locale)}
+                                {t("uimkt.home.tibok_per_consult", locale)}
                               </div>
                             </div>
                           </div>
@@ -1542,7 +1542,7 @@ export default function HomePage() {
                 {/* CTA */}
                 <div className="mt-auto">
                   <PressableWrap className="block w-full">
-                    <Link href="/tarifs" className="block">
+                    <Link href="/rdv" className="block">
                       <Button
                         size="lg"
                         className="w-full text-base font-semibold"

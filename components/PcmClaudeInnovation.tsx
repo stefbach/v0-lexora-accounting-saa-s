@@ -399,7 +399,12 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
             </StaggerGroup>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link href="/comptable/sante-pcm">
+              {/* /comptable/sante-pcm est derrière le mur d'authentification
+                  (rôles comptable / admin) : un visiteur du site public y était
+                  éjecté vers /auth/login au lieu de voir l'audit promis. Le CTA
+                  mène désormais à la prise de rendez-vous, où l'audit est
+                  présenté en direct. */}
+              <Link href="/rdv">
                 <Button
                   size="lg"
                   className="w-full px-7 text-base font-semibold sm:w-auto"
@@ -415,7 +420,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                   {t("cmkt.pcm.cta_audit", locale)}
                 </Button>
               </Link>
-              <a href="#engine">
+              <Link href="/rdv">
                 <Button
                   size="lg"
                   variant="outline"
@@ -431,7 +436,7 @@ export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
                 >
                   {t("cmkt.pcm.cta_skills", locale)}
                 </Button>
-              </a>
+              </Link>
             </div>
           </Reveal>
 
