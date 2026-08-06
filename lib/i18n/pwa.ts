@@ -18,6 +18,21 @@ export const pwaChunk = {
     'pwa.banner.title': "Installez Lexora sur votre écran d'accueil",
     'pwa.banner.subtitle': 'Vos dossiers en un geste, sans passer par le navigateur.',
 
+    // ── Navigateur Android incapable d'installer (voir lib/pwa-browser.ts) ──
+    'pwa.chrome.open': 'Ouvrir dans Chrome',
+    'pwa.chrome.title': 'Installez Lexora depuis Chrome',
+    'pwa.chrome.subtitle':
+      "Ce navigateur fabrique un paquet qu'Android refuse ensuite d'installer. Depuis Chrome, l'installation aboutit en deux touches.",
+    'pwa.chrome.inapp_subtitle':
+      "Vous naviguez depuis une autre application : elle ne sait pas installer Lexora. Ouvrez la page dans Chrome.",
+    'pwa.blocked.title': '« Appli non sécurisée bloquée » : ce message ne vient pas de Lexora',
+    'pwa.blocked.body':
+      "Samsung Internet fabrique lui-même le paquet d'installation, avec une version d'Android trop ancienne pour les règles de sécurité actuelles. Le système la refuse et Play Protect affiche cet avertissement, suivi de « Impossible d'installer l'application Web ». Rien n'est installé, et rien n'a été compromis.",
+    'pwa.blocked.fix':
+      "Ouvrez lexora.finance dans Chrome, puis installez de là : le paquet est alors préparé par Google et s'installe normalement.",
+    'pwa.blocked.fallback':
+      "Vous pouvez aussi rester sur Samsung Internet et choisir « Ajouter la page à » → « Écran d'accueil » : cela pose un simple raccourci, sans installation ni avertissement — mais Lexora s'ouvrira dans le navigateur, avec sa barre d'adresse.",
+
     // ── Boîte de dialogue (page d'accueil) ──
     'pwa.dialog.title': 'Installez Lexora sur votre appareil',
     'pwa.dialog.body':
@@ -91,6 +106,20 @@ export const pwaChunk = {
     'pwa.banner.aria': 'Install the Lexora app',
     'pwa.banner.title': 'Add Lexora to your home screen',
     'pwa.banner.subtitle': 'Your files in one tap, without going through the browser.',
+
+    'pwa.chrome.open': 'Open in Chrome',
+    'pwa.chrome.title': 'Install Lexora from Chrome',
+    'pwa.chrome.subtitle':
+      'This browser builds a package that Android then refuses to install. From Chrome, installing takes two taps.',
+    'pwa.chrome.inapp_subtitle':
+      'You are browsing inside another app, which cannot install Lexora. Open the page in Chrome.',
+    'pwa.blocked.title': '“Unsafe app blocked” — that warning is not about Lexora',
+    'pwa.blocked.body':
+      'Samsung Internet builds the install package itself, targeting an Android version too old for today’s security rules. The system rejects it, Play Protect shows that warning, and the browser then reports “Couldn’t install web app”. Nothing was installed, and nothing was compromised.',
+    'pwa.blocked.fix':
+      'Open lexora.finance in Chrome and install from there: the package is then prepared by Google and installs normally.',
+    'pwa.blocked.fallback':
+      'You can also stay in Samsung Internet and pick “Add page to” → “Home screen”: that drops a plain shortcut, with no install and no warning — but Lexora will open in the browser, address bar included.',
 
     'pwa.dialog.title': 'Install Lexora on your device',
     'pwa.dialog.body':

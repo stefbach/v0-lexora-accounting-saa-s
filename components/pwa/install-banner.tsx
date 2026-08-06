@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Download, Share, X } from 'lucide-react'
+import { Chrome, Download, Share, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { t, getLocale, type Locale } from '@/lib/i18n'
 import { useInstallPrompt } from './use-install-prompt'
@@ -39,15 +39,17 @@ const MUTED_PREFIXES = [
  * Bannière discrète, ancrée en bas d'écran.
  *
  * Elle ne s'affiche que lorsqu'elle a réellement quelque chose à proposer :
- * une boîte de dialogue native, ou — sur iPhone et iPad, où l'installation
- * automatique n'existe pas — le renvoi vers le guide. Sur un navigateur de
- * bureau sans installation automatique, elle se retire : l'encart de la page
- * d'accueil et /installer prennent le relais.
+ * une boîte de dialogue native, le passage par Chrome sur les navigateurs
+ * Android dont l'installation échoue, ou — sur iPhone et iPad, où
+ * l'installation automatique n'existe pas — le renvoi vers le guide. Sur un
+ * navigateur de bureau sans installation automatique, elle se retire :
+ * l'encart de la page d'accueil et /installer prennent le relais.
  */
 export default function InstallBanner() {
   const [locale, setLocale] = useState<Locale>('fr')
   const pathname = usePathname()
-  const { installed, canPrompt, platform, promptInstall } = useInstallPrompt()
+  const { installed, canPrompt, platform, browser, blocked, openInChrome, promptInstall } =
+    useInstallPrompt()
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
@@ -81,10 +83,59 @@ export default function InstallBanner() {
   if (installed || !visible) return null
   if (pathname && MUTED_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return null
 
+  // Navigateur Android dont l'installation est refusée par le système : la
+  // seule proposition utile est de rouvrir la page dans Chrome.
+  const viaChrome = blocked && Boolean(openInChrome)
+
   // Sur iOS aucune boîte de dialogue d'installation n'existe : le seul chemin
   // est le menu Partager de Safari, expliqué sur la page dédiée.
-  const manualOnly = !canPrompt
+  const manualOnly = !canPrompt && !viaChrome
   if (manualOnly && platform !== 'ios') return null
+
+  if (viaChrome) {
+    return (
+      <div
+        role="complementary"
+        aria-label={t('pwa.banner.aria', locale)}
+        className="fixed inset-x-4 bottom-4 z-40 md:left-6 md:right-auto md:max-w-sm"
+      >
+        <div className="flex items-center gap-3 rounded-2xl border bg-background/95 px-3 py-2.5 shadow-lg backdrop-blur sm:p-3.5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground sm:h-11 sm:w-11">
+            <Chrome className="h-5 w-5" />
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-semibold leading-tight sm:text-[13.5px]">
+              {t('pwa.chrome.title', locale)}
+            </p>
+            <p className="mt-0.5 hidden text-[11.5px] leading-snug text-muted-foreground sm:block">
+              {t(
+                browser === 'in-app' ? 'pwa.chrome.inapp_subtitle' : 'pwa.chrome.subtitle',
+                locale,
+              )}
+            </p>
+          </div>
+
+          <Button asChild size="sm" className="shrink-0">
+            {/* Lien natif et non <Link> : `intent://` sort du site, le routeur
+                de Next n'a rien à y faire. */}
+            <a href={openInChrome!} onClick={dismiss}>
+              {t('pwa.chrome.open', locale)}
+            </a>
+          </Button>
+
+          <button
+            type="button"
+            onClick={dismiss}
+            aria-label={t('pwa.dismiss', locale)}
+            className="-mr-1 flex shrink-0 items-center justify-center self-center rounded-full p-1 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
