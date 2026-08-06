@@ -1,6 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import {
+  canInstallCleanly,
+  chromeIntentUrl,
+  detectAndroidBrowser,
+  type AndroidBrowser,
+} from '@/lib/pwa-browser'
 
 /** Événement Chromium non standard, absent des types DOM. */
 type BeforeInstallPromptEvent = Event & {
@@ -28,11 +34,17 @@ function store(): InstallStore | undefined {
  *                    l'installation automatique n'existe pas — c'est le cas de
  *                    tous les iPhone et iPad, où seul Safari peut installer,
  *                    via « Partager → Sur l'écran d'accueil ».
+ *  - `blocked`     : le navigateur Android propose l'installation mais celle-ci
+ *                    échoue (Samsung Internet, navigateurs intégrés). Voir
+ *                    lib/pwa-browser.ts. Dans ce cas `openInChrome` porte le
+ *                    lien qui rouvre la page dans Chrome.
  */
 export function useInstallPrompt() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null)
   const [installed, setInstalled] = useState(false)
   const [platform, setPlatform] = useState<InstallPlatform>('unknown')
+  const [browser, setBrowser] = useState<AndroidBrowser>('unknown')
+  const [openInChrome, setOpenInChrome] = useState<string | null>(null)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -53,6 +65,12 @@ export function useInstallPrompt() {
     if (isIOS) setPlatform('ios')
     else if (/Android/.test(ua)) setPlatform('android')
     else setPlatform('desktop')
+
+    const androidBrowser = detectAndroidBrowser(ua)
+    setBrowser(androidBrowser)
+    if (!canInstallCleanly(androidBrowser)) {
+      setOpenInChrome(chromeIntentUrl(window.location.href))
+    }
 
     // `beforeinstallprompt` se déclenche très tôt, souvent AVANT que React ne
     // soit monté : un petit script dans <head> le capture dans une variable
@@ -101,5 +119,17 @@ export function useInstallPrompt() {
     return outcome
   }, [deferred])
 
-  return { installed, canPrompt: deferred !== null, platform, promptInstall }
+  return {
+    installed,
+    // Samsung Internet fournit bien un événement d'installation : la boîte de
+    // dialogue s'ouvre, l'utilisateur accepte, et c'est le système qui refuse
+    // ensuite le paquet. Mieux vaut ne jamais l'ouvrir que de le mener jusqu'à
+    // un avertissement de sécurité.
+    canPrompt: deferred !== null && canInstallCleanly(browser),
+    platform,
+    browser,
+    blocked: !canInstallCleanly(browser),
+    openInChrome,
+    promptInstall,
+  }
 }

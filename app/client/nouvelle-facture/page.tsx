@@ -490,10 +490,15 @@ function NouvelleFactureContent() {
     else if (n > 0) setDateEcheance(addDays(dateFacture, n))
   }
 
+  // `id` peut valoir "none" : sentinelle du <Select> pour l'option « aucun
+  // template » (Radix interdit une value vide). Elle ne doit JAMAIS entrer
+  // dans l'état — sinon elle repart en base sur template_id (colonne uuid) et
+  // l'enregistrement échoue avec `invalid input syntax for type uuid: "none"`.
   const handleTemplateSelect = (id: string) => {
-    setTemplateId(id)
-    if (!id || id === "none") return
-    const tpl = templates.find(tp => tp.id === id)
+    const cleanId = id === "none" ? "" : id
+    setTemplateId(cleanId)
+    if (!cleanId) return
+    const tpl = templates.find(tp => tp.id === cleanId)
     if (!tpl) return
     if (tpl.couleur_primaire) setAccentColor(tpl.couleur_primaire)
     if (tpl.devise_defaut) setDevise(tpl.devise_defaut)
@@ -544,7 +549,11 @@ function NouvelleFactureContent() {
       notes: notesVisibles,
       notes_internes: notesInternes,
       template: localStorage.getItem("lexora_invoice_template") || "standard",
-      template_id: templateId || undefined,
+      // null = template retiré volontairement ; undefined = clé absente du
+      // JSON, donc valeur DB préservée. On n'envoie null que si le sélecteur
+      // était réellement affiché (templates chargés), sinon un chargement
+      // raté de la liste effacerait le template lié lors d'une édition.
+      template_id: templateId || (templates.length > 0 ? null : undefined),
       client_offshore: clientOffshore,
       // remise_type='pct' → remise_pct ; sinon → remise_montant.
       remise_pct: remiseType === 'pct' ? remiseValue : 0,
@@ -755,7 +764,7 @@ function NouvelleFactureContent() {
                   ))}
                 </Sel>
               </div>
-              {templateId && templateId !== "none" && (() => {
+              {templateId && (() => {
                 const tpl = templates.find(tp => tp.id === templateId)
                 return tpl ? (
                   <div className="flex items-center gap-3 text-sm text-gray-600">
@@ -765,7 +774,7 @@ function NouvelleFactureContent() {
                 ) : null
               })()}
             </div>
-            {templateId && templateId !== "none" && <p className="text-xs text-green-600 mt-2">{t('inv.nf.template_applied', locale)}</p>}
+            {templateId && <p className="text-xs text-green-600 mt-2">{t('inv.nf.template_applied', locale)}</p>}
           </CardContent>
         </Card>
       )}

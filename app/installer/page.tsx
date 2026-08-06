@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
+  AlertTriangle,
   ArrowLeft,
   Check,
   CheckCircle2,
@@ -99,12 +100,16 @@ const GUIDES: Guide[] = [
     icon: Tablet,
     deviceFr: 'téléphones et tablettes Android',
     deviceEn: 'Android phones and tablets',
-    browserFr: 'Chrome, Samsung Internet, Edge',
-    browserEn: 'Chrome, Samsung Internet, Edge',
+    browserFr: 'Chrome, Edge, Opera',
+    browserEn: 'Chrome, Edge, Opera',
     steps: [
       {
-        fr: 'Ouvrez Lexora dans Chrome, Samsung Internet ou Edge, sur la page de l’espace que vous utilisez.',
-        en: 'Open Lexora in Chrome, Samsung Internet or Edge, on the space you actually use.',
+        fr: "Ouvrez Lexora dans Chrome. C'est le point important : Samsung Internet propose bien l'installation, mais Android la refuse ensuite (voir plus bas).",
+        en: 'Open Lexora in Chrome. This matters: Samsung Internet does offer to install, but Android then refuses the package (see below).',
+      },
+      {
+        fr: 'Allez sur la page de l’espace que vous utilisez — comptable, RH, salarié… — avant d’installer : c’est elle qui donne son nom et ses raccourcis à l’application.',
+        en: 'Open the space you actually use — accounting, HR, employee… — before installing: that page is what gives the app its name and shortcuts.',
       },
       {
         fr: "Une invitation « Installer l'application » peut apparaître directement en bas de l'écran. Si c'est le cas, touchez-la : c'est terminé.",
@@ -112,17 +117,19 @@ const GUIDES: Guide[] = [
         glyph: 'install',
       },
       {
-        fr: 'Sinon, touchez le menu à trois points en haut à droite du navigateur.',
-        en: 'Otherwise, tap the three-dot menu at the top right of the browser.',
+        fr: 'Sinon, touchez le menu à trois points en haut à droite de Chrome.',
+        en: 'Otherwise, tap the three-dot menu at the top right of Chrome.',
         glyph: 'menu',
       },
       {
-        fr: "Choisissez « Installer l'application » ou « Ajouter à l'écran d'accueil », puis confirmez.",
-        en: 'Choose “Install app” or “Add to Home screen”, then confirm.',
+        fr: "Choisissez « Installer l'application », puis confirmez.",
+        en: 'Choose “Install app”, then confirm.',
       },
     ],
-    noteFr: "Sur Samsung Internet, l'entrée s'appelle « Ajouter la page à » puis « Écran d'accueil ».",
-    noteEn: 'On Samsung Internet the entry is “Add page to”, then “Home screen”.',
+    noteFr:
+      "Sur Samsung Internet, l'installation se termine par « Appli non sécurisée bloquée » puis « Impossible d'installer l'application Web » : ce navigateur fabrique lui-même un paquet visant une version d'Android trop ancienne, que le système rejette. Passez par Chrome, ou restez sur Samsung Internet avec « Ajouter la page à » → « Écran d'accueil », qui pose un simple raccourci.",
+    noteEn:
+      'On Samsung Internet the install ends with “Unsafe app blocked”, then “Couldn’t install web app”: that browser builds its own package targeting an Android version the system no longer accepts. Use Chrome instead, or stay in Samsung Internet with “Add page to” → “Home screen”, which drops a plain shortcut.',
   },
   {
     id: 'desktop',
@@ -182,7 +189,8 @@ const DEFAULT_TAB: Record<InstallPlatform, TabId> = {
 
 export default function InstallerPage() {
   const [locale, setLocale] = useState<Locale>('fr')
-  const { installed, canPrompt, platform, promptInstall } = useInstallPrompt()
+  const { installed, canPrompt, platform, browser, blocked, openInChrome, promptInstall } =
+    useInstallPrompt()
   // `null` tant que l'utilisateur n'a pas choisi : l'onglet suit alors la
   // détection. Dès qu'il clique, son choix prime et ne bouge plus.
   const [tab, setTab] = useState<TabId | null>(null)
@@ -244,6 +252,46 @@ export default function InstallerPage() {
             )
           )}
         </section>
+
+        {/* ── Navigateur Android dont l'installation est refusée ──── */}
+        {!installed && blocked && (
+          <section
+            className="mt-10 rounded-2xl border p-6 md:p-8"
+            style={{ borderColor: BRAND.goldText, background: BRAND.goldSoft }}
+          >
+            <span
+              className="flex h-9 w-9 items-center justify-center rounded-xl"
+              style={{ background: BRAND.surface, color: BRAND.goldText }}
+            >
+              <AlertTriangle className="h-4 w-4" />
+            </span>
+            <h2 className="mt-3.5 text-[17px] font-bold md:text-[19px]">
+              {t('pwa.blocked.title', locale)}
+            </h2>
+            <p className="mt-2.5 max-w-3xl text-[13.5px] leading-relaxed" style={{ color: BRAND.inkBody }}>
+              {t(browser === 'in-app' ? 'pwa.chrome.inapp_subtitle' : 'pwa.blocked.body', locale)}
+            </p>
+            <p className="mt-3 max-w-3xl text-[13.5px] font-medium leading-relaxed">
+              {t('pwa.blocked.fix', locale)}
+            </p>
+
+            {openInChrome && (
+              <Button asChild size="lg" className="mt-5">
+                {/* `intent://` quitte le site : lien natif, pas de routeur Next. */}
+                <a href={openInChrome}>
+                  <Chrome className="h-4 w-4" />
+                  {t('pwa.chrome.open', locale)}
+                </a>
+              </Button>
+            )}
+
+            {browser === 'samsung' && (
+              <p className="mt-5 max-w-3xl text-[13px] leading-relaxed" style={{ color: BRAND.inkMuted }}>
+                {t('pwa.blocked.fallback', locale)}
+              </p>
+            )}
+          </section>
+        )}
 
         {/* ── Ce que l'installation apporte ───────────────────────── */}
         <section className="mt-14 grid gap-4 sm:grid-cols-3">
