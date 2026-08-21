@@ -27,15 +27,18 @@ import { getAdminClient } from '@/lib/supabase/admin'
 import { decryptSecret } from '@/lib/crypto/symmetric'
 import { launchBrowser } from './playwright-launcher'
 import { loginAndScrapeMcb } from './adapters/mcb'
+import { upsertScrapedTransactions } from './persist-transactions'
 
 export type BankCode = 'MCB' | 'SBM' | 'ABC' | 'MAUBANK' | 'MYTMONEY' | 'AFRASIA' | 'BANKONE' | 'OTHER'
 
 export type ScrapedTransaction = {
-  date: string                  // YYYY-MM-DD
+  date: string                  // YYYY-MM-DD (date d'opération)
   description: string
   amount: number                // négatif si débit, positif si crédit
   currency: string
   reference?: string
+  value_date?: string           // YYYY-MM-DD (date de valeur, si distincte)
+  balance_after?: number | null // solde courant après opération (running balance)
 }
 
 export type BankScrapeInput = {
@@ -210,6 +213,33 @@ export async function scrapeBankAccount(input: BankScrapeInput): Promise<BankScr
       trigger_source: input.trigger_source,
       result,
     })
+
+    // ── Alimentation du relevé bancaire Lexora (transactions_bancaires) ──
+    // Les mouvements scrapés (success OU partial avec transactions) sont
+    // injectés dans la table de rapprochement, dédoublonnés de façon idempotente
+    // (référence FT… ou date+montant+libellé). Un run quotidien ne recrée jamais
+    // les mouvements déjà présents.
+    if (
+      (result.status === 'success' || result.status === 'partial') &&
+      result.transactions &&
+      result.transactions.length > 0
+    ) {
+      try {
+        const persist = await upsertScrapedTransactions(
+          getAdminClient() as never,
+          { compte_bancaire_id: input.compte_bancaire_id, societe_id: input.societe_id },
+          result.transactions,
+        )
+        result.raw_excerpt = [
+          result.raw_excerpt,
+          `Relevé Lexora : +${persist.inserted} mouvement(s), ${persist.duplicates} doublon(s) ignoré(s).`,
+        ].filter(Boolean).join(' ')
+      } catch {
+        // L'échec d'injection ne doit pas faire échouer le scrape lui-même
+        // (le solde + l'audit bank_scrape_runs restent valides).
+      }
+    }
+
     return result
   } catch (e) {
     result = {

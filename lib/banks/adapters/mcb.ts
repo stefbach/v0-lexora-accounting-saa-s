@@ -33,6 +33,7 @@ import type { BankScrapeResult, ScrapedTransaction } from '../scraper'
 import { captureScreenshot, capturePageDiagnostic } from '../playwright-launcher'
 import { pickBestCompany } from '../agentic/company-match'
 import { findAccountBalance, type AccountRow } from '../agentic/accounts-parse'
+import { parseTransactions, findBalanceBreaks, type RawTransactionRow } from '../agentic/transactions-parse'
 
 export interface McbCredentials {
   username: string                  // User ID MCB
@@ -394,39 +395,105 @@ export async function loginAndScrapeMcb(
       }
 
       // ── Solde lu ✅ — navigation vers les transactions du compte ──
-      // Clic sur la ligne du compte (ouvre le détail / les transactions).
+      // Clic sur la ligne du compte (ouvre le détail → onglet « Transactions »).
       await page.getByText(options.numero_compte, { exact: false }).first()
         .click({ timeout: 6000 }).catch(() => {})
       await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
 
-      const transactions: ScrapedTransaction[] = await page.evaluate((maxN: number) => {
-        const rows = Array.from(document.querySelectorAll('tbody tr, [data-testid="transaction-row"], .transaction-item'))
-        const out: Array<{ date: string; description: string; amount: number; currency: string }> = []
-        for (const row of rows.slice(0, maxN)) {
-          const cells = Array.from(row.querySelectorAll('td')).map((c) => (c.textContent || '').trim())
-          if (cells.length < 3) continue
-          const dateCell = cells.find((c) => /\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}/.test(c)) || cells[0]
-          const amountCell = [...cells].reverse().find((c) => /-?[\d ,.]+\d/.test(c) && /\d/.test(c))
-          const amount = amountCell ? parseFloat(amountCell.replace(/[^\d.,-]/g, '').replace(/,/g, '')) : NaN
-          const desc = cells.find((c) => c && c !== dateCell && c !== amountCell) || ''
-          if (dateCell && desc && isFinite(amount)) {
-            const d = dateCell.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/)
-            const isoDate = d ? `${d[3].length === 2 ? '20' + d[3] : d[3]}-${d[2].padStart(2, '0')}-${d[1].padStart(2, '0')}` : dateCell
-            out.push({ date: isoDate, description: desc, amount, currency: '' })
-          }
-        }
-        return out
-      }, options.max_transactions || 30).catch(() => [] as ScrapedTransaction[])
+      // S'assurer d'être sur l'onglet « Transactions » (le détail de compte
+      // ouvre parfois sur « Balance History » ou « Account info »).
+      const txTab = page.getByRole('tab', { name: /transactions/i })
+        .or(page.getByText('Transactions', { exact: true })).first()
+      await txTab.click({ timeout: 4000 }).catch(() => {})
+      await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
 
-      // Solde toujours retourné ; transactions en best-effort. Si la page de
-      // transactions n'est pas encore mappée, on renvoie 'partial' + diagnostic.
+      // Extraction header-mappée du tableau des transactions, sur plusieurs
+      // pages (« Load more » / pagination). Colonnes réelles MCB : Transaction
+      // date | Value date | Reference | Description | Amount | Balance. Le parse
+      // (dates « 20 Aug 2026 », montants signés, solde courant) est délégué au
+      // module testé transactions-parse (Node), pas fait dans le navigateur.
+      const maxN = options.max_transactions ?? 30
+      const rawRows: RawTransactionRow[] = []
+      const seenRowKeys = new Set<string>()
+      for (let pageIdx = 0; pageIdx < 8 && rawRows.length < maxN; pageIdx++) {
+        const pageRows = await page.evaluate(() => {
+          const norm = (s: string | null | undefined) => (s || '').replace(/\s+/g, ' ').trim()
+          const low = (s: string) => s.toLowerCase()
+          const tables = Array.from(document.querySelectorAll('table'))
+          for (const table of tables) {
+            const headers = Array.from(table.querySelectorAll('thead th, thead td')).map((h) => low(norm(h.textContent)))
+            const idxTxDate = headers.findIndex((h) => h.includes('transaction date') || h === 'date' || (h.includes('date') && !h.includes('value')))
+            const idxAmount = headers.findIndex((h) => h.includes('amount') || h.includes('montant'))
+            if (idxTxDate === -1 || idxAmount === -1) continue
+            const idxValDate = headers.findIndex((h) => h.includes('value date') || h.includes('date de valeur'))
+            const idxRef = headers.findIndex((h) => h.includes('reference') || h.includes('référence') || h === 'ref')
+            const idxDesc = headers.findIndex((h) => h.includes('description') || h.includes('libell') || h.includes('narrative'))
+            const idxBal = headers.findIndex((h) => h.includes('balance') || h.includes('solde'))
+            const out: Array<Record<string, string>> = []
+            for (const tr of Array.from(table.querySelectorAll('tbody tr'))) {
+              const cells = Array.from(tr.querySelectorAll('td')).map((td) => norm(td.textContent))
+              if (cells.length <= idxAmount) continue
+              const at = (i: number) => (i >= 0 && i < cells.length ? cells[i] : '')
+              out.push({
+                transactionDate: at(idxTxDate),
+                valueDate: at(idxValDate),
+                reference: at(idxRef),
+                description: at(idxDesc),
+                amount: at(idxAmount),
+                balance: at(idxBal),
+              })
+            }
+            if (out.length) return out
+          }
+          return [] as Array<Record<string, string>>
+        }).catch(() => [] as Array<Record<string, string>>)
+
+        let added = 0
+        for (const r of pageRows) {
+          const key = `${r.reference}|${r.transactionDate}|${r.amount}|${r.balance}`
+          if (seenRowKeys.has(key)) continue
+          seenRowKeys.add(key)
+          rawRows.push(r as RawTransactionRow)
+          added++
+        }
+
+        if (rawRows.length >= maxN || added === 0) break
+
+        // Page suivante : bouton « Load more » / « Next » / chevron de pagination.
+        const nextBtn = page.getByRole('button', { name: /load more|show more|next|suivant|voir plus|plus/i }).first()
+        const clickedNext = await nextBtn.click({ timeout: 3000 }).then(() => true).catch(() => false)
+        if (!clickedNext) break
+        await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {})
+        await page.waitForTimeout(600)
+      }
+
+      const parsed = parseTransactions(rawRows).slice(0, maxN)
+      const balanceBreaks = findBalanceBreaks(parsed)
+      const transactions: ScrapedTransaction[] = parsed.map((t) => ({
+        date: t.date,
+        value_date: t.value_date,
+        reference: t.reference || undefined,
+        description: t.description,
+        amount: t.amount,
+        balance_after: t.balance_after,
+        currency: acct.currency || 'MUR',
+      }))
+
+      // Solde toujours retourné ; transactions désormais mappées. Si l'extraction
+      // n'a rien donné (tableau non chargé / structure inattendue), on renvoie
+      // 'partial' + diagnostic pour ajuster — jamais d'échec silencieux.
       if (transactions.length > 0) {
         return {
           status: 'success',
           balance_mur: acct.balance,
           balance_devise: acct.currency || 'MUR',
           nb_transactions: transactions.length,
-          transactions: transactions.map((t) => ({ ...t, currency: acct.currency || 'MUR' })),
+          transactions,
+          // Signal d'intégrité : une rupture de suite du solde = extraction
+          // probablement incomplète (pagination manquée) ou montant mal lu.
+          raw_excerpt: balanceBreaks.length
+            ? `⚠ ${balanceBreaks.length} rupture(s) de suite du solde détectée(s) — vérifier la pagination.`
+            : undefined,
           duration_ms: Date.now() - t0,
         }
       }
@@ -434,7 +501,7 @@ export async function loginAndScrapeMcb(
         status: 'partial',
         balance_mur: acct.balance,
         balance_devise: acct.currency || 'MUR',
-        error: `Solde lu ✅ (${acct.balance} ${acct.currency || ''}) — la page des transactions du compte ${options.numero_compte} n'est pas encore mappée. Copie le diagnostic (URL + champs + boutons) de cette page pour que je fige l'extraction des transactions.`,
+        error: `Solde lu ✅ (${acct.balance} ${acct.currency || ''}) — le tableau des transactions du compte ${options.numero_compte} n'a pas pu être extrait (0 ligne). Copie le diagnostic (URL + tableau) de la page Transactions pour ajuster.`,
         screenshot_b64: await captureScreenshot(page),
         diagnostic: await capturePageDiagnostic(page),
         duration_ms: Date.now() - t0,
