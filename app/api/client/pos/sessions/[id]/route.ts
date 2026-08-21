@@ -33,8 +33,9 @@ async function loadRecap(supabase: any, sessionId: string) {
   return buildRecapSession(ventes || [], paiements)
 }
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
     if (!societe_id) {
@@ -51,7 +52,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
     const { data: session, error } = await supabase
       .from('sessions_caisse')
       .select('*, depots(nom, type)')
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('societe_id', societe_id)
       .maybeSingle()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -66,8 +67,9 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const body = await request.json().catch(() => null)
     const societe_id = String(body?.societe_id || '')
     if (!societe_id) {
@@ -90,7 +92,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     const { data: recap, error: rpcError } = await supabase.rpc('fermer_session_caisse', {
       p_societe_id: societe_id,
-      p_session_id: params.id,
+      p_session_id: id,
       p_fond_compte: fondCompte,
       p_notes: body?.notes ? String(body.notes).slice(0, 1000) : null,
     })
@@ -103,7 +105,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     // Écriture d'écart de caisse (D 6588 / C 530 ou D 530 / C 758) — R1, idempotente.
     const ecritures = await createEcrituresForEcartCaisse(supabase, {
-      id: params.id,
+      id: id,
       societe_id,
       ecart_caisse: Number(recap?.ecart_caisse) || 0,
       fermee_at: new Date().toISOString(),
