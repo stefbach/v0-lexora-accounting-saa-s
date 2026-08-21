@@ -27,15 +27,29 @@ import { getAdminClient } from '@/lib/supabase/admin'
 import { decryptSecret } from '@/lib/crypto/symmetric'
 import { launchBrowser } from './playwright-launcher'
 import { loginAndScrapeMcb } from './adapters/mcb'
+import { upsertScrapedTransactions } from './persist-transactions'
+import { ingestScrapedStatements } from './ingest-statements'
+import { enqueueDocumentProcessing } from '@/lib/documents/queue'
 
 export type BankCode = 'MCB' | 'SBM' | 'ABC' | 'MAUBANK' | 'MYTMONEY' | 'AFRASIA' | 'BANKONE' | 'OTHER'
 
 export type ScrapedTransaction = {
-  date: string                  // YYYY-MM-DD
+  date: string                  // YYYY-MM-DD (date d'opération)
   description: string
   amount: number                // négatif si débit, positif si crédit
   currency: string
   reference?: string
+  value_date?: string           // YYYY-MM-DD (date de valeur, si distincte)
+  balance_after?: number | null // solde courant après opération (running balance)
+}
+
+/** Relevé PDF téléchargé depuis « Documents & statements » (à passer à l'OCR). */
+export type ScrapedStatement = {
+  date_generated: string        // YYYY-MM-DD (date de génération)
+  period: string                // YYYY-MM (période comptable dérivée)
+  doc_type: string
+  filename: string
+  pdf_base64: string            // contenu du PDF (base64)
 }
 
 export type BankScrapeInput = {
@@ -69,6 +83,8 @@ export type BankScrapeResult = {
   balance_devise?: string
   nb_transactions?: number
   transactions?: ScrapedTransaction[]
+  /** Relevés PDF récupérés depuis « Documents & statements » (best-effort). */
+  statements?: ScrapedStatement[]
   raw_excerpt?: string
   screenshot_b64?: string
   /** Diagnostic capturé quand un sélecteur manque : aide à corriger l'adapter. */
@@ -210,6 +226,73 @@ export async function scrapeBankAccount(input: BankScrapeInput): Promise<BankScr
       trigger_source: input.trigger_source,
       result,
     })
+
+    // ── Alimentation du relevé bancaire Lexora (transactions_bancaires) ──
+    // Les mouvements scrapés (success OU partial avec transactions) sont
+    // injectés dans la table de rapprochement, dédoublonnés de façon idempotente
+    // (référence FT… ou date+montant+libellé). Un run quotidien ne recrée jamais
+    // les mouvements déjà présents.
+    if (
+      (result.status === 'success' || result.status === 'partial') &&
+      result.transactions &&
+      result.transactions.length > 0
+    ) {
+      try {
+        const persist = await upsertScrapedTransactions(
+          getAdminClient() as never,
+          { compte_bancaire_id: input.compte_bancaire_id, societe_id: input.societe_id },
+          result.transactions,
+        )
+        result.raw_excerpt = [
+          result.raw_excerpt,
+          `Relevé Lexora : +${persist.inserted} mouvement(s), ${persist.duplicates} doublon(s) ignoré(s).`,
+        ].filter(Boolean).join(' ')
+      } catch {
+        // L'échec d'injection ne doit pas faire échouer le scrape lui-même
+        // (le solde + l'audit bank_scrape_runs restent valides).
+      }
+    }
+
+    // ── Ingestion des relevés PDF dans le pipeline OCR existant ──
+    // Les relevés « Documents & statements » récupérés sont stockés comme
+    // documents `releve_bancaire` et passés à la file OCR (process-document →
+    // process-releve) qui crée les entrées `releves_bancaires`. Dédoublonné par
+    // chemin de stockage déterministe. Best-effort : n'affecte pas le scrape.
+    if (result.statements && result.statements.length > 0) {
+      try {
+        const admin = getAdminClient()
+        const { data: dossier } = await admin
+          .from('dossiers')
+          .select('id, comptable_id, client_id')
+          .eq('societe_id', input.societe_id)
+          .limit(1)
+          .maybeSingle()
+        const uploadedBy = dossier?.comptable_id || dossier?.client_id || null
+        const compte = await loadCompte(input.compte_bancaire_id)
+        if (dossier?.id && uploadedBy) {
+          const ing = await ingestScrapedStatements(
+            admin as never,
+            {
+              societe_id: input.societe_id,
+              compte_bancaire_id: input.compte_bancaire_id,
+              banque: compte.banque || 'BANK',
+              numero_compte: compte.numero_compte || input.compte_bancaire_id,
+              dossier_id: dossier.id,
+              uploaded_by: uploadedBy,
+            },
+            result.statements,
+            (documentId: string) => enqueueDocumentProcessing({ documentId, source: 'manual' }),
+          )
+          result.raw_excerpt = [
+            result.raw_excerpt,
+            `Relevés PDF : ${ing.ingested} ingéré(s) → OCR, ${ing.skipped} déjà présent(s)${ing.errors ? `, ${ing.errors} erreur(s)` : ''}.`,
+          ].filter(Boolean).join(' ')
+        }
+      } catch {
+        // Ingestion best-effort : jamais bloquant pour le scrape.
+      }
+    }
+
     return result
   } catch (e) {
     result = {

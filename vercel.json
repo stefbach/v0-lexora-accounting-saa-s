@@ -104,6 +104,10 @@
     {
       "path": "/api/cron/process-document-queue",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/bank-scraper",
+      "schedule": "0 2 * * *"
     }
   ]
 }
