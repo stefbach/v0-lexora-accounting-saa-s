@@ -130,6 +130,20 @@ export const publicChunk = {
     'pub.cgu.s12_3_title': "Consentement de l'Utilisateur",
     'pub.cgu.s12_3_p1': "L'Utilisateur est informé que l'IA constitue uniquement un outil d'assistance et qu'un professionnel (expert-comptable, juriste, gestionnaire de paie, dirigeant) valide personnellement et <em>in fine</em> les écritures, déclarations, bulletins et contrats. Le consentement explicite est recueilli à l'inscription pour tout traitement de données via ces agents.",
 
+    // NOTE JURIDIQUE : la section 13 (connexion bancaire automatisée) est une
+    // clause à faire valider par un juriste avant mise en production.
+    'pub.cgu.s13_title': '13. Connexion bancaire automatisée',
+    'pub.cgu.s13_1_title': 'Nature du service',
+    'pub.cgu.s13_1_p1': "Lexora propose, en option, un service de récupération automatisée des relevés et soldes bancaires. Ce service consiste en une connexion automatisée, opérée par un robot logiciel, à l'espace bancaire en ligne du Client, au moyen des identifiants que le Client fournit volontairement à cette fin. Le service se limite strictement à la <strong>consultation</strong> : navigation vers les comptes, historique des opérations et export de relevés.",
+    'pub.cgu.s13_2_title': 'Consentement explicite',
+    'pub.cgu.s13_2_p1': "L'activation du service est subordonnée au <strong>consentement explicite et préalable</strong> du Client, recueilli lors de la configuration de chaque compte bancaire concerné. Le Client peut retirer ce consentement à tout moment ; le retrait entraîne la désactivation immédiate des connexions automatisées et la suppression des identifiants stockés.",
+    'pub.cgu.s13_3_title': 'Stockage des identifiants',
+    'pub.cgu.s13_3_p1': "Les identifiants bancaires confiés par le Client sont conservés sous forme <strong>chiffrée</strong> (AES-256-GCM) et ne sont déchiffrés que le temps strictement nécessaire à chaque connexion, côté serveur. Ils ne sont jamais exposés aux autres utilisateurs, ni transmis à des tiers, ni utilisés à une autre fin que la consultation décrite ci-dessus. Les codes à usage unique (OTP) éventuellement demandés par la banque sont saisis par le Client lui-même et ne sont jamais conservés.",
+    'pub.cgu.s13_4_title': 'Périmètre strictement en lecture seule',
+    'pub.cgu.s13_4_p1': "Le robot est techniquement confiné à la lecture seule par des garde-fous logiciels déterministes : toute action relevant d'un virement, d'un paiement, de la gestion de bénéficiaires, de cartes, d'ordres permanents ou des paramètres de sécurité de l'espace bancaire est <strong>bloquée avant exécution</strong> et met fin à la session. <strong>Aucune opération de paiement, aucun mouvement de fonds ni aucune modification des paramètres du compte n'est possible</strong> par l'intermédiaire du service. Chaque action du robot est consignée dans un journal d'audit inaltérable.",
+    'pub.cgu.s13_5_title': 'Responsabilité du Client',
+    'pub.cgu.s13_5_p1': "Le Client garantit l'exactitude des identifiants fournis et déclare être habilité à les utiliser. Il lui appartient de vérifier que l'usage d'un accès automatisé est compatible avec les conditions d'utilisation de sa banque et, le cas échéant, d'obtenir l'autorisation de celle-ci ; le Client assume les conséquences d'un éventuel manquement à ces conditions vis-à-vis de sa banque. Le Client s'engage à signaler sans délai toute compromission suspectée de ses identifiants afin que l'accès soit révoqué.",
+
     // ── CGV ──
     'pub.cgv.eyebrow': 'Conditions de vente',
     'pub.cgv.title': 'CGV — Conditions Générales de Vente',
@@ -574,6 +588,20 @@ export const publicChunk = {
     'pub.cgu.s12_2_p2': 'Communications are protected by advanced encryption protocols (TLS 1.3 in transit, AES-256 at rest). In line with our AI provider commitments, <strong>data sent is not used to train the models</strong>.',
     'pub.cgu.s12_3_title': 'User consent',
     'pub.cgu.s12_3_p1': 'The User is informed that AI is solely an assistance tool and that a professional (chartered accountant, lawyer, payroll manager, director) personally and <em>in fine</em> validates the entries, returns, payslips and contracts. Explicit consent is collected at registration for any data processing via these agents.',
+
+    // LEGAL NOTE: section 13 (automated bank connection) is a clause to be
+    // reviewed by a lawyer before production release.
+    'pub.cgu.s13_title': '13. Automated bank connection',
+    'pub.cgu.s13_1_title': 'Nature of the service',
+    'pub.cgu.s13_1_p1': 'Lexora offers, as an option, an automated retrieval service for bank statements and balances. This service consists of an automated connection, operated by a software robot, to the Client\'s online banking area, using the credentials the Client voluntarily provides for this purpose. The service is strictly limited to <strong>consultation</strong>: navigating to accounts, transaction history and statement export.',
+    'pub.cgu.s13_2_title': 'Explicit consent',
+    'pub.cgu.s13_2_p1': 'Activation of the service is subject to the Client\'s <strong>prior and explicit consent</strong>, collected when each relevant bank account is configured. The Client may withdraw this consent at any time; withdrawal results in the immediate deactivation of automated connections and the deletion of the stored credentials.',
+    'pub.cgu.s13_3_title': 'Credential storage',
+    'pub.cgu.s13_3_p1': 'The banking credentials entrusted by the Client are stored in <strong>encrypted</strong> form (AES-256-GCM) and are decrypted only for the time strictly necessary for each connection, server-side. They are never exposed to other users, transmitted to third parties, or used for any purpose other than the consultation described above. Any one-time codes (OTP) requested by the bank are entered by the Client themselves and are never stored.',
+    'pub.cgu.s13_4_title': 'Strictly read-only scope',
+    'pub.cgu.s13_4_p1': 'The robot is technically confined to read-only access by deterministic software guardrails: any action relating to a transfer, a payment, beneficiary management, cards, standing orders or the security settings of the banking area is <strong>blocked before execution</strong> and terminates the session. <strong>No payment operation, no movement of funds and no modification of account settings is possible</strong> through the service. Every action of the robot is recorded in a tamper-proof audit log.',
+    'pub.cgu.s13_5_title': 'Client responsibility',
+    'pub.cgu.s13_5_p1': 'The Client warrants the accuracy of the credentials provided and declares that they are authorised to use them. It is the Client\'s responsibility to verify that the use of automated access is compatible with their bank\'s terms of use and, where applicable, to obtain the bank\'s authorisation; the Client bears the consequences of any breach of those terms vis-à-vis their bank. The Client undertakes to report any suspected compromise of their credentials without delay so that access can be revoked.',
 
     // ── Terms of Sale ──
     'pub.cgv.eyebrow': 'Terms of Sale',

@@ -1,5 +1,8 @@
 "use client"
 
+// NOTE JURIDIQUE : la section 13 « Connexion bancaire automatisée » est une
+// clause à faire valider par un juriste avant mise en production.
+
 import {
   Info,
   Building2,
@@ -13,6 +16,7 @@ import {
   Scale,
   Brain,
   HeartPulse,
+  Landmark,
 } from "lucide-react"
 import {
   LegalShell,
@@ -140,6 +144,24 @@ export default function CGUPage() {
 
         <LegalSubtitle>{t('pub.cgu.s12_3_title', locale)}</LegalSubtitle>
         <p style={{ margin: 0 }} dangerouslySetInnerHTML={{ __html: t('pub.cgu.s12_3_p1', locale) }} />
+      </LegalSection>
+
+      {/* 13. Connexion bancaire automatisée */}
+      <LegalSection icon={Landmark} title={t('pub.cgu.s13_title', locale)}>
+        <LegalSubtitle>{t('pub.cgu.s13_1_title', locale)}</LegalSubtitle>
+        <p style={{ margin: "0 0 12px" }} dangerouslySetInnerHTML={{ __html: t('pub.cgu.s13_1_p1', locale) }} />
+
+        <LegalSubtitle>{t('pub.cgu.s13_2_title', locale)}</LegalSubtitle>
+        <p style={{ margin: "0 0 12px" }} dangerouslySetInnerHTML={{ __html: t('pub.cgu.s13_2_p1', locale) }} />
+
+        <LegalSubtitle>{t('pub.cgu.s13_3_title', locale)}</LegalSubtitle>
+        <p style={{ margin: "0 0 12px" }} dangerouslySetInnerHTML={{ __html: t('pub.cgu.s13_3_p1', locale) }} />
+
+        <LegalSubtitle>{t('pub.cgu.s13_4_title', locale)}</LegalSubtitle>
+        <p style={{ margin: "0 0 12px" }} dangerouslySetInnerHTML={{ __html: t('pub.cgu.s13_4_p1', locale) }} />
+
+        <LegalSubtitle>{t('pub.cgu.s13_5_title', locale)}</LegalSubtitle>
+        <p style={{ margin: 0 }} dangerouslySetInnerHTML={{ __html: t('pub.cgu.s13_5_p1', locale) }} />
       </LegalSection>
     </LegalShell>
   )
