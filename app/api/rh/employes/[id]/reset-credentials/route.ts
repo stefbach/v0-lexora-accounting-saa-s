@@ -3,6 +3,7 @@ import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { userHasAccessToEmploye } from '@/lib/rh/access'
+import { canManageRole } from '@/lib/auth/roles'
 import { sendCredentialsEmail } from '@/lib/email/sendCredentials'
 
 export const dynamic = 'force-dynamic'
@@ -82,6 +83,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
     if (!emp.email) {
       return NextResponse.json({ error: 'Email employé manquant — impossible d\'envoyer les credentials' }, { status: 400 })
+    }
+
+    // SEC-001 — hiérarchie ROLE_LEVEL : le compte Auth cible doit être de
+    // niveau STRICTEMENT inférieur au caller (un rh ne peut pas reset un
+    // super_admin dont l'auth_user_id serait lié à une fiche employé).
+    // Rôle cible inconnu / profile manquant ⇒ refus sûr.
+    const { data: targetProfile } = await supabase
+      .from('profiles').select('role').eq('id', emp.auth_user_id).maybeSingle()
+    if (!canManageRole(role, targetProfile?.role)) {
+      return apiError('access_denied', 403)
     }
 
     // Update password via Supabase Auth admin API.

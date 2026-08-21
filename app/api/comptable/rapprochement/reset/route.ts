@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -38,6 +39,16 @@ export async function POST(request: Request) {
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
     if (confirm !== 'RESET') {
       return NextResponse.json({ error: 'Confirmation requise : envoyer confirm=RESET' }, { status: 400 })
+    }
+
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) {
+        return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+      }
+      throw err
     }
 
     const stats = {

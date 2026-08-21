@@ -3,6 +3,7 @@ import { apiError } from '@/lib/api-error'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { fetchAllPaginated } from '@/lib/supabase/paginate'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +38,14 @@ export async function GET(request: Request) {
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
     const supabase = getAdminClient()
+
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) return apiError('access_denied_company', 403)
+      throw err
+    }
 
     // Récupérer le dossier
     const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()

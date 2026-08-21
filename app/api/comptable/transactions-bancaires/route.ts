@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 import { checkPeriodLock } from '@/lib/accounting/period-lock'
 
 export const dynamic = 'force-dynamic'
@@ -42,6 +43,16 @@ export async function PATCH(request: Request) {
       .single()
     if (relErr || !releve) {
       return NextResponse.json({ error: `Releve non trouve: ${relErr?.message}` }, { status: 404 })
+    }
+
+    // Multi-tenant guard (IDOR) : la société est celle du relevé ciblé
+    try {
+      await assertSocieteAccess(supabase, user.id, releve.societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) {
+        return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+      }
+      throw err
     }
 
     const txs = [...(releve.transactions_json || [])]

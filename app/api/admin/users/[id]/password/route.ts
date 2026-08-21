@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAccessibleSocieteIds } from '@/lib/supabase/assert-societe-access'
+import { canManageRole } from '@/lib/auth/roles'
 
 /**
  * Sprint 12 FEATURE 2 — PATCH /api/admin/users/[id]/password
@@ -32,20 +33,8 @@ function getAdminClient() {
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-/**
- * Hierarchie de privilèges. Un caller ne peut JAMAIS reset le mdp d'un
- * compte avec un rôle ≥ le sien.
- */
-const ROLE_LEVEL: Record<string, number> = {
-  employe: 10, salarie: 10,
-  manager: 30, team_leader: 30,
-  client_user: 30, client_assistant: 30,
-  rh: 50, rh_manager: 50,
-  comptable: 50, comptable_dedie: 50, juridique: 50,
-  direction: 70, client_admin: 70,
-  admin: 90,
-  super_admin: 100,
-}
+// Hiérarchie de privilèges : voir lib/auth/roles.ts (SEC-001).
+// Un caller ne peut JAMAIS reset le mdp d'un compte avec un rôle ≥ le sien.
 
 async function requireCaller() {
   const supabaseAuth = await createServerClient()
@@ -91,9 +80,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 404 })
     }
 
-    const callerLevel = ROLE_LEVEL[caller.role] ?? 0
-    const targetLevel = ROLE_LEVEL[targetProfile.role] ?? 100
-
     // Règle 1 : un super_admin peut tout reset SAUF un autre super_admin
     //           (peer-to-peer interdit, doit passer par un autre super_admin
     //            via 4-eyes ou par recovery email)
@@ -117,7 +103,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       // client_admin / rh / rh_manager / direction
       // Doit être strictement supérieur au target, et target doit appartenir
       // à une société accessible au caller.
-      if (targetLevel >= callerLevel) {
+      if (!canManageRole(caller.role, targetProfile.role)) {
         return NextResponse.json({
           error: 'Privilège insuffisant pour reset ce compte (rôle cible ≥ rôle caller)',
         }, { status: 403 })
