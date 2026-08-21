@@ -1,9 +1,143 @@
 import type { Jurisdiction, ValidationResult } from '../core/jurisdiction.interface'
-import type { JurisdictionConfig, Account, JournalEntry, FiscalPeriod, AccountClass } from '../core/types'
+import type { JurisdictionConfig, Account, JournalEntry, FiscalPeriod, AccountClass, AccountCategory } from '../core/types'
 import type { ChartOfAccountsProvider, AccountingOperation } from '../core/chart-of-accounts.interface'
 import type { TaxEngine, VatCalculation, TaxCalculation, VatReturn, TaxDeclaration } from '../core/tax-engine.interface'
 import type { PayrollEngine, PayslipInput, Payslip, SocialContributionRates, IncomeTaxBracket, SeveranceInput, SeveranceCalculation } from '../core/payroll-engine.interface'
 import type { FinancialStatementsProvider, StatementInput, BalanceSheet, IncomeStatement, CashFlowStatement, FinancialNotes } from '../core/financial-statements.interface'
+
+// PCG account numbers that support lettrage (bank reconciliation / tiers matching).
+// Mirrors MauritiusJurisdiction.isAccountReconcilable below — kept in sync manually,
+// both are small closed lists unlikely to drift.
+const RECONCILABLE_PREFIXES = ['411', '401', '512', '4210', '5800']
+
+// Mirrors plan_comptable.categorie_ifrs (migration 479) / comptes_ifrs.categorie_ifrs (migration 478).
+type IfrsCategorie =
+  | 'actif_courant' | 'actif_non_courant'
+  | 'passif_courant' | 'passif_non_courant'
+  | 'capitaux_propres' | 'produits' | 'charges'
+
+// Maps the IFRS classification carried by comptes_ifrs (migration 478) to the
+// generic AccountCategory used by the jurisdiction abstraction.
+const IFRS_CATEGORY_TO_ACCOUNT_CATEGORY: Record<IfrsCategorie, AccountCategory> = {
+  actif_courant: 'BALANCE_SHEET_ASSET',
+  actif_non_courant: 'BALANCE_SHEET_ASSET',
+  passif_courant: 'BALANCE_SHEET_LIABILITY',
+  passif_non_courant: 'BALANCE_SHEET_LIABILITY',
+  capitaux_propres: 'BALANCE_SHEET_EQUITY',
+  produits: 'INCOME_STATEMENT_REVENUE',
+  charges: 'INCOME_STATEMENT_EXPENSE',
+}
+
+interface MauritiusAccountSeed {
+  ancien_code_pcg: string
+  libelle: string
+  categorie_ifrs: IfrsCategorie
+  sous_categorie: string
+  sens_normal: 'D' | 'C'
+  type_mra?: 'PAYE' | 'NSF' | 'CSG' | 'PRGF' | 'TRAINING_LEVY' | 'TVA'
+}
+
+// PCM chart of accounts actually seeded for this tenant base, restated from the
+// comptes_ifrs seed in supabase/migrations/478_plan_comptable_ifrs_maurice.sql
+// (rows with a non-null ancien_code_pcg only — the IFRS-only creations such as
+// ROU-ASSET or CTA-ECART-CONVERSION have no PCG account number and therefore no
+// place in this PCM-numbered chart). Keep this list in sync with that migration
+// seed if it is ever extended; source of truth for the classification stays the
+// SQL migration + comptes_ifrs/plan_comptable, this is a static read-only mirror
+// for the synchronous ChartOfAccountsProvider contract.
+const MAURITIUS_ACCOUNT_SEEDS: MauritiusAccountSeed[] = [
+  { ancien_code_pcg: '5121', libelle: 'Banque — compte courant MUR', categorie_ifrs: 'actif_courant', sous_categorie: 'tresorerie_equivalents', sens_normal: 'D' },
+  { ancien_code_pcg: '5122', libelle: 'Banque — compte courant EUR', categorie_ifrs: 'actif_courant', sous_categorie: 'tresorerie_equivalents', sens_normal: 'D' },
+  { ancien_code_pcg: '5123', libelle: 'Banque — compte courant USD', categorie_ifrs: 'actif_courant', sous_categorie: 'tresorerie_equivalents', sens_normal: 'D' },
+  { ancien_code_pcg: '580', libelle: 'Virements internes en transit', categorie_ifrs: 'actif_courant', sous_categorie: 'tresorerie_equivalents', sens_normal: 'D' },
+  { ancien_code_pcg: '411', libelle: 'Clients — comptes commerciaux', categorie_ifrs: 'actif_courant', sous_categorie: 'clients_et_autres_creances', sens_normal: 'D' },
+  { ancien_code_pcg: '4250', libelle: 'Avances et acomptes au personnel', categorie_ifrs: 'actif_courant', sous_categorie: 'clients_et_autres_creances', sens_normal: 'D' },
+  { ancien_code_pcg: '4456', libelle: 'TVA déductible sur achats', categorie_ifrs: 'actif_courant', sous_categorie: 'autres_actifs_courants', sens_normal: 'D', type_mra: 'TVA' },
+  { ancien_code_pcg: '4670', libelle: 'Tiers divers — inter-sociétés', categorie_ifrs: 'actif_courant', sous_categorie: 'autres_actifs_courants', sens_normal: 'D' },
+  { ancien_code_pcg: '4710', libelle: 'Comptes d\'attente à reclasser', categorie_ifrs: 'actif_courant', sous_categorie: 'autres_actifs_courants', sens_normal: 'D' },
+  { ancien_code_pcg: '2181', libelle: 'Installations générales, agencements', categorie_ifrs: 'actif_non_courant', sous_categorie: 'immobilisations_corporelles', sens_normal: 'D' },
+  { ancien_code_pcg: '2183', libelle: 'Matériel de bureau et informatique', categorie_ifrs: 'actif_non_courant', sous_categorie: 'immobilisations_corporelles', sens_normal: 'D' },
+  { ancien_code_pcg: '2184', libelle: 'Mobilier de bureau', categorie_ifrs: 'actif_non_courant', sous_categorie: 'immobilisations_corporelles', sens_normal: 'D' },
+  { ancien_code_pcg: '2815', libelle: 'Amortissement cumulé — installations', categorie_ifrs: 'actif_non_courant', sous_categorie: 'immobilisations_corporelles', sens_normal: 'C' },
+  { ancien_code_pcg: '2818', libelle: 'Amortissement cumulé — autres immobilisations', categorie_ifrs: 'actif_non_courant', sous_categorie: 'immobilisations_corporelles', sens_normal: 'C' },
+  { ancien_code_pcg: '401', libelle: 'Fournisseurs — comptes commerciaux', categorie_ifrs: 'passif_courant', sous_categorie: 'fournisseurs_et_charges_a_payer', sens_normal: 'C' },
+  { ancien_code_pcg: '4210', libelle: 'Salaires nets à payer', categorie_ifrs: 'passif_courant', sous_categorie: 'fournisseurs_et_charges_a_payer', sens_normal: 'C' },
+  { ancien_code_pcg: '4211', libelle: 'Primes et gratifications à payer', categorie_ifrs: 'passif_courant', sous_categorie: 'fournisseurs_et_charges_a_payer', sens_normal: 'C' },
+  { ancien_code_pcg: '4212', libelle: '13e mois à payer (EOY Bonus)', categorie_ifrs: 'passif_courant', sous_categorie: 'fournisseurs_et_charges_a_payer', sens_normal: 'C' },
+  { ancien_code_pcg: '4280', libelle: 'Notes de frais à rembourser', categorie_ifrs: 'passif_courant', sous_categorie: 'fournisseurs_et_charges_a_payer', sens_normal: 'C' },
+  { ancien_code_pcg: '4311', libelle: 'CSG salarié à verser — MRA', categorie_ifrs: 'passif_courant', sous_categorie: 'dettes_fiscales_et_sociales', sens_normal: 'C', type_mra: 'CSG' },
+  { ancien_code_pcg: '4312', libelle: 'NSF salarié à verser — MRA', categorie_ifrs: 'passif_courant', sous_categorie: 'dettes_fiscales_et_sociales', sens_normal: 'C', type_mra: 'NSF' },
+  { ancien_code_pcg: '4321', libelle: 'CSG patronal à verser — MRA', categorie_ifrs: 'passif_courant', sous_categorie: 'dettes_fiscales_et_sociales', sens_normal: 'C', type_mra: 'CSG' },
+  { ancien_code_pcg: '4322', libelle: 'NSF patronal à verser — MRA', categorie_ifrs: 'passif_courant', sous_categorie: 'dettes_fiscales_et_sociales', sens_normal: 'C', type_mra: 'NSF' },
+  { ancien_code_pcg: '4323', libelle: 'PRGF à verser — MRA', categorie_ifrs: 'passif_courant', sous_categorie: 'dettes_fiscales_et_sociales', sens_normal: 'C', type_mra: 'PRGF' },
+  { ancien_code_pcg: '4324', libelle: 'Training Levy HRDC à verser — MRA', categorie_ifrs: 'passif_courant', sous_categorie: 'dettes_fiscales_et_sociales', sens_normal: 'C', type_mra: 'TRAINING_LEVY' },
+  { ancien_code_pcg: '4330', libelle: 'PAYE à reverser — MRA', categorie_ifrs: 'passif_courant', sous_categorie: 'dettes_fiscales_et_sociales', sens_normal: 'C', type_mra: 'PAYE' },
+  { ancien_code_pcg: '4455', libelle: 'TVA à décaisser', categorie_ifrs: 'passif_courant', sous_categorie: 'dettes_fiscales_et_sociales', sens_normal: 'C', type_mra: 'TVA' },
+  { ancien_code_pcg: '4457', libelle: 'TVA collectée sur ventes', categorie_ifrs: 'passif_courant', sous_categorie: 'dettes_fiscales_et_sociales', sens_normal: 'C', type_mra: 'TVA' },
+  { ancien_code_pcg: '4471', libelle: 'MRA — impôts et taxes divers (attente)', categorie_ifrs: 'passif_courant', sous_categorie: 'dettes_fiscales_et_sociales', sens_normal: 'C' },
+  { ancien_code_pcg: '4550', libelle: 'Comptes courants associés', categorie_ifrs: 'passif_courant', sous_categorie: 'fournisseurs_et_charges_a_payer', sens_normal: 'C' },
+  { ancien_code_pcg: '1640', libelle: 'Emprunts bancaires', categorie_ifrs: 'passif_non_courant', sous_categorie: 'emprunts_et_dettes_financieres', sens_normal: 'C' },
+  { ancien_code_pcg: '1010', libelle: 'Capital social', categorie_ifrs: 'capitaux_propres', sous_categorie: 'capital_social', sens_normal: 'C' },
+  { ancien_code_pcg: '1061', libelle: 'Réserve légale', categorie_ifrs: 'capitaux_propres', sous_categorie: 'reserves', sens_normal: 'C' },
+  { ancien_code_pcg: '1068', libelle: 'Autres réserves', categorie_ifrs: 'capitaux_propres', sous_categorie: 'reserves', sens_normal: 'C' },
+  { ancien_code_pcg: '1190', libelle: 'Report à nouveau', categorie_ifrs: 'capitaux_propres', sous_categorie: 'resultat_non_distribue', sens_normal: 'C' },
+  { ancien_code_pcg: '1200', libelle: 'Résultat de l\'exercice', categorie_ifrs: 'capitaux_propres', sous_categorie: 'resultat_non_distribue', sens_normal: 'C' },
+  { ancien_code_pcg: '701', libelle: 'Ventes de marchandises', categorie_ifrs: 'produits', sous_categorie: 'chiffre_affaires', sens_normal: 'C' },
+  { ancien_code_pcg: '706', libelle: 'Prestations de services', categorie_ifrs: 'produits', sous_categorie: 'chiffre_affaires', sens_normal: 'C' },
+  { ancien_code_pcg: '708', libelle: 'Produits accessoires', categorie_ifrs: 'produits', sous_categorie: 'autres_produits_operationnels', sens_normal: 'C' },
+  { ancien_code_pcg: '7131', libelle: 'Production stockée', categorie_ifrs: 'produits', sous_categorie: 'autres_produits_operationnels', sens_normal: 'C' },
+  { ancien_code_pcg: '753', libelle: 'Commissions reçues', categorie_ifrs: 'produits', sous_categorie: 'autres_produits_operationnels', sens_normal: 'C' },
+  { ancien_code_pcg: '766', libelle: 'Gains de change', categorie_ifrs: 'produits', sous_categorie: 'produits_financiers', sens_normal: 'C' },
+  { ancien_code_pcg: '771', libelle: 'Produits exceptionnels', categorie_ifrs: 'produits', sous_categorie: 'autres_produits_operationnels', sens_normal: 'C' },
+  { ancien_code_pcg: '601', libelle: 'Achats de marchandises', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+  { ancien_code_pcg: '606', libelle: 'Fournitures non stockées', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+  { ancien_code_pcg: '607', libelle: 'Achats de services et prestations', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+  { ancien_code_pcg: '611', libelle: 'Sous-traitance', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+  { ancien_code_pcg: '6131', libelle: 'Loyers (baux courts termes / faible valeur — hors IFRS 16)', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+  { ancien_code_pcg: '6135', libelle: 'Charges locatives', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+  { ancien_code_pcg: '6151', libelle: 'Entretien et réparations', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+  { ancien_code_pcg: '6160', libelle: 'Assurances', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+  { ancien_code_pcg: '6221', libelle: 'Honoraires comptables', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+  { ancien_code_pcg: '6225', libelle: 'Honoraires juridiques', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+  { ancien_code_pcg: '623', libelle: 'Publicité et marketing', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+  { ancien_code_pcg: '6251', libelle: 'Frais de déplacement', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+  { ancien_code_pcg: '6256', libelle: 'Missions et réceptions', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+  { ancien_code_pcg: '6261', libelle: 'Téléphone et internet', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+  { ancien_code_pcg: '6271', libelle: 'Frais bancaires', categorie_ifrs: 'charges', sous_categorie: 'charges_financieres', sens_normal: 'D' },
+  { ancien_code_pcg: '6272', libelle: 'Commissions bancaires (SWIFT)', categorie_ifrs: 'charges', sous_categorie: 'charges_financieres', sens_normal: 'D' },
+  { ancien_code_pcg: '628', libelle: 'Charges externes diverses', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+  { ancien_code_pcg: '6351', libelle: 'Droits de timbre', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+  { ancien_code_pcg: '6411', libelle: 'Salaires et appointements bruts', categorie_ifrs: 'charges', sous_categorie: 'charges_de_personnel', sens_normal: 'D' },
+  { ancien_code_pcg: '6412', libelle: 'Transport allowance', categorie_ifrs: 'charges', sous_categorie: 'charges_de_personnel', sens_normal: 'D' },
+  { ancien_code_pcg: '6413', libelle: 'Petrol allowance', categorie_ifrs: 'charges', sous_categorie: 'charges_de_personnel', sens_normal: 'D' },
+  { ancien_code_pcg: '6414', libelle: 'Heures supplémentaires', categorie_ifrs: 'charges', sous_categorie: 'charges_de_personnel', sens_normal: 'D' },
+  { ancien_code_pcg: '6415', libelle: 'Primes et gratifications', categorie_ifrs: 'charges', sous_categorie: 'charges_de_personnel', sens_normal: 'D' },
+  { ancien_code_pcg: '6416', libelle: '13e mois — EOY (provision)', categorie_ifrs: 'charges', sous_categorie: 'charges_de_personnel', sens_normal: 'D' },
+  { ancien_code_pcg: '6417', libelle: 'Indemnités compensatrices et départ', categorie_ifrs: 'charges', sous_categorie: 'charges_de_personnel', sens_normal: 'D' },
+  { ancien_code_pcg: '6418', libelle: 'Indemnités compensatrices (préavis)', categorie_ifrs: 'charges', sous_categorie: 'charges_de_personnel', sens_normal: 'D' },
+  { ancien_code_pcg: '6419', libelle: 'Autres rémunérations', categorie_ifrs: 'charges', sous_categorie: 'charges_de_personnel', sens_normal: 'D' },
+  { ancien_code_pcg: '6451', libelle: 'CSG patronale', categorie_ifrs: 'charges', sous_categorie: 'charges_de_personnel', sens_normal: 'D', type_mra: 'CSG' },
+  { ancien_code_pcg: '6452', libelle: 'NSF patronal', categorie_ifrs: 'charges', sous_categorie: 'charges_de_personnel', sens_normal: 'D', type_mra: 'NSF' },
+  { ancien_code_pcg: '6453', libelle: 'PRGF (charge)', categorie_ifrs: 'charges', sous_categorie: 'charges_de_personnel', sens_normal: 'D', type_mra: 'PRGF' },
+  { ancien_code_pcg: '6454', libelle: 'Training Levy HRDC (1%)', categorie_ifrs: 'charges', sous_categorie: 'charges_de_personnel', sens_normal: 'D', type_mra: 'TRAINING_LEVY' },
+  { ancien_code_pcg: '651', libelle: 'Redevances licences SaaS', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+  { ancien_code_pcg: '661', libelle: 'Intérêts bancaires', categorie_ifrs: 'charges', sous_categorie: 'charges_financieres', sens_normal: 'D' },
+  { ancien_code_pcg: '666', libelle: 'Pertes de change', categorie_ifrs: 'charges', sous_categorie: 'charges_financieres', sens_normal: 'D' },
+  { ancien_code_pcg: '671', libelle: 'Charges exceptionnelles', categorie_ifrs: 'charges', sous_categorie: 'achats_et_charges_externes', sens_normal: 'D' },
+]
+
+const MAURITIUS_ACCOUNTS: Account[] = MAURITIUS_ACCOUNT_SEEDS.map((seed) => ({
+  number: seed.ancien_code_pcg,
+  labelFr: seed.libelle,
+  description: `IFRS: ${seed.categorie_ifrs} / ${seed.sous_categorie}`,
+  classNumber: Number(seed.ancien_code_pcg.charAt(0)),
+  category: IFRS_CATEGORY_TO_ACCOUNT_CATEGORY[seed.categorie_ifrs],
+  isAuxiliary: seed.ancien_code_pcg === '411' || seed.ancien_code_pcg === '401',
+  normalBalance: seed.sens_normal === 'D' ? 'DEBIT' : 'CREDIT',
+  isReconcilable: RECONCILABLE_PREFIXES.some((p) => seed.ancien_code_pcg.startsWith(p)),
+  taxCode: seed.type_mra,
+  jurisdiction: 'MU',
+}))
 
 // Minimal PCM chart of accounts (uses existing Mauritius accounting code by reference)
 class MauritiusChartOfAccounts implements ChartOfAccountsProvider {
@@ -22,10 +156,26 @@ class MauritiusChartOfAccounts implements ChartOfAccountsProvider {
     ]
   }
 
-  getAccountsByClass(_n: number): Account[] { return [] /* Defer to existing PCM code */ }
-  getAccount(_num: string): Account | undefined { return undefined }
-  searchAccounts(_q: string): Account[] { return [] }
-  getAllAccounts(): Account[] { return [] }
+  getAccountsByClass(classNumber: number): Account[] {
+    return MAURITIUS_ACCOUNTS.filter((a) => a.classNumber === classNumber)
+  }
+
+  getAccount(accountNumber: string): Account | undefined {
+    return MAURITIUS_ACCOUNTS.find((a) => a.number === accountNumber)
+  }
+
+  searchAccounts(query: string): Account[] {
+    const q = query.toLowerCase().trim()
+    if (!q) return []
+    return MAURITIUS_ACCOUNTS.filter(
+      (a) => a.number.includes(q) || a.labelFr.toLowerCase().includes(q),
+    )
+  }
+
+  getAllAccounts(): Account[] {
+    return MAURITIUS_ACCOUNTS
+  }
+
   isValidAccountNumber(num: string): boolean { return /^[1-7]\d{2,5}$/.test(num) }
 
   getDefaultAccountFor(op: AccountingOperation): string | undefined {
