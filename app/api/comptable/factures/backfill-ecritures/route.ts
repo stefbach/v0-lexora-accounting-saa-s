@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createEcrituresForFacture, createEcrituresForPayment } from '@/lib/accounting/ecritures-factures'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -32,6 +33,16 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { societe_id, dry_run = false } = body
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) {
+        return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+      }
+      throw err
+    }
 
     // Timeout guard
     const start = Date.now()
@@ -143,6 +154,16 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) {
+        return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+      }
+      throw err
+    }
 
     // Count factures + existing entries
     const { count: nbFactures } = await supabase.from('factures')

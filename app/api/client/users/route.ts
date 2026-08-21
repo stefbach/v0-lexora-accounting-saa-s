@@ -1,6 +1,7 @@
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
+import { canManageRole } from '@/lib/auth/roles'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -369,6 +370,31 @@ export async function PATCH(request: NextRequest) {
     }
 
     const supabase = getAdminClient()
+
+    // SEC-001 — hiérarchie ROLE_LEVEL sur les opérations sensibles :
+    //  - changement de rôle : caller strictement supérieur à la cible ET au
+    //    rôle attribué (bloque l'auto-promotion et la promotion vers un rôle
+    //    ≥ le sien) ;
+    //  - changement d'email auth (updateUserById) : caller strictement
+    //    supérieur à la cible, sauf modification de son propre email.
+    const targetIsSelf = user_id === authUser.id
+    if (role !== undefined || (email !== undefined && !targetIsSelf)) {
+      const { data: targetProfile } = await supabase
+        .from('profiles').select('role').eq('id', user_id).maybeSingle()
+      const roleChanged = role !== undefined && role !== targetProfile?.role
+      if (roleChanged || (email !== undefined && !targetIsSelf)) {
+        if (!targetIsSelf && !canManageRole(authUser.role, targetProfile?.role)) {
+          return NextResponse.json({
+            error: 'Privilège insuffisant pour modifier ce compte (rôle cible ≥ rôle caller)',
+          }, { status: 403 })
+        }
+        if (roleChanged && !canManageRole(authUser.role, role)) {
+          return NextResponse.json({
+            error: `Privilège insuffisant pour attribuer le rôle "${role}"`,
+          }, { status: 403 })
+        }
+      }
+    }
     const updates: Record<string, unknown> = {}
     if (role) updates.role = role
     if (actif !== undefined) updates.is_active = actif

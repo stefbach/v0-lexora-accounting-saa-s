@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { apiError } from '@/lib/api-error'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +26,15 @@ export async function GET(request: Request) {
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
     const supabase = getAdminClient()
+
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) return apiError('access_denied_company', 403)
+      throw err
+    }
+
     const { data, error } = await supabase
       .from('directors_shareholders')
       .select('*')
@@ -55,11 +65,33 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { action } = body
 
+    // Multi-tenant guard (IDOR) : toute action portant sur une société
+    // exige que l'utilisateur y ait accès.
+    const assertAccess = async (societeId: string | null | undefined) => {
+      if (!societeId) return null
+      try {
+        await assertSocieteAccess(supabase, user.id, societeId)
+        return null
+      } catch (err) {
+        if (err instanceof SocieteAccessError) return apiError('access_denied_company', 403)
+        throw err
+      }
+    }
+    // Résout la société d'un dirigeant puis applique le guard.
+    const assertDirectorAccess = async (directorId: string | null | undefined) => {
+      if (!directorId) return null
+      const { data: director } = await supabase.from('directors_shareholders')
+        .select('societe_id').eq('id', directorId).maybeSingle()
+      return assertAccess(director?.societe_id)
+    }
+
     if (action === 'create' || !action) {
       const { societe_id, nom_complet, role, nic, date_nomination, parts_sociales, pourcentage_capital, notes } = body
       if (!societe_id || !nom_complet || !role) {
         return NextResponse.json({ error: 'societe_id, nom_complet, role requis' }, { status: 400 })
       }
+      const denied = await assertAccess(societe_id)
+      if (denied) return denied
       const { data, error } = await supabase.from('directors_shareholders').insert({
         societe_id, nom_complet, role, nic, date_nomination,
         parts_sociales, pourcentage_capital, notes,
@@ -70,6 +102,13 @@ export async function POST(request: Request) {
 
     if (action === 'update') {
       const { id, ...updates } = body
+      const denied = await assertDirectorAccess(id)
+      if (denied) return denied
+      // Empêcher de déplacer un dirigeant vers une société non accessible
+      if (updates.societe_id) {
+        const deniedTarget = await assertAccess(updates.societe_id)
+        if (deniedTarget) return deniedTarget
+      }
       const { error } = await supabase.from('directors_shareholders').update(updates).eq('id', id)
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
       return NextResponse.json({ ok: true })
@@ -77,6 +116,8 @@ export async function POST(request: Request) {
 
     if (action === 'delete') {
       const { id } = body
+      const denied = await assertDirectorAccess(id)
+      if (denied) return denied
       // Soft delete: marquer inactif (préserver l'historique)
       const { error } = await supabase.from('directors_shareholders').update({ active: false }).eq('id', id)
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })

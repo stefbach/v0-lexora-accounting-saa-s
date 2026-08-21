@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { apiError } from '@/lib/api-error'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,6 +29,15 @@ export async function GET(request: Request) {
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
     const supabase = getAdminClient()
+
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) return apiError('access_denied_company', 403)
+      throw err
+    }
+
     const { data, error } = await supabase
       .from('supplier_aliases')
       .select('*')
@@ -61,12 +71,28 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { action } = body
 
+    // Multi-tenant guard (IDOR) : toute action portant sur une société
+    // exige que l'utilisateur y ait accès.
+    const assertAccess = async (societeId: string | null | undefined) => {
+      if (!societeId) return null
+      try {
+        await assertSocieteAccess(supabase, user.id, societeId)
+        return null
+      } catch (err) {
+        if (err instanceof SocieteAccessError) return apiError('access_denied_company', 403)
+        throw err
+      }
+    }
+
     // ── Add a manual alias ──
     if (action === 'add') {
       const { societe_id, canonical, alias } = body
       if (!canonical || !alias) {
         return NextResponse.json({ error: 'canonical et alias requis' }, { status: 400 })
       }
+
+      const denied = await assertAccess(societe_id)
+      if (denied) return denied
 
       const norm = (alias as string).toLowerCase().replace(/[^a-z0-9\s.]/g, '').trim()
       const canon = (canonical as string).toLowerCase().replace(/[^a-z0-9\s.]/g, '').trim()
@@ -92,6 +118,10 @@ export async function POST(request: Request) {
     if (action === 'delete') {
       const { alias_id } = body
       if (!alias_id) return NextResponse.json({ error: 'alias_id requis' }, { status: 400 })
+      const { data: existingAlias } = await supabase
+        .from('supplier_aliases').select('societe_id').eq('id', alias_id).maybeSingle()
+      const denied = await assertAccess(existingAlias?.societe_id)
+      if (denied) return denied
       const { error } = await supabase.from('supplier_aliases').delete().eq('id', alias_id)
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
       return NextResponse.json({ deleted: true })
@@ -103,6 +133,9 @@ export async function POST(request: Request) {
       if (!societe_id || !bank_name || !facture_name) {
         return NextResponse.json({ error: 'societe_id, bank_name, facture_name requis' }, { status: 400 })
       }
+
+      const denied = await assertAccess(societe_id)
+      if (denied) return denied
 
       const bankNorm = (bank_name as string).toLowerCase().replace(/[^a-z0-9\s.]/g, '').trim()
       const factNorm = (facture_name as string).toLowerCase().replace(/[^a-z0-9\s.]/g, '').trim()

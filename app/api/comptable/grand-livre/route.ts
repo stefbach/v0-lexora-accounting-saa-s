@@ -3,6 +3,7 @@ import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { fetchAllPaginated } from '@/lib/supabase/paginate'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,6 +35,14 @@ export async function GET(request: Request) {
     const offset       = (page - 1) * limit
 
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) return apiError('access_denied_company', 403)
+      throw err
+    }
 
     // Parse exercice to date range if provided (e.g., "2025-2026" = July 2025 to June 2026)
     let exerciceDateDebut: string | null = null

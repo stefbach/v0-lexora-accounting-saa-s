@@ -12,6 +12,7 @@ import { NextResponse } from 'next/server'
 import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createSupabase } from '@supabase/supabase-js'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +38,15 @@ export async function GET(request: Request) {
     const actifParam = searchParams.get('actif')
 
     const supabase = getAdminClient()
+
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) return apiError('access_denied_company', 403)
+      throw err
+    }
+
     let q = supabase.from('comptes_paiement_tiers')
       .select('id, code_compte, nom_compte, type, actif, notes, created_at, updated_at')
       .eq('societe_id', societe_id)
@@ -71,6 +81,15 @@ export async function POST(request: Request) {
     const typeFinal = TYPES_VALIDES.includes(type) ? type : 'tiers'
 
     const supabase = getAdminClient()
+
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) return apiError('access_denied_company', 403)
+      throw err
+    }
+
     const { data, error } = await supabase.from('comptes_paiement_tiers').insert({
       societe_id,
       code_compte: String(code_compte).trim(),
@@ -112,6 +131,18 @@ export async function PATCH(request: Request) {
     }
 
     const supabase = getAdminClient()
+
+    // Multi-tenant guard (IDOR) : résoudre la société du compte ciblé
+    const { data: existing } = await supabase.from('comptes_paiement_tiers')
+      .select('societe_id').eq('id', id).maybeSingle()
+    if (!existing) return NextResponse.json({ error: 'Compte introuvable' }, { status: 404 })
+    try {
+      await assertSocieteAccess(supabase, user.id, existing.societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) return apiError('access_denied_company', 403)
+      throw err
+    }
+
     const { data, error } = await supabase.from('comptes_paiement_tiers')
       .update(patch).eq('id', id).select().single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -132,6 +163,18 @@ export async function DELETE(request: Request) {
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
 
     const supabase = getAdminClient()
+
+    // Multi-tenant guard (IDOR) : résoudre la société du compte ciblé
+    const { data: existing } = await supabase.from('comptes_paiement_tiers')
+      .select('societe_id').eq('id', id).maybeSingle()
+    if (!existing) return NextResponse.json({ error: 'Compte introuvable' }, { status: 404 })
+    try {
+      await assertSocieteAccess(supabase, user.id, existing.societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) return apiError('access_denied_company', 403)
+      throw err
+    }
+
     const { error } = await supabase.from('comptes_paiement_tiers').delete().eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ success: true })

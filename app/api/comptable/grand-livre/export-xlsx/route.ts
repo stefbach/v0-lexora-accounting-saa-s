@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 import { fetchAllPaginated } from '@/lib/supabase/paginate'
 import {
   aoaSheet, buildWorkbook, cell, formula, xlsxResponse,
@@ -38,6 +39,16 @@ export async function GET(request: Request) {
   const exercice   = searchParams.get('exercice')
 
   if (!societe_id) return new Response('societe_id requis', { status: 400 })
+
+  // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+  try {
+    await assertSocieteAccess(supabase, user.id, societe_id)
+  } catch (err) {
+    if (err instanceof SocieteAccessError) {
+      return new Response('Accès refusé à cette société', { status: 403 })
+    }
+    throw err
+  }
 
   let dDebut = date_debut
   let dFin   = date_fin
