@@ -32,6 +32,7 @@ import type { Page } from 'playwright-core'
 import type { BankScrapeResult, ScrapedTransaction } from '../scraper'
 import { captureScreenshot, capturePageDiagnostic } from '../playwright-launcher'
 import { pickBestCompany } from '../agentic/company-match'
+import { findAccountBalance, type AccountRow } from '../agentic/accounts-parse'
 
 export interface McbCredentials {
   username: string                  // User ID MCB
@@ -348,11 +349,92 @@ export async function loginAndScrapeMcb(
         }
       }
 
-      // On ne connaît pas encore la structure du dashboard (liste comptes +
-      // accès transactions) → on capture pour mapper l'étape finale.
+      // ── Dashboard atteint : lecture de la liste des comptes (page « Accounts ») ──
+      // On attend le tableau des comptes puis on extrait les lignes (Number /
+      // Ccy / Available / Ledger), header-mappé pour rester robuste au réordonnancement.
+      await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
+      const accountRows: AccountRow[] = await page.evaluate(() => {
+        const norm = (s: string | null | undefined) => (s || '').replace(/\s+/g, ' ').trim().toLowerCase()
+        const tables = Array.from(document.querySelectorAll('table'))
+        for (const table of tables) {
+          const headerCells = Array.from(table.querySelectorAll('thead th, thead td'))
+          const headers = headerCells.map((h) => norm(h.textContent))
+          const idxNum = headers.findIndex((h) => h.includes('number') || h.includes('account') || h === 'no')
+          if (idxNum === -1) continue
+          const idxCcy = headers.findIndex((h) => h === 'ccy' || h.includes('currency') || h.includes('devise'))
+          const idxAvail = headers.findIndex((h) => h.includes('available'))
+          const idxLedger = headers.findIndex((h) => h.includes('ledger') || h.includes('book'))
+          const bodyRows = Array.from(table.querySelectorAll('tbody tr'))
+          const out: { number: string; currency?: string; available?: string; ledger?: string }[] = []
+          for (const tr of bodyRows) {
+            const cells = Array.from(tr.querySelectorAll('td')).map((td) => (td.textContent || '').replace(/\s+/g, ' ').trim())
+            const number = idxNum >= 0 ? cells[idxNum] : ''
+            if (!number || !/\d{4,}/.test(number)) continue
+            out.push({
+              number,
+              currency: idxCcy >= 0 ? cells[idxCcy] : undefined,
+              available: idxAvail >= 0 ? cells[idxAvail] : undefined,
+              ledger: idxLedger >= 0 ? cells[idxLedger] : undefined,
+            })
+          }
+          if (out.length) return out
+        }
+        return []
+      }).catch(() => [] as AccountRow[])
+
+      const acct = findAccountBalance(accountRows, options.numero_compte)
+      if (!acct) {
+        return {
+          status: 'manual_needed',
+          error: `Société sélectionnée ✅ mais compte ${options.numero_compte} introuvable dans la liste (${accountRows.length} compte(s) lus). Copie le diagnostic pour ajuster.`,
+          screenshot_b64: await captureScreenshot(page),
+          diagnostic: await capturePageDiagnostic(page),
+          duration_ms: Date.now() - t0,
+        }
+      }
+
+      // ── Solde lu ✅ — navigation vers les transactions du compte ──
+      // Clic sur la ligne du compte (ouvre le détail / les transactions).
+      await page.getByText(options.numero_compte, { exact: false }).first()
+        .click({ timeout: 6000 }).catch(() => {})
+      await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+
+      const transactions: ScrapedTransaction[] = await page.evaluate((maxN: number) => {
+        const rows = Array.from(document.querySelectorAll('tbody tr, [data-testid="transaction-row"], .transaction-item'))
+        const out: Array<{ date: string; description: string; amount: number; currency: string }> = []
+        for (const row of rows.slice(0, maxN)) {
+          const cells = Array.from(row.querySelectorAll('td')).map((c) => (c.textContent || '').trim())
+          if (cells.length < 3) continue
+          const dateCell = cells.find((c) => /\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}/.test(c)) || cells[0]
+          const amountCell = [...cells].reverse().find((c) => /-?[\d ,.]+\d/.test(c) && /\d/.test(c))
+          const amount = amountCell ? parseFloat(amountCell.replace(/[^\d.,-]/g, '').replace(/,/g, '')) : NaN
+          const desc = cells.find((c) => c && c !== dateCell && c !== amountCell) || ''
+          if (dateCell && desc && isFinite(amount)) {
+            const d = dateCell.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/)
+            const isoDate = d ? `${d[3].length === 2 ? '20' + d[3] : d[3]}-${d[2].padStart(2, '0')}-${d[1].padStart(2, '0')}` : dateCell
+            out.push({ date: isoDate, description: desc, amount, currency: '' })
+          }
+        }
+        return out
+      }, options.max_transactions || 30).catch(() => [] as ScrapedTransaction[])
+
+      // Solde toujours retourné ; transactions en best-effort. Si la page de
+      // transactions n'est pas encore mappée, on renvoie 'partial' + diagnostic.
+      if (transactions.length > 0) {
+        return {
+          status: 'success',
+          balance_mur: acct.balance,
+          balance_devise: acct.currency || 'MUR',
+          nb_transactions: transactions.length,
+          transactions: transactions.map((t) => ({ ...t, currency: acct.currency || 'MUR' })),
+          duration_ms: Date.now() - t0,
+        }
+      }
       return {
-        status: 'manual_needed',
-        error: `Société « ${clicked} » sélectionnée ✅ — dashboard atteint. Copie le diagnostic (cliquables + textes) pour que je mappe la lecture du solde et des transactions du compte ${options.numero_compte}.`,
+        status: 'partial',
+        balance_mur: acct.balance,
+        balance_devise: acct.currency || 'MUR',
+        error: `Solde lu ✅ (${acct.balance} ${acct.currency || ''}) — la page des transactions du compte ${options.numero_compte} n'est pas encore mappée. Copie le diagnostic (URL + champs + boutons) de cette page pour que je fige l'extraction des transactions.`,
         screenshot_b64: await captureScreenshot(page),
         diagnostic: await capturePageDiagnostic(page),
         duration_ms: Date.now() - t0,
