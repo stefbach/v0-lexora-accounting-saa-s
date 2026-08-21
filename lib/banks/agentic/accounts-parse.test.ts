@@ -3,6 +3,8 @@ import {
   normalizeAccountNumber,
   accountNumbersMatch,
   findAccountBalance,
+  parseAccountRowText,
+  parseAccounts,
   type AccountRow,
 } from './accounts-parse'
 
@@ -71,5 +73,73 @@ describe('findAccountBalance — cas MCB réel', () => {
   it('match tolérant au formatage du numéro', () => {
     const rows: AccountRow[] = [{ number: '0004 4795 4555', currency: 'MUR', ledger: '2,000.50' }]
     expect(findAccountBalance(rows, '000447954555')!.balance).toBe(2000.5)
+  })
+})
+
+// Textes de lignes tels que `innerText` les produit sur la grille Backbase MCB
+// (page /en-US/accounts/list) — c'est le cas réel qui échouait (0 compte lu car
+// pas de <table> sémantique).
+const MCB_ROW_TEXTS = [
+  '000447954555 Current MUR 14,564.18 14,564.21',
+  '000447954563 Current GBP -26.72 -26.72',
+  '000447954571 Current USD -35.84 -35.84',
+  '000447954587 Current EUR 8,526.87 8,926.87',
+]
+
+describe('parseAccountRowText — grille Backbase (sans <table>)', () => {
+  it('lit numéro, devise, available et ledger', () => {
+    const r = parseAccountRowText(MCB_ROW_TEXTS[0])!
+    expect(r.number).toBe('000447954555')
+    expect(r.currency).toBe('MUR')
+    expect(r.available).toBe('14,564.18')
+    expect(r.ledger).toBe('14,564.21')
+  })
+  it('gère les soldes négatifs', () => {
+    const r = parseAccountRowText(MCB_ROW_TEXTS[1])!
+    expect(r.currency).toBe('GBP')
+    expect(r.available).toBe('-26.72')
+    expect(r.ledger).toBe('-26.72')
+  })
+  it('EUR available ≠ ledger', () => {
+    const r = parseAccountRowText(MCB_ROW_TEXTS[3])!
+    expect(r.available).toBe('8,526.87')
+    expect(r.ledger).toBe('8,926.87')
+  })
+  it('ignore une ligne d’en-tête (aucun numéro de compte)', () => {
+    expect(parseAccountRowText('Number Type Ccy Available balance Ledger balance')).toBeNull()
+  })
+  it('ignore un conteneur multi-comptes (plusieurs numéros)', () => {
+    expect(parseAccountRowText(MCB_ROW_TEXTS.join(' '))).toBeNull()
+  })
+  it('un seul montant → available uniquement', () => {
+    const r = parseAccountRowText('000447954555 MUR 1,000.00')!
+    expect(r.available).toBe('1,000.00')
+    expect(r.ledger).toBeUndefined()
+  })
+})
+
+describe('parseAccounts + findAccountBalance — bout en bout (cas réel qui échouait)', () => {
+  it('extrait les 4 comptes de la grille et lit le solde ciblé', () => {
+    const rows = parseAccounts(MCB_ROW_TEXTS)
+    expect(rows).toHaveLength(4)
+    const b = findAccountBalance(rows, '000447954555')
+    expect(b).not.toBeNull()
+    expect(b!.balance).toBe(14564.21) // ledger MUR
+    expect(b!.currency).toBe('MUR')
+  })
+  it('dédoublonne les lignes imbriquées et garde la plus riche', () => {
+    // Le DOM produit souvent le numéro seul (span interne) + la ligne complète.
+    const rows = parseAccounts(['000447954555', '000447954555 Current MUR 14,564.18 14,564.21'])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].ledger).toBe('14,564.21')
+  })
+  it('tolère le bruit (en-têtes, conteneurs) sans planter', () => {
+    const rows = parseAccounts([
+      'All Accounts',
+      'Number Type Ccy Available balance Ledger balance',
+      ...MCB_ROW_TEXTS,
+      MCB_ROW_TEXTS.join(' '),
+    ])
+    expect(rows).toHaveLength(4)
   })
 })

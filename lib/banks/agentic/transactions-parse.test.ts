@@ -3,6 +3,8 @@ import {
   normalizeStatementDate,
   parseTransactionRow,
   parseTransactions,
+  parseTransactionText,
+  parseTransactionsFromTexts,
   transactionDedupeKey,
   findBalanceBreaks,
   type RawTransactionRow,
@@ -95,6 +97,56 @@ describe('parseTransactions', () => {
     expect(txs).toHaveLength(2)
   })
   it('liste vide → []', () => expect(parseTransactions([])).toEqual([]))
+})
+
+// Textes de lignes tels que innerText les produit sur la grille MCB (sans <table>).
+const MCB_TX_TEXTS = [
+  '20 Aug 2026 20 Aug 2026 FT262327YRQX E-Commerce Transaction Fee|MASTERCARD 1010035200 -4.72 14,564.21',
+  '20 Aug 2026 20 Aug 2026 FT26232SQBXT Merchant Settlement|MASTERCARD 1010035200-MCBS2I05-288 800.00 14,568.93',
+  '17 Aug 2026 17 Aug 2026 FT26229L0Z0S Bulk Payment|HONORAIRES MEDECINS Juil 2026 -58,072.00 21,791.93',
+  '17 Aug 2026 17 Aug 2026 FT26229L0Z0S Payment fee -6.00 79,863.93',
+]
+
+describe('parseTransactionText — grille MCB (sans <table>)', () => {
+  it('débit avec séparateur de milliers + libellé pipe', () => {
+    const r = parseTransactionText(MCB_TX_TEXTS[2])!
+    expect(r.transactionDate).toBe('17 Aug 2026')
+    expect(r.valueDate).toBe('17 Aug 2026')
+    expect(r.reference).toBe('FT26229L0Z0S')
+    expect(r.description).toBe('Bulk Payment|HONORAIRES MEDECINS Juil 2026')
+    expect(r.amount).toBe('-58,072.00')
+    expect(r.balance).toBe('21,791.93')
+  })
+  it('crédit positif', () => {
+    const r = parseTransactionText(MCB_TX_TEXTS[1])!
+    expect(r.amount).toBe('800.00')
+    expect(r.balance).toBe('14,568.93')
+    expect(r.description).toBe('Merchant Settlement|MASTERCARD 1010035200-MCBS2I05-288')
+  })
+  it('libellé court « Payment fee »', () => {
+    const r = parseTransactionText(MCB_TX_TEXTS[3])!
+    expect(r.description).toBe('Payment fee')
+    expect(r.amount).toBe('-6.00')
+  })
+  it('en-tête / total sans date+montant → null', () => {
+    expect(parseTransactionText('Transaction date Value date Reference Description Amount Balance')).toBeNull()
+  })
+})
+
+describe('parseTransactionsFromTexts — bout en bout', () => {
+  it('parse toutes les lignes réelles de la grille', () => {
+    const txs = parseTransactionsFromTexts(MCB_TX_TEXTS)
+    expect(txs).toHaveLength(4)
+    expect(txs[0]).toMatchObject({ date: '2026-08-20', amount: -4.72, balance_after: 14564.21, reference: 'FT262327YRQX' })
+    expect(txs[2]).toMatchObject({ date: '2026-08-17', amount: -58072, balance_after: 21791.93 })
+  })
+  it('ignore le bruit (en-tête + conteneur) sans planter', () => {
+    const txs = parseTransactionsFromTexts([
+      'Transaction date Value date Reference Description Amount Balance',
+      ...MCB_TX_TEXTS.slice(0, 2),
+    ])
+    expect(txs).toHaveLength(2)
+  })
 })
 
 describe('transactionDedupeKey', () => {

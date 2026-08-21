@@ -32,8 +32,8 @@ import type { Page } from 'playwright-core'
 import type { BankScrapeResult, ScrapedTransaction, ScrapedStatement } from '../scraper'
 import { captureScreenshot, capturePageDiagnostic } from '../playwright-launcher'
 import { pickBestCompany } from '../agentic/company-match'
-import { findAccountBalance, type AccountRow } from '../agentic/accounts-parse'
-import { parseTransactions, findBalanceBreaks, type RawTransactionRow } from '../agentic/transactions-parse'
+import { findAccountBalance, parseAccounts } from '../agentic/accounts-parse'
+import { parseTransactionsFromTexts, findBalanceBreaks } from '../agentic/transactions-parse'
 import { parseStatements, type RawStatementRow } from '../agentic/statements-parse'
 
 export interface McbCredentials {
@@ -354,38 +354,26 @@ export async function loginAndScrapeMcb(
       }
 
       // ── Dashboard atteint : lecture de la liste des comptes (page « Accounts ») ──
-      // On attend le tableau des comptes puis on extrait les lignes (Number /
-      // Ccy / Available / Ledger), header-mappé pour rester robuste au réordonnancement.
+      // MCB (plateforme Backbase) NE rend PAS toujours un <table> sémantique :
+      // la liste des comptes est une grille de <div>. On collecte donc les
+      // textes de lignes candidats (agnostique table/div) et on délègue le parse
+      // au module testé parseAccounts (reconnaissance par motif : numéro +
+      // devise + montants), au lieu de dépendre d'un header <thead>.
       await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
-      const accountRows: AccountRow[] = await page.evaluate(() => {
-        const norm = (s: string | null | undefined) => (s || '').replace(/\s+/g, ' ').trim().toLowerCase()
-        const tables = Array.from(document.querySelectorAll('table'))
-        for (const table of tables) {
-          const headerCells = Array.from(table.querySelectorAll('thead th, thead td'))
-          const headers = headerCells.map((h) => norm(h.textContent))
-          const idxNum = headers.findIndex((h) => h.includes('number') || h.includes('account') || h === 'no')
-          if (idxNum === -1) continue
-          const idxCcy = headers.findIndex((h) => h === 'ccy' || h.includes('currency') || h.includes('devise'))
-          const idxAvail = headers.findIndex((h) => h.includes('available'))
-          const idxLedger = headers.findIndex((h) => h.includes('ledger') || h.includes('book'))
-          const bodyRows = Array.from(table.querySelectorAll('tbody tr'))
-          const out: { number: string; currency?: string; available?: string; ledger?: string }[] = []
-          for (const tr of bodyRows) {
-            const cells = Array.from(tr.querySelectorAll('td')).map((td) => (td.textContent || '').replace(/\s+/g, ' ').trim())
-            const number = idxNum >= 0 ? cells[idxNum] : ''
-            if (!number || !/\d{4,}/.test(number)) continue
-            out.push({
-              number,
-              currency: idxCcy >= 0 ? cells[idxCcy] : undefined,
-              available: idxAvail >= 0 ? cells[idxAvail] : undefined,
-              ledger: idxLedger >= 0 ? cells[idxLedger] : undefined,
-            })
-          }
-          if (out.length) return out
+      const rowTexts: string[] = await page.evaluate(() => {
+        const out: string[] = []
+        const els = Array.from(document.querySelectorAll('tr, li, [role="row"], [role="listitem"], div, a'))
+        for (const el of els) {
+          const t = ((el as HTMLElement).innerText || '').replace(/\s+/g, ' ').trim()
+          if (!t || t.length > 200) continue
+          // Ligne candidate = contient exactement un numéro de compte (9-18 chiffres).
+          const accs = t.match(/\b\d{9,18}\b/g)
+          if (accs && accs.length === 1) out.push(t)
         }
-        return []
-      }).catch(() => [] as AccountRow[])
+        return out
+      }).catch(() => [] as string[])
 
+      const accountRows = parseAccounts(rowTexts)
       const acct = findAccountBalance(accountRows, options.numero_compte)
       if (!acct) {
         return {
@@ -410,57 +398,39 @@ export async function loginAndScrapeMcb(
       await txTab.click({ timeout: 4000 }).catch(() => {})
       await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
 
-      // Extraction header-mappée du tableau des transactions, sur plusieurs
-      // pages (« Load more » / pagination). Colonnes réelles MCB : Transaction
-      // date | Value date | Reference | Description | Amount | Balance. Le parse
-      // (dates « 20 Aug 2026 », montants signés, solde courant) est délégué au
-      // module testé transactions-parse (Node), pas fait dans le navigateur.
+      // Extraction des transactions, agnostique à la structure (table OU grille
+      // de <div> Backbase), sur plusieurs pages (« Load more » / pagination). On
+      // collecte les textes de lignes candidats (une date + un montant, peu de
+      // montants → pas le conteneur global) et on délègue le parse au module
+      // testé (dates « 20 Aug 2026 », montants signés, référence FT…, solde).
       const maxN = options.max_transactions ?? 30
-      const rawRows: RawTransactionRow[] = []
+      const allRowTexts: string[] = []
       const seenRowKeys = new Set<string>()
-      for (let pageIdx = 0; pageIdx < 8 && rawRows.length < maxN; pageIdx++) {
-        const pageRows = await page.evaluate(() => {
-          const norm = (s: string | null | undefined) => (s || '').replace(/\s+/g, ' ').trim()
-          const low = (s: string) => s.toLowerCase()
-          const tables = Array.from(document.querySelectorAll('table'))
-          for (const table of tables) {
-            const headers = Array.from(table.querySelectorAll('thead th, thead td')).map((h) => low(norm(h.textContent)))
-            const idxTxDate = headers.findIndex((h) => h.includes('transaction date') || h === 'date' || (h.includes('date') && !h.includes('value')))
-            const idxAmount = headers.findIndex((h) => h.includes('amount') || h.includes('montant'))
-            if (idxTxDate === -1 || idxAmount === -1) continue
-            const idxValDate = headers.findIndex((h) => h.includes('value date') || h.includes('date de valeur'))
-            const idxRef = headers.findIndex((h) => h.includes('reference') || h.includes('référence') || h === 'ref')
-            const idxDesc = headers.findIndex((h) => h.includes('description') || h.includes('libell') || h.includes('narrative'))
-            const idxBal = headers.findIndex((h) => h.includes('balance') || h.includes('solde'))
-            const out: Array<Record<string, string>> = []
-            for (const tr of Array.from(table.querySelectorAll('tbody tr'))) {
-              const cells = Array.from(tr.querySelectorAll('td')).map((td) => norm(td.textContent))
-              if (cells.length <= idxAmount) continue
-              const at = (i: number) => (i >= 0 && i < cells.length ? cells[i] : '')
-              out.push({
-                transactionDate: at(idxTxDate),
-                valueDate: at(idxValDate),
-                reference: at(idxRef),
-                description: at(idxDesc),
-                amount: at(idxAmount),
-                balance: at(idxBal),
-              })
-            }
-            if (out.length) return out
+      for (let pageIdx = 0; pageIdx < 8 && allRowTexts.length < maxN * 2; pageIdx++) {
+        const pageTexts: string[] = await page.evaluate(() => {
+          const out: string[] = []
+          const els = Array.from(document.querySelectorAll('tr, li, [role="row"], [role="listitem"], div, a'))
+          for (const el of els) {
+            const t = ((el as HTMLElement).innerText || '').replace(/\s+/g, ' ').trim()
+            if (!t || t.length < 12 || t.length > 400) continue
+            const hasDate = /\d{1,2}[\s/\-.][A-Za-z]{3,}[\s/\-.]\d{2,4}|\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}/.test(t)
+            const monies = t.match(/-?\d[\d,]*\.\d{2}/g) || []
+            // Ligne = 1 date + 1 à 3 montants (amount [+ balance]) ; > 3 montants
+            // = conteneur multi-lignes → on écarte pour ne pas tout agréger.
+            if (hasDate && monies.length >= 1 && monies.length <= 3) out.push(t)
           }
-          return [] as Array<Record<string, string>>
-        }).catch(() => [] as Array<Record<string, string>>)
+          return out
+        }).catch(() => [] as string[])
 
         let added = 0
-        for (const r of pageRows) {
-          const key = `${r.reference}|${r.transactionDate}|${r.amount}|${r.balance}`
-          if (seenRowKeys.has(key)) continue
-          seenRowKeys.add(key)
-          rawRows.push(r as RawTransactionRow)
+        for (const t of pageTexts) {
+          if (seenRowKeys.has(t)) continue
+          seenRowKeys.add(t)
+          allRowTexts.push(t)
           added++
         }
 
-        if (rawRows.length >= maxN || added === 0) break
+        if (allRowTexts.length >= maxN * 2 || added === 0) break
 
         // Page suivante : bouton « Load more » / « Next » / chevron de pagination.
         const nextBtn = page.getByRole('button', { name: /load more|show more|next|suivant|voir plus|plus/i }).first()
@@ -470,7 +440,7 @@ export async function loginAndScrapeMcb(
         await page.waitForTimeout(600)
       }
 
-      const parsed = parseTransactions(rawRows).slice(0, maxN)
+      const parsed = parseTransactionsFromTexts(allRowTexts).slice(0, maxN)
       const balanceBreaks = findBalanceBreaks(parsed)
       const transactions: ScrapedTransaction[] = parsed.map((t) => ({
         date: t.date,
@@ -630,35 +600,37 @@ async function downloadMcbStatements(
     .click({ timeout: 3000 }).catch(() => {})
   await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {})
 
-  // 2) Extraire le tableau des relevés (header-mappé) + href de téléchargement.
+  // 2) Extraire les relevés — agnostique à la structure (table OU grille de
+  //    <div> Backbase). Ligne candidate = contient une date de génération et le
+  //    mot « statement » (ou « relevé »), avec éventuellement un href PDF. Le
+  //    parse (date → période) est délégué au module testé parseStatements.
   const rawRows: RawStatementRow[] = await page.evaluate(() => {
     const norm = (s: string | null | undefined) => (s || '').replace(/\s+/g, ' ').trim()
-    const low = (s: string) => s.toLowerCase()
-    const tables = Array.from(document.querySelectorAll('table'))
-    for (const table of tables) {
-      const headers = Array.from(table.querySelectorAll('thead th, thead td')).map((h) => low(norm(h.textContent)))
-      const idxDate = headers.findIndex((h) => h.includes('date generated') || h.includes('date') || h.includes('generated'))
-      const idxType = headers.findIndex((h) => h.includes('document type') || h.includes('type'))
-      if (idxDate === -1) continue
-      const idxName = headers.findIndex((h) => h.includes('filename') || h.includes('nom') || h.includes('name'))
-      const out: Array<Record<string, string>> = []
-      for (const tr of Array.from(table.querySelectorAll('tbody tr'))) {
-        const cells = Array.from(tr.querySelectorAll('td')).map((td) => norm(td.textContent))
-        if (cells.length <= idxDate) continue
-        const at = (i: number) => (i >= 0 && i < cells.length ? cells[i] : '')
-        // Lien de téléchargement : <a href> dans la ligne (icône download).
-        const anchors = Array.from(tr.querySelectorAll('a[href]')) as HTMLAnchorElement[]
-        const dl = anchors.map((a) => a.href).find((h) => /\.pdf|download|statement|document/i.test(h)) || ''
-        out.push({
-          dateGenerated: at(idxDate),
-          docType: at(idxType),
-          filename: at(idxName),
-          downloadHref: dl,
-        })
-      }
-      if (out.length) return out
+    const dateRe = /\d{1,2}[\s/\-.][A-Za-z]{3,}[\s/\-.]\d{2,4}/
+    const out: Array<Record<string, string>> = []
+    const seen = new Set<string>()
+    const els = Array.from(document.querySelectorAll('tr, li, [role="row"], [role="listitem"], div'))
+    for (const el of els) {
+      const t = norm((el as HTMLElement).innerText)
+      if (!t || t.length > 240) continue
+      const dm = t.match(dateRe)
+      if (!dm) continue
+      if (!/statement|relev|advice|report|document/i.test(t)) continue
+      // Une seule date par ligne (sinon conteneur multi-relevés).
+      if ((t.match(new RegExp(dateRe.source, 'g')) || []).length !== 1) continue
+      const key = dm[0] + '|' + t.slice(0, 60)
+      if (seen.has(key)) continue
+      seen.add(key)
+      const anchors = Array.from(el.querySelectorAll('a[href]')) as HTMLAnchorElement[]
+      const dl = anchors.map((a) => a.href).find((h) => /\.pdf|download|statement|document/i.test(h)) || ''
+      out.push({
+        dateGenerated: dm[0],
+        docType: /statement|relev/i.test(t) ? 'Current account statement' : t.replace(dm[0], '').trim().slice(0, 40),
+        filename: t.replace(dm[0], '').trim().slice(0, 60),
+        downloadHref: dl,
+      })
     }
-    return []
+    return out
   }).catch(() => [] as RawStatementRow[])
 
   const statements = parseStatements(rawRows).slice(0, maxN)
