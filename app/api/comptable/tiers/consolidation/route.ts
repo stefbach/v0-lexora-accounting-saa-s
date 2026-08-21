@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -57,6 +58,16 @@ export async function GET(request: Request) {
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
     const supabase = getAdminClient()
+
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) {
+        return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+      }
+      throw err
+    }
 
     // Collecter tous les tiers utilises
     const [{ data: factures }, { data: ccas }] = await Promise.all([
@@ -186,6 +197,17 @@ export async function POST(request: Request) {
     }
 
     const supabase = getAdminClient()
+
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) {
+        return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+      }
+      throw err
+    }
+
     const toReplace = variants.filter(v => v && v !== canonical_name)
     if (toReplace.length === 0) {
       return NextResponse.json({ success: true, message: 'Aucune variante a consolider' })

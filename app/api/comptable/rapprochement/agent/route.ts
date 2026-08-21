@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 import Anthropic from '@anthropic-ai/sdk'
 import { createEcrituresForPayment } from '@/lib/accounting/ecritures-factures'
 import { getTauxForDate } from '@/lib/taux-change'
@@ -757,13 +758,37 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { messages = [], societe_id, direct_action } = body
 
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à la
+    // société ciblée avant toute exécution d'outil (client service-role).
+    const assertAccess = async (societeId: string | null | undefined) => {
+      if (!societeId) return null
+      try {
+        await assertSocieteAccess(supabase, user.id, societeId)
+        return null
+      } catch (err) {
+        if (err instanceof SocieteAccessError) {
+          return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+        }
+        throw err
+      }
+    }
+
     // Direct action mode: apply a proposal without going through Claude
     if (direct_action) {
+      const actionSocieteId = direct_action?.input?.societe_id
+      if (!actionSocieteId) {
+        return NextResponse.json({ error: 'direct_action.input.societe_id requis' }, { status: 400 })
+      }
+      const denied = await assertAccess(actionSocieteId)
+      if (denied) return denied
       const result = await executeTool(direct_action.tool, direct_action.input, supabase)
       return NextResponse.json({ result })
     }
 
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+
+    const deniedSociete = await assertAccess(societe_id)
+    if (deniedSociete) return deniedSociete
 
     if (!process.env.ANTHROPIC_API_KEY) {
       return NextResponse.json({
@@ -1077,7 +1102,10 @@ Réponds en français, professionnel, concis.`
 
       for (const toolUse of toolUses) {
         try {
-          const result = await executeTool(toolUse.name, toolUse.input, supabase)
+          // IDOR guard : épingler les tool calls sur la société validée
+          // (empêche un prompt-injecté de viser une autre société).
+          const pinnedInput = { ...(toolUse.input as Record<string, unknown>), societe_id }
+          const result = await executeTool(toolUse.name, pinnedInput, supabase)
           toolCalls.push({ name: toolUse.name, input: toolUse.input, result })
           // Truncate large tool results to avoid blowing the context window
           let resultStr = JSON.stringify(result)

@@ -17,7 +17,7 @@ import {
   Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
   CalendarDays, FilePlus2, SlidersHorizontal, Menu, X, FilePen, UserCircle,
   Sparkles, Package, Send, Repeat, MessageCircle, Mail, Inbox, KeyRound, ArrowRightLeft,
-  TrendingUp, FolderKanban, ShieldCheck
+  TrendingUp, FolderKanban, ShieldCheck, ShoppingCart, Factory, Briefcase
 } from "lucide-react"
 
 /* ------------------------------------------------------------------ */
@@ -131,6 +131,16 @@ const MENU: MenuSection[] = [
       { href: "/client/plan-comptable", label: "Plan Comptable", labelKey: "comp.client_sidebar.chart_accounts", icon: BookOpen },
       { href: "/client/salaires-compta", label: "Salaires", labelKey: "comp.client_sidebar.salaries", icon: CreditCard },
       { href: "/client/compte-courant", label: "Comptes Courants Associés", labelKey: "acc.current_accounts", icon: Users },
+    ]
+  },
+  {
+    section: "Opérations",
+    requiredModule: "comptabilite",
+    items: [
+      { href: "/client/inventaire", label: "Inventaire & Stock", icon: Package },
+      { href: "/client/pos", label: "Point de vente", icon: ShoppingCart },
+      { href: "/client/manufacturing", label: "Production", icon: Factory },
+      { href: "/client/jobs", label: "Affaires & Chantiers", icon: Briefcase },
     ]
   },
   {

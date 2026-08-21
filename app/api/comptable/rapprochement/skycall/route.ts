@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { apiError } from '@/lib/api-error'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +33,14 @@ export async function GET(request: Request) {
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
     const supabase = getAdminClient()
+
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) return apiError('access_denied_company', 403)
+      throw err
+    }
 
     // Factures SKYCALL de l'année
     const { data: factures } = await supabase

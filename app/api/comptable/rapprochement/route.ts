@@ -22,6 +22,7 @@ import { classifyTransaction, detectDirector, getComplianceSeverity, type Classi
 import { checkPeriodLock } from '@/lib/accounting/period-lock'
 import { resolveInterSocieteForTransaction, COMPTE_GROUPE_451 } from '@/lib/comptable/inter-societes'
 import { userHasAccessToSociete } from '@/lib/rh/access'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 // V3-22 — helpers de lettrage extraits (voir docstring du module).
 import {
   CLASSE_COMPTES,
@@ -182,6 +183,14 @@ export async function GET(request: Request) {
     const date_fin   = searchParams.get('date_fin')   || null  // ex: 2024-07-31
 
     const supabase = getAdminClient()
+
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) return apiError('access_denied_company', 403)
+      throw err
+    }
 
     // 1. Rapprochements existants
     const { data: rapprochements } = await supabase
