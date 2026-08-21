@@ -28,6 +28,7 @@ import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createSupabase } from '@supabase/supabase-js'
 import { createEcrituresReglementTiers } from '@/lib/accounting/reglement-tiers'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,6 +61,14 @@ export async function POST(request: Request) {
     }
 
     const supabase = getAdminClient()
+
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) return apiError('access_denied_company', 403)
+      throw err
+    }
 
     // 1. Charger le compte tiers (whitelist) et vérifier qu'il est actif
     const { data: compteTiers, error: ctErr } = await supabase

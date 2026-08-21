@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 import { NextRequest, NextResponse } from 'next/server'
 
 function getAdminClient() {
@@ -41,6 +42,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
     }
 
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, authUser.id, societeId)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) {
+        return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+      }
+      throw err
+    }
+
     const { data, error } = await supabase
       .from('affectations_comptables')
       .select('*')
@@ -63,12 +74,30 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { action } = body
 
+    // Multi-tenant guard (IDOR) : toute action portant sur une société
+    // exige que l'utilisateur y ait accès.
+    const assertAccess = async (societeId: string | null | undefined) => {
+      if (!societeId) return null
+      try {
+        await assertSocieteAccess(supabase, authUser.id, societeId)
+        return null
+      } catch (err) {
+        if (err instanceof SocieteAccessError) {
+          return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+        }
+        throw err
+      }
+    }
+
     // ── CHERCHER: find matching affectation for a fournisseur name ──
     if (action === 'chercher') {
       const { societe_id, fournisseur } = body
       if (!societe_id || !fournisseur) {
         return NextResponse.json({ error: 'societe_id et fournisseur requis' }, { status: 400 })
       }
+
+      const denied = await assertAccess(societe_id)
+      if (denied) return denied
 
       const normalized = normalizeFournisseur(fournisseur)
 
@@ -119,6 +148,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'societe_id, fournisseur et compte requis' }, { status: 400 })
       }
 
+      const denied = await assertAccess(societe_id)
+      if (denied) return denied
+
       const normalized = normalizeFournisseur(fournisseur)
       const patterns = Array.isArray(fournisseur_patterns)
         ? fournisseur_patterns.map((p: string) => p.toUpperCase().trim()).filter(Boolean)
@@ -149,6 +181,12 @@ export async function POST(request: NextRequest) {
     if (action === 'supprimer') {
       const { id } = body
       if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
+
+      // Résoudre la société de l'affectation ciblée puis appliquer le guard
+      const { data: existing } = await supabase
+        .from('affectations_comptables').select('societe_id').eq('id', id).maybeSingle()
+      const denied = await assertAccess(existing?.societe_id)
+      if (denied) return denied
 
       const { error } = await supabase
         .from('affectations_comptables')

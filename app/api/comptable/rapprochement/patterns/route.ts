@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { apiError } from '@/lib/api-error'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 import { normalize, tiersScore } from '@/lib/accounting/matching-engine'
 
 export const dynamic = 'force-dynamic'
@@ -26,6 +27,15 @@ export async function GET(request: Request) {
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
     const supabase = getAdminClient()
+
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) return apiError('access_denied_company', 403)
+      throw err
+    }
+
     const { data: patterns, error } = await supabase
       .from('rapprochement_patterns')
       .select('*')
@@ -51,6 +61,19 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { action } = body
 
+    // Multi-tenant guard (IDOR) : toute action portant sur une société
+    // exige que l'utilisateur y ait accès.
+    const assertAccess = async (societeId: string | null | undefined) => {
+      if (!societeId) return null
+      try {
+        await assertSocieteAccess(supabase, user.id, societeId)
+        return null
+      } catch (err) {
+        if (err instanceof SocieteAccessError) return apiError('access_denied_company', 403)
+        throw err
+      }
+    }
+
     // ── action: learn ──
     if (action === 'learn') {
       const {
@@ -69,6 +92,9 @@ export async function POST(request: Request) {
       if (!societe_id || !tiers_banque || !type_cible) {
         return NextResponse.json({ error: 'societe_id, tiers_banque, type_cible requis' }, { status: 400 })
       }
+
+      const denied = await assertAccess(societe_id)
+      if (denied) return denied
 
       const normalizedTiers = normalize(tiers_banque)
 
@@ -134,6 +160,11 @@ export async function POST(request: Request) {
       const { pattern_id } = body
       if (!pattern_id) return NextResponse.json({ error: 'pattern_id requis' }, { status: 400 })
 
+      const { data: existingPattern } = await supabase
+        .from('rapprochement_patterns').select('societe_id').eq('id', pattern_id).maybeSingle()
+      const denied = await assertAccess(existingPattern?.societe_id)
+      if (denied) return denied
+
       const { error } = await supabase
         .from('rapprochement_patterns')
         .delete()
@@ -147,6 +178,9 @@ export async function POST(request: Request) {
     if (action === 'apply') {
       const { societe_id } = body
       if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+
+      const denied = await assertAccess(societe_id)
+      if (denied) return denied
 
       // Load patterns
       const { data: patterns } = await supabase

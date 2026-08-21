@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,6 +60,16 @@ export async function GET(request: Request) {
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
     const supabase = getAdminClient()
+
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) {
+        return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+      }
+      throw err
+    }
 
     // Get all comptes courants for this societe
     const { data: comptes, error: comptesErr } = await supabase
@@ -145,10 +156,28 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { action } = body
 
+    // Multi-tenant guard (IDOR) : toute action portant sur une société
+    // exige que l'utilisateur y ait accès.
+    const assertAccess = async (societeId: string | null | undefined) => {
+      if (!societeId) return null
+      try {
+        await assertSocieteAccess(supabase, user.id, societeId)
+        return null
+      } catch (err) {
+        if (err instanceof SocieteAccessError) {
+          return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+        }
+        throw err
+      }
+    }
+
     // === CREER COMPTE ===
     if (action === 'creer_compte') {
       const { societe_id, nom, type = 'associe' } = body
       if (!societe_id || !nom) return NextResponse.json({ error: 'societe_id et nom requis' }, { status: 400 })
+
+      const denied = await assertAccess(societe_id)
+      if (denied) return denied
 
       const { data, error } = await supabase
         .from('comptes_courants_associes')
@@ -166,6 +195,9 @@ export async function POST(request: Request) {
       if (!societe_id || !compte_courant_id || !montant) {
         return NextResponse.json({ error: 'societe_id, compte_courant_id et montant requis' }, { status: 400 })
       }
+
+      const denied = await assertAccess(societe_id)
+      if (denied) return denied
 
       const dateMvt = date_mouvement || new Date().toISOString().split('T')[0]
       const montantNum = Math.abs(Number(montant))
@@ -278,6 +310,9 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'societe_id, compte_courant_id et montant requis' }, { status: 400 })
       }
 
+      const denied = await assertAccess(societe_id)
+      if (denied) return denied
+
       const dateMvt = date_mouvement || new Date().toISOString().split('T')[0]
       const montantNum = Math.abs(Number(montant))
 
@@ -374,6 +409,12 @@ export async function POST(request: Request) {
       if (!avance_id || !remboursement_id) {
         return NextResponse.json({ error: 'avance_id et remboursement_id requis' }, { status: 400 })
       }
+
+      // Résoudre la société via le mouvement d'avance et appliquer le guard
+      const { data: avanceMvt } = await supabase.from('mouvements_compte_courant')
+        .select('societe_id').eq('id', avance_id).maybeSingle()
+      const denied = await assertAccess(avanceMvt?.societe_id)
+      if (denied) return denied
 
       const lettreCode = `CCA${String(Date.now()).slice(-4)}`
 

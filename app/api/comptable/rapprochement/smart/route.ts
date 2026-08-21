@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 import { analyzeAllTransactions, MatchingTransaction, MatchingFacture, MatchProposal, HistoricalPattern, tiersScore } from '@/lib/accounting/matching-engine'
 import { getTauxChange } from '@/lib/taux-change'
 
@@ -158,6 +159,16 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { societe_id, date_debut, date_fin } = body
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+
+    // Multi-tenant guard (IDOR) : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) {
+        return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+      }
+      throw err
+    }
 
     const start = Date.now()
 
