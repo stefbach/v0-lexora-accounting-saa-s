@@ -6,17 +6,21 @@
  *  2. Download `https://api.telegram.org/file/bot<TOKEN>/<file_path>` → ArrayBuffer
  *  3. Résout `dossier_id` (premier dossier de la société active)
  *  4. Upload vers Supabase storage bucket `documents`
- *  5. INSERT documents (statut='en_attente') — picked up par la pipeline OCR existante
+ *  5. INSERT documents (statut='en_attente')
  *  6. Audit telegram_actions (intent='document.ingest')
+ *  7. Enqueue dans `document_processing_queue` (source='telegram') + kick
+ *     `after()` — le traitement OCR/catégorisation tourne de façon
+ *     asynchrone (cf. lib/documents/queue.ts), le webhook Telegram répond
+ *     donc en <1s au lieu d'attendre l'OCR complet. Le résultat (succès ou
+ *     échec) est renvoyé au chat_id d'origine par le worker une fois le
+ *     job terminé.
  *
  * Limitations :
  *  - 20 Mo max côté Telegram bot API (cf. doc Telegram)
  *  - Types acceptés : pdf, jpeg, png, xlsx
- *  - Le statut reste 'en_attente' jusqu'à ce qu'un worker/cron lance le retraitement
- *    (cf. /api/documents/[id]/reanalyze pour le déclenchement manuel)
  */
 import { getAdminClient } from '@/lib/supabase/admin'
-import { after } from 'next/server'
+import { enqueueDocumentProcessing } from '@/lib/documents/queue'
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || ''
 const MAX_SIZE_BYTES = 20 * 1024 * 1024
@@ -155,40 +159,18 @@ export async function ingestTelegramDocument(args: {
     status: 'success',
   })
 
-  // 7. Déclenche le pipeline OCR canonique (/api/documents/process) en
-  //    synchrone. Le webhook Telegram a maxDuration=60s, l'OCR prend 10-30s,
-  //    donc on peut attendre sans problème de timeout. Le mode synchrone
-  //    permet aussi de remonter l'erreur côté webhook (loggable et debug).
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.LEXORA_BASE_URL || ''
-  const internalToken = process.env.INTERNAL_API_TOKEN || ''
-  let ocrResult: any = null
-  if (baseUrl && internalToken) {
-    try {
-      const res = await fetch(`${baseUrl}/api/documents/process`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Internal-Token': internalToken },
-        body: JSON.stringify({
-          document_id: doc.id,
-          storage_path: storagePath,
-          nom_fichier: inferredName,
-        }),
-      })
-      const text = await res.text()
-      try {
-        ocrResult = JSON.parse(text)
-      } catch {
-        ocrResult = { success: false, error: `Non-JSON ${res.status}: ${text.slice(0, 300)}` }
-      }
-      if (!res.ok && !ocrResult?.error) {
-        ocrResult = { success: false, error: `HTTP ${res.status}` }
-      }
-      if (!ocrResult?.success && ocrResult?.error) {
-        console.error('[document-ingest] /api/documents/process failed:', ocrResult.error)
-      }
-    } catch (e: any) {
-      ocrResult = { success: false, error: e?.message || String(e) }
-      console.error('[document-ingest] /api/documents/process exception:', ocrResult.error)
-    }
+  // 7. Enqueue asynchrone — le traitement OCR réel tourne en dehors de cette
+  //    requête (kick after() + cron de secours). On ne bloque plus le
+  //    webhook Telegram sur l'appel Claude (10-60s). Le payload transporte
+  //    chat_id pour que le worker puisse répondre dans le bon fil Telegram
+  //    une fois le job terminé (cf. lib/documents/queue.ts → notifyTelegram).
+  const enqueueResult = await enqueueDocumentProcessing({
+    documentId: doc.id,
+    source: 'telegram',
+    payload: { chat_id: args.chat_id },
+  })
+  if (!enqueueResult.ok) {
+    console.error('[document-ingest] enqueueDocumentProcessing failed:', enqueueResult.error)
   }
 
   return {
@@ -197,6 +179,6 @@ export async function ingestTelegramDocument(args: {
     nom_fichier: inferredName,
     type_fichier: typeFichier,
     taille: fileSize,
-    ocr: ocrResult,
+    ocr: null,
   }
 }

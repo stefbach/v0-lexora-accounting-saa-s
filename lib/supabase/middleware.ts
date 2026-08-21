@@ -111,6 +111,7 @@ export async function updateSession(request: NextRequest) {
     '/api/telegram/system-prompt',
     // Routes accessibles via X-Internal-Token (auth gérée dans la route elle-même)
     '/api/documents/process',
+    '/api/documents/queue/process',
     '/api/client/factures-ia/generer',
     '/api/client/factures',
   ]
