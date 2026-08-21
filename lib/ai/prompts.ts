@@ -49,6 +49,12 @@ export interface EcritureComptable {
   montant_ttc: number
   libelle: string
   reference_piece: string
+  // Désambiguïsation du choix de compte — renseigné uniquement quand
+  // compte_debit est un compte de charge (classe 6). Voir la section
+  // "RÈGLE DE DERNIER RECOURS — COMPTE 6280" du prompt facture fournisseur.
+  compte_confidence?: number
+  compte_justification?: string
+  compte_alternative?: string | null
 }
 
 export interface FactureFournisseurResult {
@@ -64,6 +70,13 @@ export interface FactureFournisseurResult {
   categorie: string
   ecritures: EcritureComptable[]
   alerte: string | null
+  // Fiscalisation MRA (IRN / QR code EBS)
+  irn_fiscalisation?: string | null
+  fiscalisation_date?: string | null
+  mra_status?: string | null
+  // TDS — retenue à la source détectée sur la facture
+  tds_montant?: number | null
+  tds_pct?: number | null
 }
 
 export interface FactureClientResult {
@@ -230,19 +243,62 @@ Pour identifier laquelle :
 
 ═══ PLAN COMPTABLE — sous-comptes (4 digits + tiers) ═══
 
-CHARGES (classe 6) — toujours en DÉBIT :
+CHARGES (classe 6) — toujours en DÉBIT. Liste étendue pour limiter le recours au compte générique 6280 :
+
+Achats & fournitures :
 - 6011 Achats marchandises · 6022 Pharmacie/fournitures médicales
-- 6060 Fournitures bureau / consommables
-- 6110 Sous-traitance · 6120 Loyer et charges locatives
-- 6160 Assurances
-- 6220 Honoraires (avocats, comptables, consultants)
-- 6230 Publicité / marketing / communication
-- 6240 Transport / déplacements / carburant
-- 6260 Télécommunications (Emtel, Mauritius Telecom, CEB électricité, CWA eau)
-- 6270 Services bancaires / frais bancaires
+- 6021 Fournitures informatiques (hardware, périphériques, câbles, accessoires — PAS le SaaS, voir 651x)
+- 6060 Fournitures bureau / consommables généraux · 6061 Petit équipement / outillage non immobilisable (< seuil immobilisation)
+
+Sous-traitance & locations :
+- 6111 Sous-traitance générale (prestataire externe non-IT, main d'œuvre externalisée)
+- 6112 Sous-traitance IT / développement (freelance dev, agence tech — PAS 6220 honoraires, PAS 6510 SaaS)
+- 6120 Loyer immobilier (bureaux, entrepôt) · 6130 Location mobilière (matériel, véhicule en location simple, hors leasing IFRS 16)
+
+Assurances :
+- 6161 Assurance véhicules · 6162 Assurance RC professionnelle / multirisque / santé collective
+- 6160 Assurance — usage seulement si le type précis n'est pas identifiable dans le document
+
+Honoraires (services intellectuels facturés par un tiers) :
+- 6221 Honoraires comptables / audit / fiscalité
+- 6222 Honoraires juridiques (avocats, notaires)
+- 6223 Honoraires conseil / stratégie / management consulting
+- 6224 Honoraires techniques / IT (consultant technique facturant AU FORFAIT MISSION — si c'est un abonnement récurrent à un outil, voir 651x ; si c'est une prestation de développement suivie, voir 6112)
+- 6220 Honoraires — fallback uniquement si aucune des 4 sous-catégories ci-dessus ne correspond
+
+Marketing & représentation :
+- 6231 Publicité digitale (Google Ads, Meta/Facebook Ads, LinkedIn Ads, boost réseaux sociaux)
+- 6232 Marketing / communication / impression / print / goodies
+- 6233 Frais de représentation / événementiel / repas d'affaires
+
+Transport & déplacement :
+- 6241 Carburant véhicules · 6242 Billets d'avion / train
+- 6243 Hôtel / hébergement professionnel · 6244 Taxi / VTC / parking / péage
+
+Télécom & utilities Maurice (élimine la nécessité de 6280 pour les factures utility) :
+- 6261 Internet / data (Emtel, MT fibre/ADSL)
+- 6262 Téléphonie mobile (Emtel, MT — forfaits, cartes SIM)
+- 6263 Électricité (CEB)
+- 6264 Eau (CWA)
+- 6260 Télécommunications/utilities — fallback uniquement si le sous-type (internet/mobile/électricité/eau) n'est pas identifiable
+
+Frais bancaires :
+- 6270 Frais de tenue de compte / commissions générales
 - 6271 Frais SWIFT / transferts cross-border
-- 6280 Charges diverses gestion courante
-- 6510 SaaS / abonnements logiciels (OpenAI, Vercel, Supabase, AWS, Google Workspace, MS365)
+- 6272 Agios / intérêts débiteurs
+
+Divers structurés (comptes dédiés pour sortir des postes récurrents hors du fourre-tout) :
+- 6290 Cotisations professionnelles / abonnements associations métier / frais FSC-Registrar
+- 6291 Formation du personnel (hors HRDC training levy, qui reste en paie)
+- 6292 Entretien / nettoyage des locaux
+- 6293 Gardiennage / sécurité
+- 6294 Frais postaux et courrier (Mauritius Post, DHL, courrier interne)
+- 6280 Charges diverses gestion courante — VOIR RÈGLE DE DERNIER RECOURS ci-dessous. N'est PAS un compte "par défaut quand on n'est pas sûr" : c'est un compte réservé aux dépenses réellement atypiques et non récurrentes.
+
+SaaS / abonnements logiciels :
+- 6510 SaaS / abonnements logiciels (OpenAI, Anthropic, Vercel, Supabase, AWS, Google Workspace, MS365, Slack, Notion, noms de domaine)
+
+Financier :
 - 6611/6612 Intérêts emprunts / agios
 
 TVA :
@@ -253,10 +309,25 @@ FOURNISSEURS :
 - 401x Fournisseurs (CRÉDIT) — utilise sous-comptes 4011-EMTEL, 4011-MWPROP, etc.
   si liste fournisseurs connue ; sinon générique 4010
 
+═══ RÈGLE DE DERNIER RECOURS — COMPTE 6280 ═══
+
+6280 ne doit être utilisé QUE si TOUTES les conditions suivantes sont vraies :
+1. Tu as explicitement écarté chacune des catégories spécifiques ci-dessus (achats, sous-traitance, location, assurance, honoraires, marketing, transport, télécom/utility, frais bancaires, divers structurés, SaaS) — aucune ne correspond à la nature réelle de la dépense décrite sur le document.
+2. La dépense n'est PAS récurrente/mensuelle typique d'un fournisseur connu (utility, telecom, SaaS) — ces cas ont TOUJOURS un compte dédié ci-dessus, jamais 6280.
+3. Tu ne peux identifier aucun sous-type plus précis même en te basant sur le nom du fournisseur, l'objet de la ligne, ou le contexte du document.
+
+Si tu hésites entre DEUX comptes spécifiques (ex: 6112 sous-traitance IT vs 6224 honoraires techniques) :
+→ choisis le plus probable selon la nature de la relation commerciale (récurrent/suivi = 6112, mission ponctuelle = 6224)
+→ renseigne \`compte_alternative\` avec le second choix
+→ renseigne \`compte_confidence\` < 70
+→ NE bascule PAS sur 6280 par facilité : un compte spécifique incertain est toujours préférable à un compte générique certain, car il reste corrigible en revue humaine sans perdre l'information métier.
+
+Si tu utilises malgré tout 6280 : renseigne obligatoirement \`compte_justification\` expliquant pourquoi aucune catégorie spécifique ne convient, et fixe \`compte_confidence\` ≤ 50 (déclenche automatiquement une revue humaine côté application).
+
 ═══ ÉCRITURE TYPE ═══
 
 Pour une facture fournisseur de 1000 MUR HT + 150 TVA = 1150 TTC :
-  D 6260 Télécommunications    1000.00
+  D 6261 Internet / data       1000.00
   D 4456 TVA déductible         150.00
   C 4011-EMTEL Fournisseur     1150.00
 
@@ -278,7 +349,7 @@ ALORS :
 - montant_ht = montant_ttc / 1.15 (utilities Maurice = TVA 15%)
 - montant_tva = montant_ttc - montant_ht
 - taux_tva = 15, tva_applicable = true
-- compte = 6260 (Telecom/CEB/CWA) ou 6280 (autre utility)
+- compte = choisis le sous-type précis selon l'émetteur : Emtel/MT internet → 6261, Emtel/MT mobile → 6262, CEB → 6263, CWA → 6264. N'utilise 6260 (générique) que si le type exact (internet vs mobile) n'est pas déterminable, et 6280 JAMAIS pour une utility identifiée.
 - IMPORTANT : "Current Charges" peut être 0.00 (paiement précédent reporté) — ne JAMAIS utiliser cette valeur
 
 ═══ TDS — DÉTECTION ═══
@@ -312,8 +383,15 @@ date_echeance :
 ❌ Confondre "Amount Due" avec "Current Charges" sur les statements
 ❌ Confondre "Bill To" (destinataire) avec "From" (émetteur)
 ❌ Mettre montant_ttc négatif sur une facture (les avoirs sont gérés séparément)
+❌ Utiliser 6280 (ou 6260 générique) pour une dépense récurrente identifiable (utility, telecom, SaaS) qui a un compte dédié
+❌ Utiliser 6280 sans renseigner compte_justification et sans baisser compte_confidence ≤ 50
+❌ Choisir 6280 simplement parce qu'aucun compte n'a été relu en détail — la liste ci-dessus doit être parcourue explicitement avant tout repli
 
-RÉPONSE en JSON strict selon le format FactureFournisseurResult avec en plus :
+RÉPONSE en JSON strict selon le format FactureFournisseurResult, avec sur CHAQUE écriture de charge (compte_debit en classe 6) en plus :
+- \`compte_confidence\` (number 0-100) : confiance dans le choix du compte précis (pas la confiance globale du document)
+- \`compte_justification\` (string) : courte justification (1 phrase) du choix, obligatoire si compte ∈ {6220, 6260, 6280}
+- \`compte_alternative\` (string|null) : second compte candidat si hésitation entre deux comptes spécifiques
+Et globalement :
 - \`irn_fiscalisation\` (string|null) si fiscalisée MRA
 - \`tds_montant\` (number|null) si TDS retenue
 - \`tds_pct\` (number|null) si %TDS détecté`
