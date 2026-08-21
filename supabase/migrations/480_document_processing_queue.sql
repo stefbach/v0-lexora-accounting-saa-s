@@ -54,6 +54,13 @@ CREATE INDEX IF NOT EXISTS idx_doc_queue_stale_processing
   ON public.document_processing_queue (locked_at)
   WHERE statut = 'processing';
 
+-- Anti-double-job : au plus un job actif (pending/processing) par document, quel
+-- que soit le point d'entrée (double-clic « Réanalyser », POST + retry, webhook +
+-- cron). Rend l'enqueue idempotent via INSERT ... ON CONFLICT DO NOTHING.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_doc_queue_one_active_per_document
+  ON public.document_processing_queue (document_id)
+  WHERE statut IN ('pending', 'processing');
+
 ALTER TABLE public.document_processing_queue ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS doc_queue_select_by_societe_access ON public.document_processing_queue;
@@ -119,10 +126,24 @@ SET search_path = public
 AS $$
   WITH stale AS (
     UPDATE public.document_processing_queue
-    SET statut = 'pending',
+    -- Un crash dur du worker (kill maxDuration, OOM sur un PDF pathologique)
+    -- laisse le job en 'processing' sans passer par finalizeJob : attempts n'y
+    -- est donc jamais incrémenté. On l'incrémente ICI, sinon un « document
+    -- poison » serait requeué et re-crasherait indéfiniment (coût API en boucle,
+    -- jamais de dead_letter). Au-delà de max_attempts, on l'enterre.
+    SET statut = CASE
+                   WHEN attempts + 1 >= max_attempts THEN 'dead_letter'
+                   ELSE 'pending'
+                 END,
+        attempts = attempts + 1,
         locked_at = NULL,
         locked_by = NULL,
+        last_error = COALESCE(last_error, 'worker stale (crash présumé), requeue automatique'),
         next_attempt_at = now(),
+        finished_at = CASE
+                        WHEN attempts + 1 >= max_attempts THEN now()
+                        ELSE finished_at
+                      END,
         updated_at = now()
     WHERE statut = 'processing'
       AND locked_at < now() - INTERVAL '6 minutes'

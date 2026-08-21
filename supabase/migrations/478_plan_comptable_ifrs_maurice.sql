@@ -70,8 +70,20 @@ CREATE INDEX IF NOT EXISTS idx_comptes_ifrs_ancien_code ON public.comptes_ifrs(a
 CREATE INDEX IF NOT EXISTS idx_comptes_ifrs_societe ON public.comptes_ifrs(societe_id);
 
 ALTER TABLE public.comptes_ifrs ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "comptes_ifrs_auth" ON public.comptes_ifrs
-  USING (auth.uid() IS NOT NULL);
+-- Lecture seule pour authenticated (SEC-003) : le template global (societe_id NULL)
+-- est lisible par tout compte authentifié ; une surcharge portant un societe_id
+-- n'est visible que par les membres de cette société via user_has_societe_access.
+-- Aucune policy INSERT/UPDATE/DELETE : le référentiel n'est écrit que par le
+-- service_role (migrations / back-office), jamais depuis un client authentifié —
+-- sinon un tenant pourrait corriger la classification IFRS d'un autre tenant.
+DROP POLICY IF EXISTS "comptes_ifrs_auth" ON public.comptes_ifrs;
+DROP POLICY IF EXISTS "comptes_ifrs_select_by_societe_access" ON public.comptes_ifrs;
+CREATE POLICY "comptes_ifrs_select_by_societe_access" ON public.comptes_ifrs
+  FOR SELECT
+  USING (
+    societe_id IS NULL
+    OR public.user_has_societe_access(societe_id)
+  );
 
 -- ============================================================
 -- 2. Table plan_comptable_migration_map — correspondance PCG -> IFRS
@@ -93,7 +105,15 @@ CREATE TABLE IF NOT EXISTS public.plan_comptable_migration_map (
 );
 
 ALTER TABLE public.plan_comptable_migration_map ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "plan_comptable_migration_map_auth" ON public.plan_comptable_migration_map
+-- Table de correspondance globale (PCG -> IFRS), sans dimension société : lecture
+-- seule pour authenticated, écriture réservée au service_role. Cette table pilotera
+-- une future réécriture de masse de ecritures_comptables_v2.numero_compte — la
+-- laisser modifiable par un client authentifié serait un vecteur de corruption
+-- comptable différée.
+DROP POLICY IF EXISTS "plan_comptable_migration_map_auth" ON public.plan_comptable_migration_map;
+DROP POLICY IF EXISTS "plan_comptable_migration_map_select" ON public.plan_comptable_migration_map;
+CREATE POLICY "plan_comptable_migration_map_select" ON public.plan_comptable_migration_map
+  FOR SELECT
   USING (auth.uid() IS NOT NULL);
 
 -- ============================================================
@@ -230,7 +250,10 @@ ON CONFLICT (ancien_code_pcg) DO NOTHING;
 -- 5. Vue de contrôle — écritures dont le compte PCG n'a pas encore
 --    de mapping IFRS enregistré (à combler avant toute bascule)
 -- ============================================================
-CREATE OR REPLACE VIEW public.v_ecritures_sans_mapping_ifrs AS
+-- security_invoker = true : respecte la RLS tenant de ecritures_comptables_v2
+-- (sinon la vue exposerait la liste des comptes utilisés par tous les tenants).
+CREATE OR REPLACE VIEW public.v_ecritures_sans_mapping_ifrs
+WITH (security_invoker = true) AS
 SELECT DISTINCT e.numero_compte
 FROM public.ecritures_comptables_v2 e
 LEFT JOIN public.plan_comptable_migration_map m ON m.ancien_code_pcg = e.numero_compte

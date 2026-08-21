@@ -37,7 +37,7 @@ const h = vi.hoisted(() => {
   const processReleveBancaire = vi.fn()
   const autoCreateNoteDeFrais = vi.fn()
 
-  const CHAIN_METHODS = ['select', 'insert', 'update', 'delete', 'eq', 'in', 'limit', 'order', 'like']
+  const CHAIN_METHODS = ['select', 'insert', 'update', 'delete', 'eq', 'in', 'is', 'limit', 'order', 'like']
 
   function from(table: string) {
     const call = { table, ops: [] as { method: string; args: any[] }[] }
@@ -582,6 +582,27 @@ describe('processDocument — écritures comptables Claude (charges sociales)', 
     expect(entries[1]).toMatchObject({ numero_compte: '6450', debit_mur: 1250.5, credit_mur: 0 })
     // Pas de facture pour ce type.
     expect(insertsFor('factures')).toHaveLength(0)
+  })
+
+  it('écritures IA déséquilibrées → aucune insertion, document en attente de revue', async () => {
+    claudeReplies({
+      routing: { societe: 'MRA', type_document: 'charges_sociales', confiance_type: 90, format_detecte: 'scan_pdf' },
+      extraction: {
+        confiance_extraction: 90,
+        // Σdébit = 1000, Σcrédit = 900 → déséquilibre de 100.
+        ecritures_comptables: [
+          { compte: '4310', libelle: 'CSG', debit: 0, credit: 900 },
+          { compte: '6450', libelle: 'Charges', debit: 1000, credit: 0 },
+        ],
+      },
+    })
+    const res = await processDocument(PARAMS)
+    expect(res.ok).toBe(true)
+    // Garde-fou R1 : rien n'est inséré au grand livre.
+    expect(insertsFor('ecritures_comptables_v2')).toHaveLength(0)
+    // Le document est basculé en revue manuelle.
+    const revue = updatesFor('documents').some((u) => u?.statut === 'en_attente_revue')
+    expect(revue).toBe(true)
   })
 
   it('dossier sans societe_id → écritures non insérées (garde-fou)', async () => {

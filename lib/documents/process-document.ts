@@ -18,6 +18,7 @@ import { createEcrituresForFacture } from '@/lib/accounting/ecritures-factures'
 import { getTauxChange } from '@/lib/taux-change'
 import { processReleveBancaire } from '@/lib/bank/process-releve'
 import { autoCreateNoteDeFrais } from '@/lib/expenses/auto-create'
+import { isBalanced, balanceDelta, round2 } from '@/lib/money'
 
 // Mapping types canoniques étendus (cf. migration 283).
 const ALLOWED_TYPE_DOCUMENT = new Set([
@@ -577,12 +578,37 @@ ${excelText}`
             numero_piece: extraction.numero_reference || null,
             numero_compte: String(e.compte),
             libelle: e.libelle || nomFichier,
-            debit_mur: Number(e.debit) || 0,
-            credit_mur: Number(e.credit) || 0,
+            debit_mur: round2(e.debit),
+            credit_mur: round2(e.credit),
             piece_justificative: documentId,
           }))
         if (entries.length > 0 && societeId) {
-          await supabase.from('ecritures_comptables_v2').insert(entries)
+          // Garde-fou R1 : ne jamais insérer un lot d'écritures IA déséquilibré
+          // (Claude peut renvoyer des montants qui ne bouclent pas). Un grand
+          // livre déséquilibré est bien plus coûteux à corriger qu'un document
+          // laissé en revue manuelle.
+          const debits = entries.map((e: { debit_mur: number }) => e.debit_mur)
+          const credits = entries.map((e: { credit_mur: number }) => e.credit_mur)
+          if (!isBalanced(debits, credits)) {
+            console.warn(
+              `[process-document] Écritures IA déséquilibrées (écart ${balanceDelta(
+                debits,
+                credits,
+              )}) pour document ${documentId} — insertion annulée, document laissé en revue.`,
+            )
+            await supabase.from('documents').update({ statut: 'en_attente_revue' }).eq('id', documentId)
+          } else {
+            // Idempotence au retry : purge les écritures OD non lettrées déjà
+            // posées pour ce document avant de réinsérer, sinon un échec après
+            // cet insert ferait doubler les écritures au prochain passage du worker.
+            await supabase
+              .from('ecritures_comptables_v2')
+              .delete()
+              .eq('piece_justificative', documentId)
+              .eq('journal', journalMap[typeDoc] || 'OD')
+              .is('lettre', null)
+            await supabase.from('ecritures_comptables_v2').insert(entries)
+          }
         } else if (entries.length > 0 && !societeId) {
           console.warn(`[process-document] Skipping ecritures insert: dossier ${doc.dossier_id} has no societe_id`)
         }

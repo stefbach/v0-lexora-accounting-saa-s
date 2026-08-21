@@ -74,7 +74,12 @@ WHERE m.mapping_sans_ambiguite = TRUE
 -- 3. Vue de lecture — écritures classées IFRS (source unique pour
 --    les futurs rapports SOFP/SOCI). Ne modifie aucune donnée.
 -- ============================================================
-CREATE OR REPLACE VIEW public.v_ecritures_classees_ifrs AS
+-- security_invoker = true : la vue s'exécute avec les droits de l'appelant, donc
+-- les policies RLS tenant de ecritures_comptables_v2 s'appliquent. Sans cette
+-- option, la vue (propriété du rôle postgres) contournerait la RLS et exposerait
+-- les écritures de tous les tenants à tout utilisateur authentifié.
+CREATE OR REPLACE VIEW public.v_ecritures_classees_ifrs
+WITH (security_invoker = true) AS
 SELECT
   e.*,
   pc.categorie_ifrs,
