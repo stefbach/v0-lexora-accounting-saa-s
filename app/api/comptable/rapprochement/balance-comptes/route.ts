@@ -52,6 +52,53 @@ function libForCompte(numero: string): string {
   return ''
 }
 
+// Classification IFRS (migration 478/479) : rattachement ancien code PCM ->
+// poste des etats financiers IFRS, lu depuis plan_comptable.categorie_ifrs.
+// Enrichissement PUREMENT additif — categorie_ifrs est volontairement NULL
+// pour les comptes ambigus (421/431/432 non ventiles) ou non encore classes ;
+// on ne devine jamais, on affiche ce que la migration a rempli.
+type PlanComptableIfrsRow = {
+  compte: string
+  libelle: string | null
+  categorie_ifrs: string | null
+  sous_categorie_ifrs: string | null
+  poste_etat_financier_ifrs: string | null
+  code_interne_ifrs: string | null
+}
+
+async function fetchPlanComptableIfrsMap(
+  supabase: ReturnType<typeof getAdminClient>,
+  societe_id: string
+): Promise<Map<string, PlanComptableIfrsRow>> {
+  const map = new Map<string, PlanComptableIfrsRow>()
+  try {
+    const { data, error } = await supabase
+      .from('plan_comptable')
+      .select('compte, libelle, categorie_ifrs, sous_categorie_ifrs, poste_etat_financier_ifrs, code_interne_ifrs')
+      .or(`societe_id.is.null,societe_id.eq.${societe_id}`)
+    if (error || !data) return map
+    for (const row of data as PlanComptableIfrsRow[]) {
+      map.set(row.compte, row)
+    }
+  } catch {
+    // Best-effort : une erreur de lecture ne doit jamais casser la balance.
+  }
+  return map
+}
+
+function planComptableRowFor(
+  numero: string,
+  planComptableMap: Map<string, PlanComptableIfrsRow>
+): PlanComptableIfrsRow | null {
+  if (!numero) return null
+  if (planComptableMap.has(numero)) return planComptableMap.get(numero)!
+  for (let len = numero.length - 1; len >= 3; len--) {
+    const prefix = numero.substring(0, len)
+    if (planComptableMap.has(prefix)) return planComptableMap.get(prefix)!
+  }
+  return null
+}
+
 /**
  * GET /api/comptable/rapprochement/balance-comptes?societe_id=xxx&mois=YYYY-MM
  *
@@ -71,6 +118,9 @@ export async function GET(request: Request) {
     const societe_id = searchParams.get('societe_id')
     const mois = searchParams.get('mois') // YYYY-MM, optionnel
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(societe_id)) {
+      return NextResponse.json({ error: 'societe_id invalide' }, { status: 400 })
+    }
 
     const supabase = getAdminClient()
 
@@ -95,10 +145,16 @@ export async function GET(request: Request) {
     const { data: ecritures, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+    const planComptableMap = await fetchPlanComptableIfrsMap(supabase, societe_id)
+
     // Agregation par compte
     type CompteRow = {
       compte: string
       libelle: string
+      categorie_ifrs: string | null
+      sous_categorie_ifrs: string | null
+      poste_etat_financier_ifrs: string | null
+      code_interne_ifrs: string | null
       debit_total: number
       credit_total: number
       solde: number
@@ -113,9 +169,14 @@ export async function GET(request: Request) {
       const compte = String(e.numero_compte || '')
       if (!compte) continue
       if (!map[compte]) {
+        const pcRow = planComptableRowFor(compte, planComptableMap)
         map[compte] = {
           compte,
-          libelle: libForCompte(compte),
+          libelle: pcRow?.libelle || libForCompte(compte),
+          categorie_ifrs: pcRow?.categorie_ifrs ?? null,
+          sous_categorie_ifrs: pcRow?.sous_categorie_ifrs ?? null,
+          poste_etat_financier_ifrs: pcRow?.poste_etat_financier_ifrs ?? null,
+          code_interne_ifrs: pcRow?.code_interne_ifrs ?? null,
           debit_total: 0,
           credit_total: 0,
           solde: 0,
