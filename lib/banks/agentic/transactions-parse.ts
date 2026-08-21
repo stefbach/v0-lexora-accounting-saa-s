@@ -139,6 +139,73 @@ export function parseTransactionRow(row: RawTransactionRow): ParsedTransaction |
   }
 }
 
+/** Date de relevé « 20 Aug 2026 » / « 20/08/2026 » repérée dans un texte libre. */
+const DATE_TOKEN_RE = /\d{1,2}[\s/\-.]+[A-Za-zÀ-ÿ]{3,}\.?[\s/\-.]+\d{2,4}|\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}/g
+/**
+ * Montant signé à 2 décimales, séparateur de milliers = virgule uniquement
+ * (locale en-US de MCB : « -58,072.00 », « 800.00 », « (1,234.56) »). On
+ * n'autorise PAS l'espace comme séparateur ici : sinon un suffixe de référence
+ * (« …-288 800.00 ») fusionnerait avec le montant.
+ */
+const AMOUNT_TOKEN_RE = /-?\(?\d{1,3}(?:,\d{3})*\.\d{2}\)?|-?\d+\.\d{2}/g
+/** Référence bancaire type MCB (« FT262327YRQX »). */
+const REFERENCE_TOKEN_RE = /\bFT[A-Z0-9]{5,}\b/
+
+/**
+ * Parse le texte concaténé d'UNE ligne de transaction (agnostique à la
+ * structure : fonctionne que la banque rende un <table> ou une grille de <div>
+ * Backbase). Reconnaît la ligne à son motif : date(s), référence, libellé, puis
+ * montant et solde courant en fin de ligne.
+ *
+ * Ex. « 20 Aug 2026 20 Aug 2026 FT262327YRQX E-Commerce Transaction Fee|... -4.72 14,564.21 »
+ * `null` si la ligne ne porte ni date ni montant (en-tête, total, bruit).
+ */
+export function parseTransactionText(text: string): RawTransactionRow | null {
+  const clean = (text || '').replace(/\s+/g, ' ').trim()
+  if (!clean) return null
+
+  const dates = clean.match(DATE_TOKEN_RE) || []
+  const monies = clean.match(AMOUNT_TOKEN_RE) || []
+  if (dates.length === 0 || monies.length === 0) return null
+
+  // Colonnes MCB : … Amount puis Balance → les deux derniers montants.
+  const balance = monies[monies.length - 1]
+  const amount = monies.length >= 2 ? monies[monies.length - 2] : monies[0]
+
+  const refMatch = clean.match(REFERENCE_TOKEN_RE)
+  const reference = refMatch ? refMatch[0] : undefined
+
+  // Libellé = ce qui sépare la référence (ou la dernière date) du montant.
+  const afterRef = reference
+    ? clean.indexOf(reference) + reference.length
+    : clean.indexOf(dates[dates.length - 1]) + dates[dates.length - 1].length
+  const amountIdx = monies.length >= 2 && amount ? clean.indexOf(amount, afterRef) : clean.length
+  const description = clean.slice(afterRef, amountIdx >= 0 ? amountIdx : clean.length).trim()
+
+  return {
+    transactionDate: dates[0],
+    valueDate: dates[1] || dates[0],
+    reference,
+    description,
+    amount,
+    balance,
+  }
+}
+
+/**
+ * Extrait les mouvements à partir des textes de lignes candidats collectés dans
+ * le DOM (agnostique table/div). Passe par parseTransactionText puis le parse
+ * normalisé habituel.
+ */
+export function parseTransactionsFromTexts(rowTexts: string[]): ParsedTransaction[] {
+  const raws: RawTransactionRow[] = []
+  for (const t of rowTexts || []) {
+    const r = parseTransactionText(t)
+    if (r) raws.push(r)
+  }
+  return parseTransactions(raws)
+}
+
 /**
  * Parse un tableau complet de lignes brutes en mouvements normalisés.
  * Ignore silencieusement les lignes non exploitables. Ordre préservé

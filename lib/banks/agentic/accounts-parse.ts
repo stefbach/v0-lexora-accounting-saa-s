@@ -59,6 +59,70 @@ function toAmount(raw?: string): number | null {
 }
 
 /**
+ * Devises acceptées comme code de compte (ISO 4217 fréquentes à Maurice).
+ * Sert à distinguer la colonne « Ccy » d'un mot de 3 lettres quelconque.
+ */
+const CURRENCY_CODES = new Set([
+  'MUR', 'USD', 'EUR', 'GBP', 'ZAR', 'AUD', 'CAD', 'CHF', 'JPY', 'CNY',
+  'INR', 'AED', 'SGD', 'HKD', 'NZD', 'SEK', 'NOK', 'DKK', 'KES', 'SCR',
+])
+
+/** Numéro de compte : suite de 9 à 18 chiffres (000447954555…). */
+const ACCOUNT_TOKEN_RE = /\b\d{9,18}\b/g
+/** Montant : « 14,564.18 », « -26.72 », « (1,234.56) » (locale en-US, virgule = milliers). */
+const MONEY_TOKEN_RE = /-?\(?\d{1,3}(?:,\d{3})*\.\d{2}\)?|-?\d+\.\d{2}/g
+
+/**
+ * Parse le texte concaténé d'UNE ligne de compte (agnostique à la structure :
+ * fonctionne que la banque rende un <table> ou une grille de <div> Backbase).
+ * Reconnaît le compte à son motif : exactement un numéro de compte, une devise,
+ * et un/deux montants (available puis ledger). `null` si la ligne ne contient
+ * pas exactement un numéro de compte (en-tête, conteneur multi-lignes, bruit).
+ */
+export function parseAccountRowText(text: string): AccountRow | null {
+  const clean = (text || '').replace(/\s+/g, ' ').trim()
+  if (!clean) return null
+
+  const accounts = clean.match(ACCOUNT_TOKEN_RE)
+  if (!accounts || accounts.length !== 1) return null
+  const number = accounts[0]
+
+  const currency = (clean.match(/\b[A-Z]{3}\b/g) || []).find((c) => CURRENCY_CODES.has(c))
+  const monies = clean.match(MONEY_TOKEN_RE) || []
+
+  // Colonnes MCB : Available balance puis Ledger balance → les deux derniers
+  // montants de la ligne. Un seul montant → available uniquement.
+  let available: string | undefined
+  let ledger: string | undefined
+  if (monies.length >= 2) {
+    available = monies[monies.length - 2]
+    ledger = monies[monies.length - 1]
+  } else if (monies.length === 1) {
+    available = monies[0]
+  }
+
+  return { number, currency, available, ledger }
+}
+
+/**
+ * Extrait toutes les lignes de comptes à partir des textes de lignes candidats
+ * collectés dans le DOM (agnostique table/div). Dédoublonne par numéro et
+ * privilégie la ligne la plus riche (celle qui porte les montants).
+ */
+export function parseAccounts(rowTexts: string[]): AccountRow[] {
+  const byNumber = new Map<string, AccountRow>()
+  for (const text of rowTexts || []) {
+    const row = parseAccountRowText(text)
+    if (!row) continue
+    const key = normalizeAccountNumber(row.number)
+    const existing = byNumber.get(key)
+    const richness = (r: AccountRow) => (r.ledger ? 2 : 0) + (r.available ? 1 : 0) + (r.currency ? 1 : 0)
+    if (!existing || richness(row) > richness(existing)) byNumber.set(key, row)
+  }
+  return [...byNumber.values()]
+}
+
+/**
  * Trouve le compte ciblé dans la liste et en extrait le solde.
  * `null` si le compte n'est pas présent. Le solde de rapprochement = ledger si
  * disponible (solde comptable / livre), sinon available.
