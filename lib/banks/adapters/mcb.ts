@@ -31,6 +31,7 @@
 import type { Page } from 'playwright-core'
 import type { BankScrapeResult, ScrapedTransaction } from '../scraper'
 import { captureScreenshot, capturePageDiagnostic } from '../playwright-launcher'
+import { pickBestCompany } from '../agentic/company-match'
 
 export interface McbCredentials {
   username: string                  // User ID MCB
@@ -268,31 +269,39 @@ export async function loginAndScrapeMcb(
         }
       }
 
-      // 2) Localiser la ligne la plus SPÉCIFIQUE (texte le plus court contenant
-      //    tous les mots) et récupérer ses coordonnées, pour un VRAI clic souris
-      //    (el.click() DOM ne déclenche pas le routeur Angular de MCB).
-      const allWords = norm(company).split(' ').filter((w) => w.length > 2)
-      const box = await page.evaluate((words) => {
-        const nrm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
-        const nodes = Array.from(document.querySelectorAll('a, li, [role="button"], [role="listitem"], button, div, span'))
-        let best: Element | null = null
-        let bestLen = Infinity
+      // 2) Collecter TOUS les libellés candidats visibles (lignes de sociétés)
+      //    avec leurs coordonnées, puis laisser le matcher intelligent choisir
+      //    la bonne société — tolérant aux abréviations/troncatures MCB
+      //    (« Digital Data Solutions Ltd » ↔ « DIGITAL DATA SOL LTD »). Le
+      //    rapprochement se fait côté Node (testé), pas dans le navigateur.
+      const candidates = await page.evaluate(() => {
+        const nodes = Array.from(
+          document.querySelectorAll('a, li, [role="button"], [role="listitem"], button, div, span'),
+        )
+        const seen = new Set<string>()
+        const out: { label: string; x: number; y: number }[] = []
         for (const el of nodes) {
           const txt = (el.textContent || '').trim()
-          if (!txt || txt.length > 50) continue
-          // Uniquement les éléments VISIBLES (sinon on matche un nœud caché).
-          const r0 = (el as HTMLElement).getBoundingClientRect()
-          if (r0.width < 2 || r0.height < 2) continue
+          if (!txt || txt.length > 50 || seen.has(txt)) continue
+          const r = (el as HTMLElement).getBoundingClientRect()
+          if (r.width < 2 || r.height < 2) continue
           if ((el as HTMLElement).offsetParent === null && getComputedStyle(el as HTMLElement).position !== 'fixed') continue
-          const n = nrm(txt)
-          const all = words.every((w: string) => n.includes(w))
-          if (all && txt.length < bestLen) { bestLen = txt.length; best = el }
+          seen.add(txt)
+          out.push({ label: txt, x: r.x + r.width / 2, y: r.y + r.height / 2 })
         }
-        if (!best) return null
-        best.scrollIntoView({ block: 'center' })
-        const r = (best as HTMLElement).getBoundingClientRect()
-        return { x: r.x + r.width / 2, y: r.y + r.height / 2, label: (best.textContent || '').trim() }
-      }, allWords).catch(() => null)
+        return out
+      }).catch(() => [] as { label: string; x: number; y: number }[])
+
+      const match = pickBestCompany(company, candidates.map((c) => c.label))
+      const box = match ? candidates[match.index] : null
+      if (box) {
+        await page.evaluate((label) => {
+          const el = Array.from(document.querySelectorAll('*')).find(
+            (n) => (n.textContent || '').trim() === label,
+          )
+          el?.scrollIntoView({ block: 'center' })
+        }, box.label).catch(() => {})
+      }
 
       let clicked: string | null = box?.label || null
       if (box?.label) {
