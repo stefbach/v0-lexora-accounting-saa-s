@@ -29,11 +29,12 @@
  */
 
 import type { Page } from 'playwright-core'
-import type { BankScrapeResult, ScrapedTransaction } from '../scraper'
+import type { BankScrapeResult, ScrapedTransaction, ScrapedStatement } from '../scraper'
 import { captureScreenshot, capturePageDiagnostic } from '../playwright-launcher'
 import { pickBestCompany } from '../agentic/company-match'
 import { findAccountBalance, type AccountRow } from '../agentic/accounts-parse'
 import { parseTransactions, findBalanceBreaks, type RawTransactionRow } from '../agentic/transactions-parse'
+import { parseStatements, type RawStatementRow } from '../agentic/statements-parse'
 
 export interface McbCredentials {
   username: string                  // User ID MCB
@@ -46,6 +47,8 @@ export interface McbAdapterOptions {
   numero_compte: string
   /** Nombre de transactions à récupérer (défaut 30) */
   max_transactions?: number
+  /** Nombre de relevés PDF récents à télécharger par run (défaut 3, 0 = désactivé) */
+  max_statements?: number
   /** URL de connexion (override) ; défaut https://ibank.mcb.mu/ */
   login_url?: string
   /** Nom de la société — pour choisir le bon « context » MCB Pro. */
@@ -479,6 +482,14 @@ export async function loginAndScrapeMcb(
         currency: acct.currency || 'MUR',
       }))
 
+      // ── Relevés PDF (« Documents & statements ») — best-effort, borné ──
+      // Récupère les N relevés récents ; l'ingestion + OCR + dédoublonnage se
+      // font côté scraper.ts via le pipeline documentaire existant. N'échoue
+      // jamais le scrape principal (solde + transactions déjà obtenus).
+      const statements = (options.max_statements ?? 3) > 0
+        ? await downloadMcbStatements(page, options).catch(() => [] as ScrapedStatement[])
+        : []
+
       // Solde toujours retourné ; transactions désormais mappées. Si l'extraction
       // n'a rien donné (tableau non chargé / structure inattendue), on renvoie
       // 'partial' + diagnostic pour ajuster — jamais d'échec silencieux.
@@ -489,6 +500,7 @@ export async function loginAndScrapeMcb(
           balance_devise: acct.currency || 'MUR',
           nb_transactions: transactions.length,
           transactions,
+          statements,
           // Signal d'intégrité : une rupture de suite du solde = extraction
           // probablement incomplète (pagination manquée) ou montant mal lu.
           raw_excerpt: balanceBreaks.length
@@ -501,6 +513,7 @@ export async function loginAndScrapeMcb(
         status: 'partial',
         balance_mur: acct.balance,
         balance_devise: acct.currency || 'MUR',
+        statements,
         error: `Solde lu ✅ (${acct.balance} ${acct.currency || ''}) — le tableau des transactions du compte ${options.numero_compte} n'a pas pu être extrait (0 ligne). Copie le diagnostic (URL + tableau) de la page Transactions pour ajuster.`,
         screenshot_b64: await captureScreenshot(page),
         diagnostic: await capturePageDiagnostic(page),
@@ -585,4 +598,126 @@ export async function loginAndScrapeMcb(
       duration_ms: Date.now() - t0,
     }
   }
+}
+
+/**
+ * Récupère les relevés PDF récents depuis « Documents & statements ».
+ *
+ * Best-effort et borné (max_statements) : navigue vers la section relevés,
+ * extrait le tableau (Date generated / Document type / Filename + lien de
+ * téléchargement) via le parser testé, puis télécharge le PDF de chaque relevé
+ * récent — soit par requête HTTP authentifiée (href direct, session partagée),
+ * soit par capture de l'événement de téléchargement du navigateur. Retourne les
+ * relevés en base64 ; l'ingestion + OCR + dédoublonnage sont faits côté
+ * scraper.ts. Toute erreur → liste vide (ne casse jamais le scrape principal).
+ */
+async function downloadMcbStatements(
+  page: Page,
+  options: McbAdapterOptions,
+): Promise<ScrapedStatement[]> {
+  const maxN = options.max_statements ?? 3
+
+  // 1) Naviguer vers « Documents & statements » (lien de menu / nav latérale).
+  const navLink = page.getByRole('link', { name: /documents\s*&?\s*statements|statements|relev/i })
+    .or(page.getByText(/documents\s*&?\s*statements/i)).first()
+  const navigated = await navLink.click({ timeout: 6000 }).then(() => true).catch(() => false)
+  if (!navigated) return []
+  await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {})
+
+  // S'assurer d'être sur l'onglet « Statements » (vs Advices / Reports).
+  await page.getByRole('tab', { name: /statements/i })
+    .or(page.getByText('Statements', { exact: true })).first()
+    .click({ timeout: 3000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {})
+
+  // 2) Extraire le tableau des relevés (header-mappé) + href de téléchargement.
+  const rawRows: RawStatementRow[] = await page.evaluate(() => {
+    const norm = (s: string | null | undefined) => (s || '').replace(/\s+/g, ' ').trim()
+    const low = (s: string) => s.toLowerCase()
+    const tables = Array.from(document.querySelectorAll('table'))
+    for (const table of tables) {
+      const headers = Array.from(table.querySelectorAll('thead th, thead td')).map((h) => low(norm(h.textContent)))
+      const idxDate = headers.findIndex((h) => h.includes('date generated') || h.includes('date') || h.includes('generated'))
+      const idxType = headers.findIndex((h) => h.includes('document type') || h.includes('type'))
+      if (idxDate === -1) continue
+      const idxName = headers.findIndex((h) => h.includes('filename') || h.includes('nom') || h.includes('name'))
+      const out: Array<Record<string, string>> = []
+      for (const tr of Array.from(table.querySelectorAll('tbody tr'))) {
+        const cells = Array.from(tr.querySelectorAll('td')).map((td) => norm(td.textContent))
+        if (cells.length <= idxDate) continue
+        const at = (i: number) => (i >= 0 && i < cells.length ? cells[i] : '')
+        // Lien de téléchargement : <a href> dans la ligne (icône download).
+        const anchors = Array.from(tr.querySelectorAll('a[href]')) as HTMLAnchorElement[]
+        const dl = anchors.map((a) => a.href).find((h) => /\.pdf|download|statement|document/i.test(h)) || ''
+        out.push({
+          dateGenerated: at(idxDate),
+          docType: at(idxType),
+          filename: at(idxName),
+          downloadHref: dl,
+        })
+      }
+      if (out.length) return out
+    }
+    return []
+  }).catch(() => [] as RawStatementRow[])
+
+  const statements = parseStatements(rawRows).slice(0, maxN)
+  if (statements.length === 0) return []
+
+  const out: ScrapedStatement[] = []
+  for (const s of statements) {
+    let base64: string | null = null
+
+    // Voie 1 : requête HTTP authentifiée (réutilise la session/les cookies).
+    if (s.download_href) {
+      base64 = await page.request.get(s.download_href, { timeout: 20000 })
+        .then(async (resp) => {
+          if (!resp.ok()) return null
+          const ct = (resp.headers()['content-type'] || '').toLowerCase()
+          const buf = Buffer.from(await resp.body())
+          // Valide que c'est bien un PDF (signature %PDF) — évite d'ingérer une
+          // page HTML d'erreur/login renvoyée à la place du fichier.
+          const isPdf = ct.includes('pdf') || buf.slice(0, 5).toString('latin1') === '%PDF-'
+          return isPdf && buf.length > 500 ? buf.toString('base64') : null
+        })
+        .catch(() => null)
+    }
+
+    // Voie 2 : capture de l'événement de téléchargement (clic sur l'icône ↓).
+    if (!base64) {
+      base64 = await (async () => {
+        try {
+          const rowLoc = page.getByText(
+            new RegExp(s.date_generated.replace(/-/g, '.').slice(0, 4)),
+          ).first()
+          const [download] = await Promise.all([
+            page.waitForEvent('download', { timeout: 15000 }),
+            rowLoc.click({ timeout: 5000 }).catch(() => {}),
+          ])
+          const stream = await download.createReadStream().catch(() => null)
+          if (!stream) return null
+          const chunks: Buffer[] = []
+          for await (const chunk of stream) chunks.push(chunk as Buffer)
+          const buf = Buffer.concat(chunks)
+          return buf.length > 500 && buf.slice(0, 5).toString('latin1') === '%PDF-'
+            ? buf.toString('base64')
+            : null
+        } catch {
+          return null
+        }
+      })()
+    }
+
+    if (base64) {
+      out.push({
+        date_generated: s.date_generated,
+        period: s.period,
+        doc_type: s.doc_type,
+        filename: s.filename,
+        pdf_base64: base64,
+      })
+    }
+  }
+
+  return out
 }
