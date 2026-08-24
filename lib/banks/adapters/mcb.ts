@@ -115,6 +115,18 @@ export async function loginAndScrapeMcb(
   page.on('response', onResponse)
   const capturedApiUrls = () => Array.from(new Set(apiResponses.map((r) => r.url))).slice(0, 25)
 
+  // Attend qu'une réponse d'API correspondant au prédicat soit captée (ex. la
+  // page a déclenché son appel transaction-manager). Évite d'extraire avant que
+  // les données ne soient arrivées (cause n°1 des « 0 ligne » en SPA).
+  const waitForApiCapture = async (pred: (url: string) => boolean, timeoutMs: number): Promise<boolean> => {
+    const start = Date.now()
+    while (Date.now() - start < timeoutMs) {
+      if (apiResponses.some((r) => pred(r.url))) return true
+      await page.waitForTimeout(400)
+    }
+    return apiResponses.some((r) => pred(r.url))
+  }
+
   try {
     // ── 1. Navigation page login ──
     // Les URL identity.mcb.mu/…/auth?…&state=…&nonce=…&code_challenge=… sont à
@@ -417,17 +429,31 @@ export async function loginAndScrapeMcb(
       }
 
       // ── Solde lu ✅ — navigation vers les transactions du compte ──
-      // Clic sur la ligne du compte (ouvre le détail → onglet « Transactions »).
-      await page.getByText(options.numero_compte, { exact: false }).first()
-        .click({ timeout: 6000 }).catch(() => {})
-      await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+      // Deux chemins possibles selon MCB : (1) détail du compte à onglets, ou
+      // (2) page « Transactions » GLOBALE qui exige de SÉLECTIONNER le compte
+      // dans un menu déroulant avant de charger les mouvements. On tente les
+      // deux et on ATTEND que l'API transaction-manager réponde (déclenchée par
+      // la sélection) — c'est la vraie source des données, pas le DOM.
 
-      // S'assurer d'être sur l'onglet « Transactions » (le détail de compte
-      // ouvre parfois sur « Balance History » ou « Account info »).
-      const txTab = page.getByRole('tab', { name: /transactions/i })
+      // Tentative 1 : ouvrir le détail du compte (clic sur la ligne) → onglet Transactions.
+      await page.getByText(options.numero_compte, { exact: false }).first()
+        .click({ timeout: 5000 }).catch(() => {})
+      await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {})
+      await page.getByRole('tab', { name: /transactions/i })
         .or(page.getByText('Transactions', { exact: true })).first()
-      await txTab.click({ timeout: 4000 }).catch(() => {})
-      await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+        .click({ timeout: 3000 }).catch(() => {})
+      let gotTxApi = await waitForApiCapture((u) => /transaction/i.test(u), 8000)
+
+      // Tentative 2 : page « Transactions » globale + sélection explicite du compte.
+      if (!gotTxApi) {
+        await page.getByRole('link', { name: /transactions/i })
+          .or(page.getByText('Transactions', { exact: true })).first()
+          .click({ timeout: 4000 }).catch(() => {})
+        await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {})
+        await selectMcbAccount(page, options.numero_compte).catch(() => {})
+        gotTxApi = await waitForApiCapture((u) => /transaction/i.test(u), 10000)
+      }
+      await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {})
 
       // Extraction des transactions, agnostique à la structure (table OU grille
       // de <div> Backbase), sur plusieurs pages (« Load more » / pagination). On
@@ -516,12 +542,19 @@ export async function loginAndScrapeMcb(
           duration_ms: Date.now() - t0,
         }
       }
+      const apiUrls = capturedApiUrls()
       return {
         status: 'partial',
         balance_mur: acct.balance,
         balance_devise: acct.currency || 'MUR',
         statements,
-        error: `Solde lu ✅ (${acct.balance} ${acct.currency || ''}) — le tableau des transactions du compte ${options.numero_compte} n'a pas pu être extrait (0 ligne). Copie le diagnostic (URL + tableau) de la page Transactions pour ajuster.`,
+        error:
+          `Solde lu ✅ (${acct.balance} ${acct.currency || ''}) — transactions non extraites ` +
+          `(0 ligne, ${apiTx.length} via API, ${allRowTexts.length} lignes DOM, sélection compte ${gotTxApi ? 'OK' : 'KO'}). ` +
+          (apiUrls.length
+            ? `API captées : ${apiUrls.join(' | ')}`
+            : `Aucune API transaction captée — copie le diagnostic de la page Transactions.`),
+        raw_excerpt: apiUrls.join('\n'),
         screenshot_b64: await captureScreenshot(page),
         diagnostic: await capturePageDiagnostic(page),
         duration_ms: Date.now() - t0,
@@ -608,6 +641,45 @@ export async function loginAndScrapeMcb(
 }
 
 /**
+ * Sélectionne un compte dans le menu déroulant « Select an account » des pages
+ * globales MCB (Transactions, Documents & statements). Ces pages n'affichent
+ * rien tant qu'aucun compte n'est choisi (« You did not select an account
+ * yet ») — c'est la cause n°1 des « 0 ligne ». Best-effort : ouvre le déroulant,
+ * tape les derniers chiffres du numéro, clique l'option correspondante.
+ * Retourne true si une option a pu être cliquée.
+ */
+async function selectMcbAccount(page: Page, numero: string): Promise<boolean> {
+  const digits = (numero || '').replace(/\D/g, '')
+  if (!digits) return false
+  const last4 = digits.slice(-4)
+
+  // 1) Ouvrir le sélecteur : bouton/combobox « Select an account ».
+  const trigger = page.getByRole('combobox')
+    .or(page.getByText(/select an? account|choisir un compte|select account/i)).first()
+  await trigger.click({ timeout: 4000 }).catch(() => {})
+  await page.waitForTimeout(400)
+
+  // 2) Filtrer via le champ de recherche du déroulant (souvent un input search
+  //    masqué jusqu'à l'ouverture).
+  const search = page.locator(
+    'input[type="search"], input[placeholder*="typing" i], input[placeholder*="Search" i], input[role="combobox"]',
+  ).first()
+  await search.fill(last4).catch(async () => {
+    await search.click({ timeout: 2000 }).catch(() => {})
+    await search.type(last4, { delay: 40 }).catch(() => {})
+  })
+  await page.waitForTimeout(800)
+
+  // 3) Cliquer l'option qui contient le numéro complet ou ses 4 derniers chiffres.
+  const option = page.getByRole('option', { name: new RegExp(digits + '|' + last4) })
+    .or(page.getByText(new RegExp('\\b' + digits + '\\b|' + last4)).last())
+    .first()
+  const clicked = await option.click({ timeout: 4000 }).then(() => true).catch(() => false)
+  await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {})
+  return clicked
+}
+
+/**
  * Récupère les relevés PDF récents depuis « Documents & statements ».
  *
  * Best-effort et borné (max_statements) : navigue vers la section relevés,
@@ -635,6 +707,12 @@ async function downloadMcbStatements(
   const navigated = await navLink.click({ timeout: 6000 }).then(() => true).catch(() => false)
   if (!navigated) return []
   await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {})
+
+  // La page « Documents & statements » est globale et affiche « You did not
+  // select an account yet » tant qu'aucun compte n'est choisi → on sélectionne
+  // le compte cible avant de lister les relevés.
+  await selectMcbAccount(page, options.numero_compte).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {})
 
   // S'assurer d'être sur l'onglet « Statements » (vs Advices / Reports).
   await page.getByRole('tab', { name: /statements/i })
