@@ -516,10 +516,10 @@ export async function loginAndScrapeMcb(
           `matched=${arr ? arr.id : 'AUCUN'}`,
         ]
 
-        // Endpoints/params Backbase à tester (l'appel direct via page.request est
-        // authentifié par les cookies de session mais n'apparaît PAS dans les URLs
-        // captées — d'où l'instrumentation ci-dessous qui remonte statut + taille
-        // + nb de transactions parsées, pour figer l'intégration à coup sûr).
+        // Endpoints/params Backbase à tester. IMPORTANT : l'appel se fait DANS le
+        // contexte de la page (page.evaluate + fetch credentials:'include' + header
+        // XSRF) — page.request donnait 401 car il ne réplique pas l'auth complète
+        // de la session Backbase (cookie session + token XSRF).
         const tryUrls: string[] = []
         if (arr) {
           for (const ver of ['v2', 'v3']) {
@@ -532,17 +532,33 @@ export async function loginAndScrapeMcb(
         tryUrls.push(`${origin}/api/transaction-manager/client-api/v2/transactions?from=0&size=${maxN}`)
 
         for (const url of tryUrls.slice(0, 6)) {
-          const resp = await page.request.get(url, { timeout: 15000 }).catch(() => null)
+          const res = await page.evaluate(async (u: string) => {
+            const cookie = (n: string) => {
+              const m = document.cookie.match(new RegExp('(?:^|; )' + n.replace(/-/g, '\\-') + '=([^;]+)'))
+              return m ? decodeURIComponent(m[1]) : ''
+            }
+            const xsrf = cookie('XSRF-TOKEN') || cookie('XSRF-TOKEN-IB') || cookie('CSRF-TOKEN') || ''
+            try {
+              const r = await fetch(u, {
+                method: 'GET',
+                credentials: 'include',
+                headers: { Accept: 'application/json', ...(xsrf ? { 'X-XSRF-TOKEN': xsrf } : {}) },
+              })
+              const body = await r.text()
+              return { status: r.status, body: body.slice(0, 300000) }
+            } catch {
+              return { status: -1, body: '' }
+            }
+          }, url).catch(() => ({ status: -2, body: '' }))
+
           const tag = url.replace(origin, '').replace(/\?.*$/, '') +
             (url.includes('arrangementsIds') ? '?arrangementsIds' : url.includes('arrangementId') ? '?arrangementId' : '?none')
-          if (!resp) { dbg.push(`${tag}=ERR`); continue }
-          const body = await resp.text().catch(() => '')
           let parsedN = 0
           let rows: ReturnType<typeof findTransactionsInJson> = []
-          if (resp.ok() && body) {
-            try { rows = findTransactionsInJson(JSON.parse(body)); parsedN = rows.length } catch { /* non-JSON */ }
+          if (res.status >= 200 && res.status < 300 && res.body) {
+            try { rows = findTransactionsInJson(JSON.parse(res.body)); parsedN = rows.length } catch { /* non-JSON */ }
           }
-          dbg.push(`${tag}=${resp.status()}/len${body.length}/tx${parsedN}`)
+          dbg.push(`${tag}=${res.status}/len${res.body.length}/tx${parsedN}`)
           if (parsedN > 0) { apiTx = rows; break }
         }
         txApiDebug = dbg.join(' || ')
