@@ -215,6 +215,26 @@ function transactionFromObject(o: Record<string, unknown>): RawTransactionRow | 
   if (!transactionDate && valueDate) transactionDate = valueDate
   if (!transactionDate || amount == null) return null
 
+  // Sens crédit/débit : MCB/Backbase renvoie un montant POSITIF + un indicateur
+  // séparé (creditDebitIndicator = « DBIT »/« CRDT »). Sans ce signe, tous les
+  // mouvements finiraient en crédit. On applique le signe négatif aux débits.
+  if (!/^-/.test(amount.trim())) {
+    let indicator = ''
+    for (const [k, v] of Object.entries(o)) {
+      if (typeof v === 'string' &&
+          /credit.?debit.?ind|debit.?credit.?ind|creditdebit|^indicator$|^direction$|^sens$|creditordebit/i.test(k)) {
+        indicator = v; break
+      }
+    }
+    // Repli : n'importe quelle valeur exactement égale à DBIT/CRDT/DEBIT/CREDIT.
+    if (!indicator) {
+      for (const v of Object.values(o)) {
+        if (typeof v === 'string' && /^(dbit|crdt|debit|credit|dr|cr)$/i.test(v.trim())) { indicator = v; break }
+      }
+    }
+    if (/^(d|dbit|debit|dr|deb)$/i.test(indicator.trim())) amount = '-' + amount.trim()
+  }
+
   return {
     transactionDate,
     valueDate: valueDate || transactionDate,

@@ -102,6 +102,31 @@ describe('findTransactionsInJson — Backbase', () => {
   it('objet sans date ou sans montant → ignoré', () => {
     expect(findTransactionsInJson({ items: [{ description: 'x' }, { amount: '5.00' }] })).toEqual([])
   })
+
+  it('applique le sens débit/crédit (montant positif + creditDebitIndicator)', () => {
+    // Cas réel MCB : montant POSITIF + indicateur séparé. Le débit doit devenir négatif.
+    const payload = {
+      _embedded: {
+        transactions: [
+          { bookingDate: '2026-08-17', reference: 'FT26229L0Z0S', description: 'Bulk Payment', transactionAmount: { amount: '58072.00', currencyCode: 'MUR' }, creditDebitIndicator: 'DBIT', runningBalance: '21791.93' },
+          { bookingDate: '2026-08-20', reference: 'FT26232SQBXT', description: 'Merchant Settlement', transactionAmount: { amount: '800.00', currencyCode: 'MUR' }, creditDebitIndicator: 'CRDT', runningBalance: '14568.93' },
+        ],
+      },
+    }
+    const txs = parseTransactions(findTransactionsInJson(payload))
+    expect(txs[0]).toMatchObject({ amount: -58072, reference: 'FT26229L0Z0S' }) // débit → négatif
+    expect(txs[1]).toMatchObject({ amount: 800, reference: 'FT26232SQBXT' })    // crédit → positif
+  })
+
+  it('détecte l’indicateur par valeur si la clé est atypique', () => {
+    const payload = { data: [{ date: '2026-08-17', amount: '100.00', sens: 'DEBIT' }] }
+    expect(parseTransactions(findTransactionsInJson(payload))[0].amount).toBe(-100)
+  })
+
+  it('un montant déjà signé n’est pas re-signé', () => {
+    const payload = { data: [{ date: '2026-08-17', amount: '-42.00', creditDebitIndicator: 'DBIT' }] }
+    expect(parseTransactions(findTransactionsInJson(payload))[0].amount).toBe(-42)
+  })
 })
 
 describe('findStatementsInJson', () => {
