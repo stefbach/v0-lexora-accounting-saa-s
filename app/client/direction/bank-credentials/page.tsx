@@ -358,14 +358,10 @@ export default function BankCredentialsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-              <div>
-                <div className="text-slate-500">{t('scp.cred_official_balance', locale)}</div>
-                <div className="font-mono">{cb.solde_actuel?.toLocaleString('fr-FR') || '—'} {cb.devise || 'MUR'}</div>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
               <div>
                 <div className="text-slate-500">{t('scp.cred_scraped_balance', locale)}</div>
-                <div className="font-mono">{cb.scraping?.last_balance_mur?.toLocaleString('fr-FR') || '—'} MUR</div>
+                <div className="font-mono">{cb.scraping?.last_balance_mur?.toLocaleString('fr-FR') || '—'} {cb.devise || 'MUR'}</div>
               </div>
               <div>
                 <div className="text-slate-500">{t('scp.cred_last_scrape', locale)}</div>
