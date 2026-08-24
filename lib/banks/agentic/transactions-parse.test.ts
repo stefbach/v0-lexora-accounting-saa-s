@@ -8,6 +8,7 @@ import {
   transactionDedupeKey,
   findBalanceBreaks,
   reconcileAmountsFromBalance,
+  dedupeRawTransactions,
   type RawTransactionRow,
 } from './transactions-parse'
 
@@ -233,5 +234,39 @@ describe('reconcileAmountsFromBalance — récupère le sens débit/crédit via 
       { transactionDate: '01 Aug 2026', amount: '3.00', balance: '999.00' },
     ])
     expect(reconcileAmountsFromBalance(txs).map((t) => t.amount)).toEqual([7, 9, 3])
+  })
+})
+
+describe('dedupeRawTransactions — fusion de pages captées sans doublon', () => {
+  it('déduplique par référence FT… (même mouvement sur 2 pages)', () => {
+    const page1: RawTransactionRow[] = [
+      { transactionDate: '20 Aug 2026', reference: 'FT262327YRQX', amount: '-4.72', description: 'Fee' },
+      { transactionDate: '20 Aug 2026', reference: 'FT26232SQBXT', amount: '800.00', description: 'Settlement' },
+    ]
+    const page2: RawTransactionRow[] = [
+      // chevauchement de page : FT26232SQBXT réapparaît, + un nouveau
+      { transactionDate: '20 Aug 2026', reference: 'FT26232SQBXT', amount: '800.00', description: 'Settlement' },
+      { transactionDate: '17 Aug 2026', reference: 'FT26229L0Z0S', amount: '-58,072.00', description: 'Bulk Payment' },
+    ]
+    const merged = dedupeRawTransactions([...page1, ...page2])
+    expect(merged.map((r) => r.reference)).toEqual(['FT262327YRQX', 'FT26232SQBXT', 'FT26229L0Z0S'])
+  })
+
+  it('sans référence : déduplique par date+montant+libellé', () => {
+    const rows: RawTransactionRow[] = [
+      { transactionDate: '20 Aug 2026', amount: '-4.72', description: 'Card fee' },
+      { transactionDate: '20 Aug 2026', amount: '-4.72', description: 'Card fee' }, // doublon
+      { transactionDate: '20 Aug 2026', amount: '-4.72', description: 'Autre libellé' }, // gardé
+    ]
+    expect(dedupeRawTransactions(rows)).toHaveLength(2)
+  })
+
+  it('préserve l’ordre de première apparition (récent → ancien)', () => {
+    const rows: RawTransactionRow[] = [
+      { transactionDate: '20 Aug 2026', reference: 'FT_A', amount: '1.00' },
+      { transactionDate: '19 Aug 2026', reference: 'FT_B', amount: '2.00' },
+      { transactionDate: '20 Aug 2026', reference: 'FT_A', amount: '1.00' },
+    ]
+    expect(dedupeRawTransactions(rows).map((r) => r.reference)).toEqual(['FT_A', 'FT_B'])
   })
 })

@@ -232,6 +232,40 @@ export function transactionDedupeKey(tx: ParsedTransaction): string {
 }
 
 /**
+ * Clé de dédoublonnage d'une ligne BRUTE (avant parse), pour fusionner plusieurs
+ * pages captées sans doublon : référence bancaire si présente (unique côté
+ * banque), sinon date + montant + début de libellé. Tolérante aux variations
+ * d'espaces/casse.
+ */
+function rawTransactionKey(r: RawTransactionRow): string {
+  const ref = (r.reference || '').trim()
+  if (ref) return `ref:${ref.toUpperCase()}`
+  const d = (r.transactionDate || '').trim()
+  const a = (r.amount || '').replace(/\s/g, '')
+  const desc = (r.description || '').replace(/\s+/g, ' ').trim().slice(0, 40).toLowerCase()
+  return `dmd:${d}|${a}|${desc}`
+}
+
+/**
+ * Fusionne plusieurs lots de lignes brutes (ex. pages successives d'un relevé
+ * paginé, ou API captée + DOM) en supprimant les doublons. Ordre de première
+ * apparition préservé (MCB liste du plus récent au plus ancien → l'ordre reste
+ * exploitable par reconcileAmountsFromBalance et findBalanceBreaks).
+ */
+export function dedupeRawTransactions(rows: RawTransactionRow[]): RawTransactionRow[] {
+  const out: RawTransactionRow[] = []
+  const seen = new Set<string>()
+  for (const r of rows || []) {
+    if (!r) continue
+    const k = rawTransactionKey(r)
+    if (seen.has(k)) continue
+    seen.add(k)
+    out.push(r)
+  }
+  return out
+}
+
+/**
  * Reconstruit le SENS (débit/crédit) — et corrige un éventuel écart de
  * magnitude — de chaque mouvement à partir du solde courant (running balance),
  * seul repère fiable et agnostique à la banque.

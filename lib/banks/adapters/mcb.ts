@@ -33,10 +33,10 @@ import type { BankScrapeResult, ScrapedTransaction, ScrapedStatement } from '../
 import { captureScreenshot, capturePageDiagnostic } from '../playwright-launcher'
 import { pickBestCompany } from '../agentic/company-match'
 import { findAccountBalance, parseAccounts, accountNumbersMatch } from '../agentic/accounts-parse'
-import { parseTransactions, parseTransactionsFromTexts, findBalanceBreaks, reconcileAmountsFromBalance } from '../agentic/transactions-parse'
+import { parseTransactions, parseTransactionsFromTexts, findBalanceBreaks, reconcileAmountsFromBalance, dedupeRawTransactions } from '../agentic/transactions-parse'
 import { parseStatements, selectStatementsForBackfill, type RawStatementRow } from '../agentic/statements-parse'
 import {
-  isBankApiUrl, extractFromCaptured, arrangementsFromCaptured, findTransactionsInJson,
+  isBankApiUrl, extractFromCaptured, transactionsFromCaptured, arrangementsFromCaptured, findTransactionsInJson,
   type CapturedApiResponse,
 } from '../agentic/api-extract'
 
@@ -49,8 +49,13 @@ export interface McbCredentials {
 export interface McbAdapterOptions {
   /** Numéro de compte à scraper (filtre côté UI MCB) */
   numero_compte: string
-  /** Nombre de transactions à récupérer (défaut 30) */
+  /** Nombre de transactions à récupérer (défaut 30) — borne le pull par run ;
+   *  la dédup permet aux runs successifs de compléter sans doublon. */
   max_transactions?: number
+  /** Nombre max de pages « suivant / load more » à parcourir sur la vue
+   *  Transactions (défaut 8) : chaque page déclenche une réponse API captée,
+   *  toutes fusionnées et dédoublonnées. */
+  max_transaction_pages?: number
   /** Plafond de relevés PDF téléchargés par run (défaut 3, 0 = désactivé). Le
    *  vrai frein est le budget temps ci-dessous : ce plafond n'est qu'un garde-fou. */
   max_statements?: number
@@ -482,9 +487,10 @@ export async function loginAndScrapeMcb(
       // montants → pas le conteneur global) et on délègue le parse au module
       // testé (dates « 20 Aug 2026 », montants signés, référence FT…, solde).
       const maxN = options.max_transactions ?? 30
+      const maxPages = options.max_transaction_pages ?? 8
       const allRowTexts: string[] = []
       const seenRowKeys = new Set<string>()
-      for (let pageIdx = 0; pageIdx < 8 && allRowTexts.length < maxN * 2; pageIdx++) {
+      for (let pageIdx = 0; pageIdx < maxPages && allRowTexts.length < maxN * 3; pageIdx++) {
         const pageTexts: string[] = await page.evaluate(() => {
           const out: string[] = []
           const els = Array.from(document.querySelectorAll('tr, li, [role="row"], [role="listitem"], div, a'))
@@ -523,7 +529,11 @@ export async function loginAndScrapeMcb(
       // enumValues du filtre). Puisqu'on connaît l'endpoint (diagnostic) et
       // qu'on a l'arrangementId du compte dans la réponse productsummary captée,
       // on interroge l'API directement avec la session authentifiée (page.request).
-      let apiTx = extractFromCaptured(apiResponses).transactions
+      // Union DÉDOUBLONNÉE de toutes les réponses captées (≠ extractFromCaptured
+      // qui ne garde que la plus grosse) : le relevé « Transactions » est paginé,
+      // chaque clic « suivant / load more » ci-dessus a déclenché une page que le
+      // SPA a chargée et qu'on a captée. On les fusionne toutes ici.
+      let apiTx = transactionsFromCaptured(apiResponses)
       let txApiDebug = ''
       if (apiTx.length === 0) {
         const origin = new URL(page.url()).origin // https://ibpro.mcb.mu

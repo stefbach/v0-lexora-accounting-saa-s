@@ -7,6 +7,7 @@ import {
   findArrangementIds,
   arrangementsFromCaptured,
   extractFromCaptured,
+  transactionsFromCaptured,
   isBankApiUrl,
 } from './api-extract'
 import { findAccountBalance } from './accounts-parse'
@@ -172,6 +173,36 @@ describe('findArrangementIds — productsummary Backbase', () => {
       { url: 'u2', status: 200, json: PRODUCT_SUMMARY },
     ])
     expect(arr).toHaveLength(2)
+  })
+})
+
+describe('transactionsFromCaptured — union paginée dédoublonnée', () => {
+  it('fusionne les transactions de PLUSIEURS pages captées (≠ plus grosse seule)', () => {
+    // Page 1 et page 2 du même relevé paginé, chacune une réponse API distincte.
+    const page1 = {
+      _embedded: {
+        transactions: [
+          { bookingDate: '2026-08-20', reference: 'FT262327YRQX', description: 'Fee', transactionAmount: { amount: '-4.72', currencyCode: 'MUR' } },
+          { bookingDate: '2026-08-20', reference: 'FT26232SQBXT', description: 'Settlement', transactionAmount: { amount: '800.00', currencyCode: 'MUR' } },
+        ],
+      },
+    }
+    const page2 = {
+      _embedded: {
+        transactions: [
+          // chevauchement volontaire + un mouvement plus ancien
+          { bookingDate: '2026-08-20', reference: 'FT26232SQBXT', description: 'Settlement', transactionAmount: { amount: '800.00', currencyCode: 'MUR' } },
+          { bookingDate: '2026-08-17', reference: 'FT26229L0Z0S', description: 'Bulk Payment', transactionAmount: { amount: '-58072.00', currencyCode: 'MUR' } },
+        ],
+      },
+    }
+    const union = transactionsFromCaptured([
+      { url: 'https://ibpro.mcb.mu/api/transaction-manager/transactions?from=0', status: 200, json: page1 },
+      { url: 'https://ibpro.mcb.mu/api/transaction-manager/transactions?from=2', status: 200, json: page2 },
+    ])
+    // extractFromCaptured n'aurait gardé qu'une page (2 tx) ; l'union en a 3.
+    expect(union).toHaveLength(3)
+    expect(union.map((r) => r.reference)).toEqual(['FT262327YRQX', 'FT26232SQBXT', 'FT26229L0Z0S'])
   })
 })
 

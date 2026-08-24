@@ -225,7 +225,12 @@ export async function scrapeBankAccount(input: BankScrapeInput): Promise<BankScr
         credentials,
         {
           numero_compte: compte.numero_compte,
-          max_transactions: 30,
+          // Transactions « live » (HTML/API, pas PDF) : on parcourt plusieurs
+          // pages (« suivant / load more ») et on fusionne toutes les réponses
+          // API captées, dédoublonnées. Généreux mais borné ; la dédup au niveau
+          // transactions_bancaires évite tout doublon entre runs quotidiens.
+          max_transactions: 60,
+          max_transaction_pages: 10,
           // Backfill des relevés PDF mensuels : plafond haut (24) + budget temps
           // (~70 s) + exclusion des mois déjà ingérés (knownPeriods). Le robot
           // parcourt les onglets année MCB et récupère l'historique manquant,
