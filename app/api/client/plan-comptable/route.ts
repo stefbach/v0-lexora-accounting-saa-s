@@ -29,6 +29,9 @@ export async function GET(request: Request) {
       .select(
         "id, compte, libelle, classe, type_compte, sens_normal, compte_parent, niveau, actif, est_analytique, notes, societe_id"
       )
+      // N'afficher que les comptes actifs (aligné sur /api/comptable/plan-comptable).
+      // Les comptes doublons/legacy désactivés (migration 495) sont ainsi masqués.
+      .eq("actif", true)
       .order("compte", { ascending: true })
 
     if (societe_id) {
