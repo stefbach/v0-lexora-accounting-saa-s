@@ -106,6 +106,25 @@ export function selectNewStatements(
 }
 
 /**
+ * Sélection pour le BACKFILL historique complet : dédoublonne le lot, EXCLUT les
+ * périodes déjà ingérées (relevé PDF déjà stocké/OCRisé), trie du plus récent au
+ * plus ancien, puis borne à `maxN`. Permet à des runs successifs de remonter
+ * TOUT l'historique MCB (onglets année 2026/2025/2024…) sans jamais
+ * re-télécharger un mois déjà présent : chaque run récupère les mois manquants
+ * les plus récents en priorité, et les plus anciens run après run.
+ */
+export function selectStatementsForBackfill(
+  statements: StatementRef[],
+  knownPeriods: Set<string>,
+  maxN: number,
+): StatementRef[] {
+  return selectNewStatements(statements, new Set())
+    .filter((s) => !knownPeriods.has(s.period))
+    .sort((a, b) => b.period.localeCompare(a.period))
+    .slice(0, Math.max(0, maxN))
+}
+
+/**
  * Nom de fichier de stockage normalisé, stable et sans collision entre comptes /
  * périodes : « MCB_<compte>_<periode>_<type>.pdf ». Sert aussi de garde-fou de
  * dédoublonnage au niveau du stockage.
