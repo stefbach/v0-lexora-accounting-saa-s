@@ -232,6 +232,69 @@ export function transactionDedupeKey(tx: ParsedTransaction): string {
 }
 
 /**
+ * Reconstruit le SENS (débit/crédit) — et corrige un éventuel écart de
+ * magnitude — de chaque mouvement à partir du solde courant (running balance),
+ * seul repère fiable et agnostique à la banque.
+ *
+ * Pourquoi : certains portails (MCB/Backbase) renvoient un montant TOUJOURS
+ * POSITIF accompagné d'un indicateur débit/crédit dont la nomenclature varie
+ * d'une version à l'autre. Quand cet indicateur n'est pas reconnu, tous les
+ * mouvements finissent en crédit (bug observé en prod : un retrait DAB et des
+ * frais comptés en crédit, solde d'ouverture aberrant). Le solde courant, lui,
+ * ne ment pas : sur une liste triée du plus récent au plus ancien,
+ * `solde[i] - solde[i+1]` EST le montant signé du mouvement `i`.
+ *
+ * Sûr par construction :
+ *  - ne fait rien si un solde manque sur une ligne (on exige la suite complète) ;
+ *  - détecte l'ordre (plus récent d'abord vs plus ancien d'abord) en comparant
+ *    les deltas aux magnitudes, et n'agit que si une large majorité (≥60 %) des
+ *    paires collent — sinon la suite est jugée peu fiable et on ne touche à rien ;
+ *  - ne réécrit un montant que lorsque |delta| ≈ |montant| : un écart de
+ *    magnitude signale une ligne manquante, pas un signe à inverser, et on laisse
+ *    alors la ligne intacte.
+ *
+ * L'unique mouvement de bout de liste (le plus ancien en tri récent-d'abord)
+ * n'a pas de solde antérieur : son signe est laissé tel que parsé.
+ */
+export function reconcileAmountsFromBalance(
+  txs: ParsedTransaction[],
+  epsilon = 0.01,
+): ParsedTransaction[] {
+  if (!txs || txs.length < 2) return txs
+  if (txs.some((t) => t.balance_after == null)) return txs
+
+  const bal = txs.map((t) => t.balance_after as number)
+  const mag = txs.map((t) => Math.abs(t.amount))
+  const round2 = (n: number) => Math.round(n * 100) / 100
+
+  // Score chaque hypothèse d'ordre.
+  let newestFirst = 0
+  for (let i = 0; i < txs.length - 1; i++) {
+    if (Math.abs(Math.abs(bal[i] - bal[i + 1]) - mag[i]) <= epsilon) newestFirst++
+  }
+  let oldestFirst = 0
+  for (let i = 1; i < txs.length; i++) {
+    if (Math.abs(Math.abs(bal[i] - bal[i - 1]) - mag[i]) <= epsilon) oldestFirst++
+  }
+  const pairs = txs.length - 1
+  if (Math.max(newestFirst, oldestFirst) < Math.ceil(pairs * 0.6)) return txs
+
+  const out = txs.map((t) => ({ ...t }))
+  if (newestFirst >= oldestFirst) {
+    for (let i = 0; i < out.length - 1; i++) {
+      const delta = bal[i] - bal[i + 1]
+      if (Math.abs(Math.abs(delta) - mag[i]) <= epsilon) out[i].amount = round2(delta)
+    }
+  } else {
+    for (let i = 1; i < out.length; i++) {
+      const delta = bal[i] - bal[i - 1]
+      if (Math.abs(Math.abs(delta) - mag[i]) <= epsilon) out[i].amount = round2(delta)
+    }
+  }
+  return out
+}
+
+/**
  * Contrôle de cohérence : sur un relevé trié du plus récent au plus ancien,
  * `balance_after[n] - amount[n]` doit égaler `balance_after[n+1]` (à un epsilon
  * près). Retourne la liste des index où la suite est rompue — signal fort d'une

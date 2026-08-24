@@ -28,6 +28,7 @@ import { decryptSecret } from '@/lib/crypto/symmetric'
 import { launchBrowser } from './playwright-launcher'
 import { loginAndScrapeMcb } from './adapters/mcb'
 import { upsertScrapedTransactions } from './persist-transactions'
+import { ingestScrapedTransactions } from './ingest-scrape'
 import { ingestScrapedStatements } from './ingest-statements'
 import { enqueueDocumentProcessing } from '@/lib/documents/queue'
 
@@ -91,6 +92,8 @@ export type BankScrapeResult = {
   diagnostic?: ScrapeDiagnostic
   error?: string
   duration_ms?: number
+  /** Résultat de l'alimentation du relevé Lexora (relevés_bancaires + solde compte). */
+  ingestion?: { ingested: boolean; nb_transactions?: number; releve_id?: string; reason?: string }
 }
 
 const BANK_LOGIN_URLS: Record<BankCode, string> = {
@@ -206,6 +209,11 @@ export async function scrapeBankAccount(input: BankScrapeInput): Promise<BankScr
         {
           numero_compte: compte.numero_compte,
           max_transactions: 30,
+          // Relevés PDF mensuels : on en récupère jusqu'à 6 (best-effort, borné,
+          // dédoublonné par chemin de stockage) pour combler les mois manquants
+          // dans l'historique — la vue « Transactions » ne montre qu'une fenêtre
+          // récente, seuls les relevés PDF permettent de remonter le temps.
+          max_statements: 6,
           company_name: soc?.nom || null,
           // URL configurée par l'utilisateur, sinon URL par défaut de la banque.
           login_url: credentials.login_url || BANK_LOGIN_URLS[bankCode],
@@ -250,6 +258,24 @@ export async function scrapeBankAccount(input: BankScrapeInput): Promise<BankScr
       } catch {
         // L'échec d'injection ne doit pas faire échouer le scrape lui-même
         // (le solde + l'audit bank_scrape_runs restent valides).
+      }
+
+      // ── Relevé de rapprochement + solde courant du compte ──
+      // Construit/actualise le relevé `releves_bancaires` (source du moteur de
+      // rapprochement, transactions_json) ET met à jour comptes_bancaires
+      // (solde_actuel / date_dernier_releve). Appelé pour TOUS les déclencheurs
+      // (cron ET manuel) : le robot quotidien alimente ainsi le rapprochement de
+      // façon autonome, et la carte compte ne reste plus figée sur l'ancien solde.
+      // Best-effort : n'échoue jamais le scrape.
+      try {
+        result.ingestion = await ingestScrapedTransactions(getAdminClient() as never, {
+          compte_bancaire_id: input.compte_bancaire_id,
+          societe_id: input.societe_id,
+          numero_compte: null,
+          result,
+        })
+      } catch (e) {
+        result.ingestion = { ingested: false, reason: e instanceof Error ? e.message : 'ingestion_failed' }
       }
     }
 

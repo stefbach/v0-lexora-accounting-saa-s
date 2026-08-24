@@ -110,21 +110,38 @@ export async function ingestScrapedTransactions(
     { uploaded_by: null, source: 'api' },
   )
 
-  // Best-effort : lignes par transaction dans transactions_bancaires (recherche
-  // libre Telegram). Le rapprochement, lui, lit transactions_json ci-dessus.
+  // NB : on n'insère PAS ici dans `transactions_bancaires`. Le scraper
+  // (lib/banks/scraper.ts → upsertScrapedTransactions) l'a déjà fait, de façon
+  // DÉDOUBLONNÉE (clé référence FT… ou date+montant+libellé). Doubler l'insert
+  // ici (sans dédup) recréait les mêmes lignes à chaque scrape → doublons dans
+  // le rapprochement / la recherche Telegram. La source du rapprochement reste
+  // `releves_bancaires.transactions_json` construit ci-dessus.
+
+  // Met à jour le solde courant + la date du dernier relevé du compte, comme le
+  // fait le pipeline OCR (lib/bank/process-releve.ts). Sans ça, la carte compte
+  // (/client/banque) reste figée sur l'ancien solde alors que le relevé scrapé
+  // est bien créé → incohérence « haut/bas » signalée en prod. On n'écrase pas
+  // si notre date est antérieure au dernier relevé déjà enregistré (un relevé
+  // OCR mensuel plus récent doit rester prioritaire).
   try {
-    const rows = normalized.map((t) => ({
-      releve_id: upserted.releve_id,
-      compte_bancaire_id: input.compte_bancaire_id,
-      societe_id: input.societe_id,
-      date_transaction: t.date,
-      libelle_banque: t.libelle,
-      reference: t.reference,
-      debit: t.debit,
-      credit: t.credit,
-      statut_lettrage: 'a_lettrer',
-    }))
-    if (rows.length > 0) await supabase.from('transactions_bancaires').insert(rows)
+    const { data: existingAcc } = await supabase
+      .from('comptes_bancaires')
+      .select('date_dernier_releve')
+      .eq('id', input.compte_bancaire_id)
+      .single()
+    if (
+      !existingAcc?.date_dernier_releve ||
+      String(existingAcc.date_dernier_releve) <= dateFin
+    ) {
+      await supabase
+        .from('comptes_bancaires')
+        .update({
+          solde_actuel: soldeCloture,
+          solde_dernier_releve: soldeCloture,
+          date_dernier_releve: dateFin,
+        })
+        .eq('id', input.compte_bancaire_id)
+    }
   } catch { /* non-fatal */ }
 
   return {
