@@ -202,6 +202,23 @@ export async function scrapeBankAccount(input: BankScrapeInput): Promise<BankScr
       const admin = getAdminClient()
       const { data: soc } = await admin
         .from('societes').select('nom').eq('id', compte.societe_id).maybeSingle()
+
+      // Mois déjà couverts par un relevé PDF ingéré (document lié) → le robot ne
+      // les re-télécharge pas et se concentre sur l'historique manquant. Permet
+      // un backfill PROGRESSIF de tout l'historique MCB (onglets année) run après
+      // run, sans jamais dépasser le budget temps serverless. Best-effort.
+      let knownPeriods: string[] = []
+      try {
+        const { data: existing } = await admin
+          .from('releves_bancaires')
+          .select('periode')
+          .eq('compte_bancaire_id', input.compte_bancaire_id)
+          .not('document_id', 'is', null)
+        knownPeriods = [...new Set((existing || [])
+          .map((r: { periode: string | null }) => r.periode)
+          .filter((p): p is string => !!p))]
+      } catch { /* best-effort : au pire on re-télécharge (dédup au stockage) */ }
+
       session = await launchBrowser({ defaultTimeout: 30000 })
       const scraped = await loginAndScrapeMcb(
         session.page,
@@ -209,11 +226,13 @@ export async function scrapeBankAccount(input: BankScrapeInput): Promise<BankScr
         {
           numero_compte: compte.numero_compte,
           max_transactions: 30,
-          // Relevés PDF mensuels : on en récupère jusqu'à 6 (best-effort, borné,
-          // dédoublonné par chemin de stockage) pour combler les mois manquants
-          // dans l'historique — la vue « Transactions » ne montre qu'une fenêtre
-          // récente, seuls les relevés PDF permettent de remonter le temps.
-          max_statements: 6,
+          // Backfill des relevés PDF mensuels : plafond haut (24) + budget temps
+          // (~70 s) + exclusion des mois déjà ingérés (knownPeriods). Le robot
+          // parcourt les onglets année MCB et récupère l'historique manquant,
+          // du plus récent au plus ancien, sur plusieurs runs si besoin. L'OCR +
+          // le dédoublonnage par chemin de stockage se font côté scraper.ts.
+          max_statements: 24,
+          known_statement_periods: knownPeriods,
           company_name: soc?.nom || null,
           // URL configurée par l'utilisateur, sinon URL par défaut de la banque.
           login_url: credentials.login_url || BANK_LOGIN_URLS[bankCode],

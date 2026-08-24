@@ -4,6 +4,7 @@ import {
   parseStatements,
   statementDedupeKey,
   selectNewStatements,
+  selectStatementsForBackfill,
   statementStorageName,
   type RawStatementRow,
   type StatementRef,
@@ -82,5 +83,39 @@ describe('statementStorageName', () => {
     const s = parseStatementRow(MCB_ROWS[0])!
     const name = statementStorageName(s, { banque: 'MCB', numero_compte: '000447954587' })
     expect(name).toBe('MCB_000447954587_2026-07_Current_account_statement.pdf')
+  })
+})
+
+describe('selectStatementsForBackfill — backfill historique progressif', () => {
+  // Historique multi-années (onglets 2026/2025), listé en vrac.
+  const HIST: RawStatementRow[] = [
+    { dateGenerated: '30 Jun 2026', docType: 'Current account statement', filename: 'x' },
+    { dateGenerated: '31 May 2026', docType: 'Current account statement', filename: 'x' },
+    { dateGenerated: '30 Apr 2026', docType: 'Current account statement', filename: 'x' },
+    { dateGenerated: '31 Dec 2025', docType: 'Current account statement', filename: 'x' },
+  ]
+  const parsed = parseStatements(HIST)
+
+  it('saute les mois déjà ingérés et priorise le plus récent, borné à maxN', () => {
+    // Avril déjà en base → on récupère juin puis mai (les 2 plus récents restants).
+    const known = new Set(['2026-04'])
+    const picked = selectStatementsForBackfill(parsed, known, 2)
+    expect(picked.map((s) => s.period)).toEqual(['2026-06', '2026-05'])
+  })
+
+  it('remonte l’historique ancien quand le récent est déjà pris (run suivant)', () => {
+    const known = new Set(['2026-06', '2026-05', '2026-04'])
+    const picked = selectStatementsForBackfill(parsed, known, 5)
+    expect(picked.map((s) => s.period)).toEqual(['2025-12'])
+  })
+
+  it('rien à faire si tout est déjà ingéré', () => {
+    const known = new Set(['2026-06', '2026-05', '2026-04', '2025-12'])
+    expect(selectStatementsForBackfill(parsed, known, 10)).toEqual([])
+  })
+
+  it('dédoublonne le lot (même mois listé deux fois via API + DOM)', () => {
+    const picked = selectStatementsForBackfill([...parsed, parsed[0]], new Set(), 10)
+    expect(picked).toHaveLength(4)
   })
 })

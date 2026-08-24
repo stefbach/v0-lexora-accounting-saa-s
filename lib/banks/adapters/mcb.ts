@@ -34,7 +34,7 @@ import { captureScreenshot, capturePageDiagnostic } from '../playwright-launcher
 import { pickBestCompany } from '../agentic/company-match'
 import { findAccountBalance, parseAccounts, accountNumbersMatch } from '../agentic/accounts-parse'
 import { parseTransactions, parseTransactionsFromTexts, findBalanceBreaks, reconcileAmountsFromBalance } from '../agentic/transactions-parse'
-import { parseStatements, type RawStatementRow } from '../agentic/statements-parse'
+import { parseStatements, selectStatementsForBackfill, type RawStatementRow } from '../agentic/statements-parse'
 import {
   isBankApiUrl, extractFromCaptured, arrangementsFromCaptured, findTransactionsInJson,
   type CapturedApiResponse,
@@ -51,8 +51,15 @@ export interface McbAdapterOptions {
   numero_compte: string
   /** Nombre de transactions à récupérer (défaut 30) */
   max_transactions?: number
-  /** Nombre de relevés PDF récents à télécharger par run (défaut 3, 0 = désactivé) */
+  /** Plafond de relevés PDF téléchargés par run (défaut 3, 0 = désactivé). Le
+   *  vrai frein est le budget temps ci-dessous : ce plafond n'est qu'un garde-fou. */
   max_statements?: number
+  /** Périodes YYYY-MM déjà couvertes par un relevé PDF ingéré → le robot les
+   *  saute et se concentre sur l'historique manquant (backfill progressif). */
+  known_statement_periods?: string[]
+  /** Budget temps (ms) pour la phase relevés — borne le backfill sous la limite
+   *  serverless (défaut 70 000 ms, marge sous les 120 s de Vercel). */
+  statement_time_budget_ms?: number
   /** URL de connexion (override) ; défaut https://ibank.mcb.mu/ */
   login_url?: string
   /** Nom de la société — pour choisir le bon « context » MCB Pro. */
@@ -818,6 +825,11 @@ async function downloadMcbStatements(
   captured: CapturedApiResponse[] = [],
 ): Promise<ScrapedStatement[]> {
   const maxN = options.max_statements ?? 3
+  const knownPeriods = new Set(options.known_statement_periods || [])
+  // Budget temps : borne la phase relevés sous la limite serverless (120 s
+  // Vercel). On s'arrête proprement avant, quitte à finir l'historique au run
+  // suivant (les mois déjà pris sont sautés via knownPeriods → progression).
+  const deadline = Date.now() + (options.statement_time_budget_ms ?? 70000)
 
   // 0) Source PRIMAIRE = relevés listés par l'API interne (avec lien direct).
   //    Si l'API a exposé la liste, pas besoin de naviguer/scraper le SPA.
@@ -842,11 +854,11 @@ async function downloadMcbStatements(
     .click({ timeout: 3000 }).catch(() => {})
   await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {})
 
-  // 2) Extraire les relevés — agnostique à la structure (table OU grille de
-  //    <div> Backbase). Ligne candidate = contient une date de génération et le
-  //    mot « statement » (ou « relevé »), avec éventuellement un href PDF. Le
-  //    parse (date → période) est délégué au module testé parseStatements.
-  const rawRows: RawStatementRow[] = await page.evaluate(() => {
+  // 2) Extraire les relevés de la vue courante — agnostique à la structure
+  //    (table OU grille de <div> Backbase). Ligne candidate = date de génération
+  //    + mot « statement »/« relevé », avec éventuellement un href PDF. Le parse
+  //    (date → période) est délégué au module testé parseStatements.
+  const extractRows = (): Promise<RawStatementRow[]> => page.evaluate(() => {
     const norm = (s: string | null | undefined) => (s || '').replace(/\s+/g, ' ').trim()
     const dateRe = /\d{1,2}[\s/\-.][A-Za-z]{3,}[\s/\-.]\d{2,4}/
     const out: Array<Record<string, string>> = []
@@ -875,12 +887,35 @@ async function downloadMcbStatements(
     return out
   }).catch(() => [] as RawStatementRow[])
 
-  // API captée prioritaire ; repli sur l'extraction DOM.
-  const statements = parseStatements(apiStatements.length > 0 ? apiStatements : rawRows).slice(0, maxN)
+  // MCB range les relevés par ANNÉE (onglets « 2026 » « 2025 » « 2024 »…). Pour
+  // récupérer TOUT l'historique — pas seulement l'année courante affichée par
+  // défaut — on parcourt chaque onglet année (best-effort ; si aucun onglet, on
+  // lit simplement la vue par défaut). Borné par le budget temps.
+  const rawRows: RawStatementRow[] = []
+  rawRows.push(...(await extractRows()))
+  const yearTabs = page.getByRole('tab', { name: /^20\d{2}$/ })
+    .or(page.getByRole('button', { name: /^20\d{2}$/ }))
+    .or(page.getByRole('link', { name: /^20\d{2}$/ }))
+  const yearCount = await yearTabs.count().catch(() => 0)
+  for (let i = 0; i < yearCount; i++) {
+    if (Date.now() > deadline) break
+    await yearTabs.nth(i).click({ timeout: 3000 }).catch(() => {})
+    await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {})
+    rawRows.push(...(await extractRows()))
+  }
+
+  // Fusionne API captée + DOM (multi-années), dédoublonne, EXCLUT les mois déjà
+  // ingérés (backfill progressif) et priorise le plus récent, borné à maxN.
+  const statements = selectStatementsForBackfill(
+    parseStatements([...apiStatements, ...rawRows]),
+    knownPeriods,
+    maxN,
+  )
   if (statements.length === 0) return []
 
   const out: ScrapedStatement[] = []
   for (const s of statements) {
+    if (Date.now() > deadline) break // budget temps épuisé → on finit au prochain run
     let base64: string | null = null
 
     // Voie 1 : requête HTTP authentifiée (réutilise la session/les cookies).
