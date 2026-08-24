@@ -129,6 +129,67 @@ export function findAccountsInJson(root: Json): AccountRow[] {
   return out
 }
 
+/** Un compte avec son identifiant d'arrangement Backbase (pour appels API directs). */
+export interface ArrangementRef {
+  id: string
+  number: string
+}
+
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
+
+/**
+ * Extrait les couples { arrangementId, numéro de compte } d'une réponse
+ * `productsummary/arrangements` (Backbase). L'arrangementId (UUID) permet
+ * d'appeler DIRECTEMENT l'API transaction-manager du compte ciblé, sans piloter
+ * le SPA. On reconnaît l'objet arrangement à : un numéro de compte + un champ
+ * id/arrangementId de type UUID (ou identifiant long).
+ */
+export function findArrangementIds(root: Json): ArrangementRef[] {
+  const out: ArrangementRef[] = []
+  const seen = new Set<string>()
+
+  walkObjects(root, (obj) => {
+    let number: string | undefined
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v !== 'string') continue
+      if (/bban|iban|accountnumber|account_no|acctid|\bnumber\b/i.test(k)) {
+        const m = v.match(ACCOUNT_RE)
+        if (m) { number = m[0]; break }
+      }
+    }
+    if (!number) return
+
+    // id d'arrangement : UUID prioritaire, sinon champ id/arrangementId long.
+    let id: string | undefined
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v !== 'string') continue
+      if (/(^id$|arrangementid|productid|resourceid|internalid)/i.test(k)) {
+        if (UUID_RE.test(v) || v.length >= 16) { id = v; break }
+      }
+    }
+    if (!id) return
+
+    const key = number.replace(/\D/g, '').replace(/^0+/, '')
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push({ id, number })
+  })
+
+  return out
+}
+
+/** Agrège findArrangementIds sur toutes les réponses captées. */
+export function arrangementsFromCaptured(responses: CapturedApiResponse[]): ArrangementRef[] {
+  const byNumber = new Map<string, ArrangementRef>()
+  for (const r of responses || []) {
+    for (const a of findArrangementIds(r.json)) {
+      const key = a.number.replace(/\D/g, '').replace(/^0+/, '')
+      if (!byNumber.has(key)) byNumber.set(key, a)
+    }
+  }
+  return [...byNumber.values()]
+}
+
 function transactionFromObject(o: Record<string, unknown>): RawTransactionRow | null {
   let transactionDate: string | undefined
   let valueDate: string | undefined
