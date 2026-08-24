@@ -33,8 +33,9 @@ import type { BankScrapeResult, ScrapedTransaction, ScrapedStatement } from '../
 import { captureScreenshot, capturePageDiagnostic } from '../playwright-launcher'
 import { pickBestCompany } from '../agentic/company-match'
 import { findAccountBalance, parseAccounts } from '../agentic/accounts-parse'
-import { parseTransactionsFromTexts, findBalanceBreaks } from '../agentic/transactions-parse'
+import { parseTransactions, parseTransactionsFromTexts, findBalanceBreaks } from '../agentic/transactions-parse'
 import { parseStatements, type RawStatementRow } from '../agentic/statements-parse'
+import { isBankApiUrl, extractFromCaptured, type CapturedApiResponse } from '../agentic/api-extract'
 
 export interface McbCredentials {
   username: string                  // User ID MCB
@@ -92,6 +93,27 @@ export async function loginAndScrapeMcb(
 ): Promise<BankScrapeResult> {
   const t0 = Date.now()
   const maxTx = options.max_transactions ?? 30
+
+  // ── Capture réseau : on écoute les réponses JSON de l'API interne du portail
+  //    (Backbase). C'est la source PRIMAIRE des données : plutôt que de scraper
+  //    un SPA à l'aveugle, on lit les comptes / transactions / relevés dans les
+  //    réponses de l'API que le SPA appelle lui-même (session authentifiée).
+  //    Le scraping DOM ne sert plus que de repli.
+  const apiResponses: CapturedApiResponse[] = []
+  const onResponse = async (resp: import('playwright-core').Response) => {
+    try {
+      const url = resp.url()
+      if (!isBankApiUrl(url)) return
+      const ct = (resp.headers()['content-type'] || '').toLowerCase()
+      if (!ct.includes('json')) return
+      const json = await resp.json().catch(() => null)
+      if (json != null && apiResponses.length < 200) apiResponses.push({ url, status: resp.status(), json })
+    } catch {
+      /* réponse illisible → ignorée */
+    }
+  }
+  page.on('response', onResponse)
+  const capturedApiUrls = () => Array.from(new Set(apiResponses.map((r) => r.url))).slice(0, 25)
 
   try {
     // ── 1. Navigation page login ──
@@ -373,12 +395,21 @@ export async function loginAndScrapeMcb(
         return out
       }).catch(() => [] as string[])
 
-      const accountRows = parseAccounts(rowTexts)
+      // Source PRIMAIRE = API interne captée (JSON structuré) ; repli = DOM.
+      const apiAccounts = extractFromCaptured(apiResponses).accounts
+      const accountRows = apiAccounts.length > 0 ? apiAccounts : parseAccounts(rowTexts)
       const acct = findAccountBalance(accountRows, options.numero_compte)
       if (!acct) {
+        const apiUrls = capturedApiUrls()
         return {
           status: 'manual_needed',
-          error: `Société sélectionnée ✅ mais compte ${options.numero_compte} introuvable dans la liste (${accountRows.length} compte(s) lus). Copie le diagnostic pour ajuster.`,
+          error:
+            `Société sélectionnée ✅ mais compte ${options.numero_compte} introuvable (${accountRows.length} compte(s) lus, ` +
+            `${apiAccounts.length} via API, ${rowTexts.length} lignes DOM). ` +
+            (apiUrls.length
+              ? `API captées : ${apiUrls.join(' | ')}`
+              : `Aucune API JSON captée — le SPA charge peut-être ses données autrement. Copie le diagnostic.`),
+          raw_excerpt: apiUrls.join('\n'),
           screenshot_b64: await captureScreenshot(page),
           diagnostic: await capturePageDiagnostic(page),
           duration_ms: Date.now() - t0,
@@ -440,7 +471,13 @@ export async function loginAndScrapeMcb(
         await page.waitForTimeout(600)
       }
 
-      const parsed = parseTransactionsFromTexts(allRowTexts).slice(0, maxN)
+      // Source PRIMAIRE = transactions de l'API interne (la navigation vers
+      // l'onglet a déclenché l'appel transaction-manager) ; repli = DOM.
+      const apiTx = extractFromCaptured(apiResponses).transactions
+      const parsed = (apiTx.length > 0
+        ? parseTransactions(apiTx)
+        : parseTransactionsFromTexts(allRowTexts)
+      ).slice(0, maxN)
       const balanceBreaks = findBalanceBreaks(parsed)
       const transactions: ScrapedTransaction[] = parsed.map((t) => ({
         date: t.date,
@@ -457,7 +494,7 @@ export async function loginAndScrapeMcb(
       // font côté scraper.ts via le pipeline documentaire existant. N'échoue
       // jamais le scrape principal (solde + transactions déjà obtenus).
       const statements = (options.max_statements ?? 3) > 0
-        ? await downloadMcbStatements(page, options).catch(() => [] as ScrapedStatement[])
+        ? await downloadMcbStatements(page, options, apiResponses).catch(() => [] as ScrapedStatement[])
         : []
 
       // Solde toujours retourné ; transactions désormais mappées. Si l'extraction
@@ -584,8 +621,13 @@ export async function loginAndScrapeMcb(
 async function downloadMcbStatements(
   page: Page,
   options: McbAdapterOptions,
+  captured: CapturedApiResponse[] = [],
 ): Promise<ScrapedStatement[]> {
   const maxN = options.max_statements ?? 3
+
+  // 0) Source PRIMAIRE = relevés listés par l'API interne (avec lien direct).
+  //    Si l'API a exposé la liste, pas besoin de naviguer/scraper le SPA.
+  const apiStatements = extractFromCaptured(captured).statements
 
   // 1) Naviguer vers « Documents & statements » (lien de menu / nav latérale).
   const navLink = page.getByRole('link', { name: /documents\s*&?\s*statements|statements|relev/i })
@@ -633,7 +675,8 @@ async function downloadMcbStatements(
     return out
   }).catch(() => [] as RawStatementRow[])
 
-  const statements = parseStatements(rawRows).slice(0, maxN)
+  // API captée prioritaire ; repli sur l'extraction DOM.
+  const statements = parseStatements(apiStatements.length > 0 ? apiStatements : rawRows).slice(0, maxN)
   if (statements.length === 0) return []
 
   const out: ScrapedStatement[] = []
