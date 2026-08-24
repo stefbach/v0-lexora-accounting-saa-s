@@ -33,7 +33,7 @@ import type { BankScrapeResult, ScrapedTransaction, ScrapedStatement } from '../
 import { captureScreenshot, capturePageDiagnostic } from '../playwright-launcher'
 import { pickBestCompany } from '../agentic/company-match'
 import { findAccountBalance, parseAccounts, accountNumbersMatch } from '../agentic/accounts-parse'
-import { parseTransactions, parseTransactionsFromTexts, findBalanceBreaks } from '../agentic/transactions-parse'
+import { parseTransactions, parseTransactionsFromTexts, findBalanceBreaks, reconcileAmountsFromBalance } from '../agentic/transactions-parse'
 import { parseStatements, type RawStatementRow } from '../agentic/statements-parse'
 import {
   isBankApiUrl, extractFromCaptured, arrangementsFromCaptured, findTransactionsInJson,
@@ -606,10 +606,14 @@ export async function loginAndScrapeMcb(
       }
 
       // Repli final : DOM (grille Backbase) si l'API n'a rien donné.
-      const parsed = (apiTx.length > 0
+      // Le solde courant (running balance) tranche le SENS débit/crédit de façon
+      // fiable, quelle que soit la nomenclature de l'indicateur côté banque —
+      // évite le bug « tout en crédit » quand l'API renvoie un montant positif +
+      // un indicateur non reconnu. No-op si les soldes manquent (cf. fonction).
+      const parsed = reconcileAmountsFromBalance((apiTx.length > 0
         ? parseTransactions(apiTx)
         : parseTransactionsFromTexts(allRowTexts)
-      ).slice(0, maxN)
+      ).slice(0, maxN))
       const balanceBreaks = findBalanceBreaks(parsed)
       const transactions: ScrapedTransaction[] = parsed.map((t) => ({
         date: t.date,

@@ -7,6 +7,7 @@ import {
   parseTransactionsFromTexts,
   transactionDedupeKey,
   findBalanceBreaks,
+  reconcileAmountsFromBalance,
   type RawTransactionRow,
 } from './transactions-parse'
 
@@ -184,5 +185,53 @@ describe('findBalanceBreaks — contrôle de suite du solde', () => {
       { transactionDate: '02 Aug 2026', amount: '-20.00', balance: '110.00' },
     ])
     expect(findBalanceBreaks(txs)).toEqual([])
+  })
+})
+
+describe('reconcileAmountsFromBalance — récupère le sens débit/crédit via le solde', () => {
+  it('reconstruit les signes quand la banque renvoie TOUT en positif (bug MCB prod)', () => {
+    // Cas réel : l'indicateur débit/crédit n'a pas été reconnu → tous les
+    // montants sont sortis POSITIFS. Le solde courant tranche le sens.
+    // Chaîne de soldes (récent→ancien) identique au relevé MCB réel.
+    const txs = parseTransactions([
+      { transactionDate: '20 Aug 2026', reference: 'FT262327YRQX', description: 'E-Commerce Fee', amount: '4.72', balance: '14,564.21' },
+      { transactionDate: '20 Aug 2026', reference: 'FT26232SQBXT', description: 'Merchant Settlement', amount: '800.00', balance: '14,568.93' },
+      { transactionDate: '20 Aug 2026', reference: 'FT26232J47Y3', description: 'Merchant Discount', amount: '20.00', balance: '13,768.93' },
+      { transactionDate: '17 Aug 2026', reference: 'FT26229SNYNF', description: 'ATM Cash Withdrawal', amount: '8,000.00', balance: '13,788.93' },
+      { transactionDate: '17 Aug 2026', reference: 'FT26229L0Z0S', description: 'Bulk Payment', amount: '58,072.00', balance: '21,788.93' },
+    ])
+    const fixed = reconcileAmountsFromBalance(txs)
+    expect(fixed.map((t) => t.amount)).toEqual([-4.72, 800, -20, -8000, /* le plus ancien laissé tel quel */ 58072])
+    // Les 4 premiers ont un solde antérieur → sens fiable ; ATM = débit.
+    expect(fixed[3].amount).toBe(-8000)
+    // La suite du solde est cohérente après correction (sauf l'endpoint gardé).
+    expect(findBalanceBreaks(fixed).filter((i) => i < 3)).toEqual([])
+  })
+
+  it('ne touche pas des montants déjà correctement signés (idempotent)', () => {
+    const txs = parseTransactions([
+      { transactionDate: '03 Aug 2026', amount: '-10.00', balance: '100.00' },
+      { transactionDate: '02 Aug 2026', amount: '-20.00', balance: '110.00' },
+      { transactionDate: '01 Aug 2026', amount: '5.00', balance: '130.00' },
+    ])
+    const fixed = reconcileAmountsFromBalance(txs)
+    expect(fixed.map((t) => t.amount)).toEqual([-10, -20, 5])
+  })
+
+  it('ne modifie rien si un solde manque (sûr)', () => {
+    const txs = parseTransactions([
+      { transactionDate: '03 Aug 2026', amount: '10.00', balance: '100.00' },
+      { transactionDate: '02 Aug 2026', amount: '20.00' },
+    ])
+    expect(reconcileAmountsFromBalance(txs).map((t) => t.amount)).toEqual([10, 20])
+  })
+
+  it('ne modifie rien si la suite du solde est incohérente (magnitudes ne collent pas)', () => {
+    const txs = parseTransactions([
+      { transactionDate: '03 Aug 2026', amount: '7.00', balance: '100.00' },
+      { transactionDate: '02 Aug 2026', amount: '9.00', balance: '250.00' },
+      { transactionDate: '01 Aug 2026', amount: '3.00', balance: '999.00' },
+    ])
+    expect(reconcileAmountsFromBalance(txs).map((t) => t.amount)).toEqual([7, 9, 3])
   })
 })
