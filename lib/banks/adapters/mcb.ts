@@ -438,23 +438,34 @@ export async function loginAndScrapeMcb(
       // deux et on ATTEND que l'API transaction-manager réponde (déclenchée par
       // la sélection) — c'est la vraie source des données, pas le DOM.
 
-      // Tentative 1 : ouvrir le détail du compte (clic sur la ligne) → onglet Transactions.
+      // On veut que le SPA lui-même charge la liste (avec son token valide en
+      // mémoire) : on capte alors sa réponse. Le prédicat attend la VRAIE liste
+      // (.../transactions?…), PAS l'appel enumValues du filtre.
+      const wantsTxList = (u: string) =>
+        /transaction-manager/i.test(u) && /\/transactions(\?|$)/i.test(u) && !/enumvalues/i.test(u)
+
+      // Tentative 1 : ouvrir le DÉTAIL du compte (clic sur la ligne) → cliquer
+      // l'ONGLET Transactions DU DÉTAIL (role=tab / bouton — surtout PAS le lien
+      // de la barre latérale, qui mène à la page globale et ne charge que les
+      // enumValues du filtre, jamais la liste du compte).
       await page.getByText(options.numero_compte, { exact: false }).first()
         .click({ timeout: 5000 }).catch(() => {})
       await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {})
-      await page.getByRole('tab', { name: /transactions/i })
-        .or(page.getByText('Transactions', { exact: true })).first()
-        .click({ timeout: 3000 }).catch(() => {})
-      let gotTxApi = await waitForApiCapture((u) => /transaction/i.test(u), 8000)
+      const detailTxTab = page.getByRole('tab', { name: /transactions/i })
+        .or(page.locator('button, [role="tab"], [class*="tab" i]').filter({ hasText: /^\s*transactions\s*$/i }))
+        .first()
+      await detailTxTab.click({ timeout: 5000 }).catch(() => {})
+      let gotTxApi = await waitForApiCapture(wantsTxList, 12000)
 
-      // Tentative 2 : page « Transactions » globale + sélection explicite du compte.
+      // Tentative 2 : page « Transactions » globale + sélection explicite du compte
+      // (certains parcours ne passent pas par le détail).
       if (!gotTxApi) {
         await page.getByRole('link', { name: /transactions/i })
           .or(page.getByText('Transactions', { exact: true })).first()
           .click({ timeout: 4000 }).catch(() => {})
         await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {})
         await selectMcbAccount(page, options.numero_compte).catch(() => {})
-        gotTxApi = await waitForApiCapture((u) => /transaction/i.test(u), 10000)
+        gotTxApi = await waitForApiCapture(wantsTxList, 12000)
       }
       await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {})
 
