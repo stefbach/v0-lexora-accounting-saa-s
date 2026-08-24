@@ -649,6 +649,20 @@ export async function loginAndScrapeMcb(
         }
       }
       const apiUrls = capturedApiUrls()
+
+      // Le SPA a bien appelé la liste (.../transactions?arrangementsIds=…) et sa
+      // réponse est captée, mais findTransactionsInJson n'en extrait rien → la
+      // structure JSON exacte de MCB nous échappe. On dumpe un échantillon du
+      // corps de CETTE réponse pour figer le parseur au prochain run.
+      const txResp = apiResponses.find((r) => wantsTxList(r.url))
+      let txShape = 'TXRESP=absente des captures'
+      if (txResp) {
+        try {
+          const s = JSON.stringify(txResp.json)
+          txShape = `TXRESP len=${s.length} sample=${s.slice(0, 900)}`
+        } catch { txShape = 'TXRESP=nonjson' }
+      }
+
       return {
         status: 'partial',
         balance_mur: acct.balance,
@@ -657,11 +671,8 @@ export async function loginAndScrapeMcb(
         error:
           `Solde lu ✅ (${acct.balance} ${acct.currency || ''}) — transactions non extraites ` +
           `(0 ligne, ${apiTx.length} via API, ${allRowTexts.length} lignes DOM, sélection compte ${gotTxApi ? 'OK' : 'KO'}). ` +
-          `[API tx directe] ${txApiDebug || 'non tentée'}. ` +
-          (apiUrls.length
-            ? `API captées : ${apiUrls.join(' | ')}`
-            : `Aucune API transaction captée.`),
-        raw_excerpt: [txApiDebug, apiUrls.join('\n')].filter(Boolean).join('\n---\n'),
+          `${txShape}`,
+        raw_excerpt: [txShape, txApiDebug, apiUrls.join('\n')].filter(Boolean).join('\n---\n'),
         screenshot_b64: await captureScreenshot(page),
         diagnostic: await capturePageDiagnostic(page),
         duration_ms: Date.now() - t0,
