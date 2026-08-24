@@ -32,10 +32,13 @@ import type { Page } from 'playwright-core'
 import type { BankScrapeResult, ScrapedTransaction, ScrapedStatement } from '../scraper'
 import { captureScreenshot, capturePageDiagnostic } from '../playwright-launcher'
 import { pickBestCompany } from '../agentic/company-match'
-import { findAccountBalance, parseAccounts } from '../agentic/accounts-parse'
+import { findAccountBalance, parseAccounts, accountNumbersMatch } from '../agentic/accounts-parse'
 import { parseTransactions, parseTransactionsFromTexts, findBalanceBreaks } from '../agentic/transactions-parse'
 import { parseStatements, type RawStatementRow } from '../agentic/statements-parse'
-import { isBankApiUrl, extractFromCaptured, type CapturedApiResponse } from '../agentic/api-extract'
+import {
+  isBankApiUrl, extractFromCaptured, arrangementsFromCaptured, findTransactionsInJson,
+  type CapturedApiResponse,
+} from '../agentic/api-extract'
 
 export interface McbCredentials {
   username: string                  // User ID MCB
@@ -497,9 +500,39 @@ export async function loginAndScrapeMcb(
         await page.waitForTimeout(600)
       }
 
-      // Source PRIMAIRE = transactions de l'API interne (la navigation vers
-      // l'onglet a déclenché l'appel transaction-manager) ; repli = DOM.
-      const apiTx = extractFromCaptured(apiResponses).transactions
+      // ── Source PRIMAIRE : appel DIRECT de l'API transaction-manager ──
+      // Le SPA ne déclenche pas toujours la requête liste (il ne charge que les
+      // enumValues du filtre). Puisqu'on connaît l'endpoint (diagnostic) et
+      // qu'on a l'arrangementId du compte dans la réponse productsummary captée,
+      // on interroge l'API directement avec la session authentifiée (page.request).
+      let apiTx = extractFromCaptured(apiResponses).transactions
+      if (apiTx.length === 0) {
+        const origin = new URL(page.url()).origin // https://ibpro.mcb.mu
+        const arr = arrangementsFromCaptured(apiResponses).find((a) =>
+          accountNumbersMatch(a.number, options.numero_compte),
+        )
+        if (arr) {
+          const base = `${origin}/api/transaction-manager/client-api/v2/transactions`
+          // Variantes de paramètres Backbase connues (arrangementId singulier /
+          // pluriel), tri par date décroissante, taille bornée.
+          const queries = [
+            `?arrangementId=${encodeURIComponent(arr.id)}&from=0&size=${maxN}`,
+            `?arrangementsIds=${encodeURIComponent(arr.id)}&from=0&size=${maxN}`,
+            `?arrangementId=${encodeURIComponent(arr.id)}&from=0&size=${maxN}&orderBy=bookingDate&direction=DESC`,
+          ]
+          for (const qs of queries) {
+            const json = await page.request.get(base + qs, { timeout: 15000 })
+              .then((r) => (r.ok() ? r.json() : null))
+              .catch(() => null)
+            if (json) {
+              const raws = findTransactionsInJson(json)
+              if (raws.length > 0) { apiTx = raws; break }
+            }
+          }
+        }
+      }
+
+      // Repli final : DOM (grille Backbase) si l'API n'a rien donné.
       const parsed = (apiTx.length > 0
         ? parseTransactions(apiTx)
         : parseTransactionsFromTexts(allRowTexts)

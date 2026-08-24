@@ -4,6 +4,8 @@ import {
   findAccountsInJson,
   findTransactionsInJson,
   findStatementsInJson,
+  findArrangementIds,
+  arrangementsFromCaptured,
   extractFromCaptured,
   isBankApiUrl,
 } from './api-extract'
@@ -116,6 +118,35 @@ describe('findStatementsInJson', () => {
     expect(st).toHaveLength(2)
     expect(st[0].dateGenerated).toBe('2026-07-31')
     expect(st[0].downloadHref).toBe('https://ibpro.mcb.mu/api/doc/123.pdf')
+  })
+})
+
+describe('findArrangementIds — productsummary Backbase', () => {
+  const PRODUCT_SUMMARY = {
+    _embedded: {
+      arrangements: [
+        { id: 'b37e8d68-168b-4194-a1f9-74c8556f7436', BBAN: '000447954555', currency: 'MUR', bookedBalance: '14564.21' },
+        { id: 'c48f9e79-279c-4285-b2a0-85d9667a8547', BBAN: '000447954587', currency: 'EUR', bookedBalance: '8926.87' },
+      ],
+    },
+  }
+  it('associe chaque numéro de compte à son arrangementId (UUID)', () => {
+    const arr = findArrangementIds(PRODUCT_SUMMARY)
+    expect(arr).toHaveLength(2)
+    expect(arr.find((a) => a.number === '000447954555')!.id).toBe('b37e8d68-168b-4194-a1f9-74c8556f7436')
+  })
+  it('ignore un objet sans id d’arrangement', () => {
+    expect(findArrangementIds({ BBAN: '000447954555' })).toEqual([])
+  })
+  it('ignore un id trop court non-UUID', () => {
+    expect(findArrangementIds({ accountNumber: '000447954555', id: 'x1' })).toEqual([])
+  })
+  it('arrangementsFromCaptured dédoublonne par numéro', () => {
+    const arr = arrangementsFromCaptured([
+      { url: 'u1', status: 200, json: PRODUCT_SUMMARY },
+      { url: 'u2', status: 200, json: PRODUCT_SUMMARY },
+    ])
+    expect(arr).toHaveLength(2)
   })
 })
 
