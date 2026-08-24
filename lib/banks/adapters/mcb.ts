@@ -531,6 +531,7 @@ export async function loginAndScrapeMcb(
         // Sans arrangement (contexte société courant) — repli de diagnostic.
         tryUrls.push(`${origin}/api/transaction-manager/client-api/v2/transactions?from=0&size=${maxN}`)
 
+        let tokMarker = ''
         for (const url of tryUrls.slice(0, 6)) {
           const res = await page.evaluate(async (u: string) => {
             const cookie = (n: string) => {
@@ -538,19 +539,47 @@ export async function loginAndScrapeMcb(
               return m ? decodeURIComponent(m[1]) : ''
             }
             const xsrf = cookie('XSRF-TOKEN') || cookie('XSRF-TOKEN-IB') || cookie('CSRF-TOKEN') || ''
-            try {
-              const r = await fetch(u, {
-                method: 'GET',
-                credentials: 'include',
-                headers: { Accept: 'application/json', ...(xsrf ? { 'X-XSRF-TOKEN': xsrf } : {}) },
-              })
-              const body = await r.text()
-              return { status: r.status, body: body.slice(0, 300000) }
-            } catch {
-              return { status: -1, body: '' }
-            }
-          }, url).catch(() => ({ status: -2, body: '' }))
 
+            // Backbase ajoute un token Bearer (JWT) via un intercepteur HTTP : un
+            // fetch brut avec cookies seuls reçoit 401. On récupère donc le JWT
+            // stocké par le SPA (session/localStorage), directement ou dans un
+            // objet JSON (access_token / accessToken / token).
+            const findJwt = (store: Storage): string => {
+              try {
+                for (let i = 0; i < store.length; i++) {
+                  const k = store.key(i)
+                  if (!k) continue
+                  const v = store.getItem(k) || ''
+                  if (/^eyJ[\w-]+\.[\w-]+\.[\w-]+$/.test(v)) return v
+                  if (v.includes('eyJ')) {
+                    try {
+                      const o = JSON.parse(v)
+                      const cand = o.access_token || o.accessToken || o.token ||
+                        (o.value && (o.value.access_token || o.value.accessToken)) ||
+                        (o.tokens && (o.tokens.access_token || o.tokens.accessToken))
+                      if (typeof cand === 'string' && /^eyJ/.test(cand)) return cand
+                    } catch { /* pas du JSON */ }
+                  }
+                }
+              } catch { /* storage inaccessible */ }
+              return ''
+            }
+            let bearer = ''
+            try { bearer = findJwt(sessionStorage) || findJwt(localStorage) } catch { /* */ }
+
+            const headers: Record<string, string> = { Accept: 'application/json' }
+            if (xsrf) headers['X-XSRF-TOKEN'] = xsrf
+            if (bearer) headers['Authorization'] = 'Bearer ' + bearer
+            try {
+              const r = await fetch(u, { method: 'GET', credentials: 'include', headers })
+              const body = await r.text()
+              return { status: r.status, body: body.slice(0, 300000), tok: bearer ? 1 : 0 }
+            } catch {
+              return { status: -1, body: '', tok: bearer ? 1 : 0 }
+            }
+          }, url).catch(() => ({ status: -2, body: '', tok: 0 }))
+
+          if (!tokMarker) tokMarker = `mode=inpage tok=${res.tok}`
           const tag = url.replace(origin, '').replace(/\?.*$/, '') +
             (url.includes('arrangementsIds') ? '?arrangementsIds' : url.includes('arrangementId') ? '?arrangementId' : '?none')
           let parsedN = 0
@@ -561,6 +590,7 @@ export async function loginAndScrapeMcb(
           dbg.push(`${tag}=${res.status}/len${res.body.length}/tx${parsedN}`)
           if (parsedN > 0) { apiTx = rows; break }
         }
+        if (tokMarker) dbg.splice(2, 0, tokMarker)
         txApiDebug = dbg.join(' || ')
       }
 
