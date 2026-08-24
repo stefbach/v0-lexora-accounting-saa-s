@@ -1,16 +1,23 @@
 "use client"
 
 /**
- * Page /client/pos — Point de vente (Module B, MVP).
+ * Page /client/pos — Point de vente (Module B).
  *
  * Session de caisse (ouverture avec fond initial, clôture avec comptage et
  * écart), écran caisse (recherche produit, panier, remises, totaux TVA),
  * encaissement multi-moyens et tickets du shift. La validation d'un ticket
  * est atomique côté serveur (RPC valider_vente_pos) : déduction de stock au
  * CUMP + écritures comptables (journal POS + COGS).
+ *
+ * Refonte "tableau de bord opérationnel" : au-delà de la caisse, la page
+ * fournit désormais l'analytics du shift (CA, panier moyen, répartition des
+ * moyens de paiement, CA par heure, top produits), l'historique des sessions
+ * clôturées et une analyse IA à la demande. Toute la logique métier et les
+ * appels API/RPC d'origine sont préservés — c'est une refonte de présentation
+ * et d'intelligence, pas de logique.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -48,10 +55,41 @@ import {
   Plus,
   Minus,
   Receipt,
+  TrendingUp,
+  Package,
+  History,
+  Wallet,
+  PieChart as PieIcon,
+  CornerDownLeft,
 } from "lucide-react"
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { calculerLigne, calculerTotaux, resteAPayer, type LignePanier } from "@/lib/pos/panier"
+import { sumMoney } from "@/lib/money"
+import {
+  KpiCard,
+  KpiGrid,
+  SectionCard,
+  ChartCard,
+  OpsEmpty,
+  OpsSkeleton,
+  OperationsInsights,
+  formatMUR,
+  formatNumber,
+  signedClass,
+} from "@/components/operations"
 import {
   LIBELLES_MOYEN_PAIEMENT,
   MOYENS_PAIEMENT,
@@ -77,13 +115,34 @@ interface SessionRow {
   depots?: { nom: string } | null
 }
 
+interface LigneTicket {
+  produit_id: string
+  quantite: number
+  montant_ttc: number
+  produits?: { sku: string; designation: string } | null
+}
+
 interface TicketRow {
   id: string
   numero_ticket: string
   date_vente: string
+  montant_ht?: number
   montant_ttc: number
   statut: string
+  session_caisse_id?: string
   paiements_pos?: Array<{ moyen_paiement: MoyenPaiement; montant: number }>
+  lignes_vente_pos?: LigneTicket[]
+}
+
+interface HistoriqueSession {
+  id: string
+  statut: string
+  ouverte_at: string
+  fermee_at: string | null
+  fond_ouverture: number
+  fond_fermeture_compte: number | null
+  ecart_caisse: number | null
+  depots?: { nom: string } | null
 }
 
 interface PanierItem extends LignePanier {
@@ -107,11 +166,28 @@ interface RecapFermeture {
   par_moyen: Record<string, number>
 }
 
+/** Couleur d'accent par moyen de paiement (donut + badges). */
+const COULEUR_MOYEN: Record<MoyenPaiement, string> = {
+  especes: "#0F766E",
+  carte: "#0B0F2E",
+  mobile_money: "#D4AF37",
+  virement: "#2A6FCC",
+}
+
+/** Montant unitaire (centimes) pour panier & dialogs. */
 function fmt(n: number): string {
   return (Number(n) || 0).toLocaleString("fr-FR", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }) + " MUR"
+}
+
+/** Initiales lisibles d'un produit pour la vignette de la grille caisse. */
+function initiales(designation: string): string {
+  const mots = designation.trim().split(/\s+/).filter(Boolean)
+  if (mots.length === 0) return "?"
+  if (mots.length === 1) return mots[0].slice(0, 2).toUpperCase()
+  return (mots[0][0] + mots[1][0]).toUpperCase()
 }
 
 export default function PosPage() {
@@ -123,8 +199,11 @@ export default function PosPage() {
   const [session, setSession] = useState<SessionRow | null>(null)
   const [produits, setProduits] = useState<ProduitRow[]>([])
   const [tickets, setTickets] = useState<TicketRow[]>([])
+  const [historique, setHistorique] = useState<HistoriqueSession[]>([])
+  const [caParSession, setCaParSession] = useState<Record<string, number>>({})
   const [search, setSearch] = useState("")
   const [panier, setPanier] = useState<PanierItem[]>([])
+  const searchRef = useRef<HTMLInputElement>(null)
 
   const [fondOuverture, setFondOuverture] = useState("")
   const [encaisserOpen, setEncaisserOpen] = useState(false)
@@ -142,21 +221,39 @@ export default function PosPage() {
     if (!societeId) return
     setLoading(true)
     try {
-      const sRes = await fetch(`/api/client/pos/sessions?societe_id=${societeId}&statut=ouverte`)
+      const [sRes, pRes, hRes, vRes] = await Promise.all([
+        fetch(`/api/client/pos/sessions?societe_id=${societeId}&statut=ouverte`),
+        fetch(`/api/client/inventaire/produits?societe_id=${societeId}`),
+        fetch(`/api/client/pos/sessions?societe_id=${societeId}&statut=fermee`),
+        fetch(`/api/client/pos/ventes?societe_id=${societeId}`),
+      ])
+
       const sData = await sRes.json()
       if (!sRes.ok) throw new Error(sData.error || "Erreur sessions")
       const ouverte: SessionRow | null = (sData.items || [])[0] || null
       setSession(ouverte)
 
-      const pRes = await fetch(`/api/client/inventaire/produits?societe_id=${societeId}`)
       const pData = await pRes.json()
       if (!pRes.ok) throw new Error(pData.error || "Erreur produits")
       setProduits((pData.items || []).filter((p: ProduitRow) => p.actif))
 
+      const hData = await hRes.json()
+      if (hRes.ok) setHistorique(hData.items || [])
+
+      // CA validé agrégé par session (alimente l'historique et le shift courant).
+      const vData = await vRes.json()
+      const allVentes: TicketRow[] = vRes.ok ? vData.items || [] : []
+      const caMap: Record<string, number[]> = {}
+      for (const v of allVentes) {
+        if (v.statut !== "validee" || !v.session_caisse_id) continue
+        ;(caMap[v.session_caisse_id] ||= []).push(Number(v.montant_ttc) || 0)
+      }
+      setCaParSession(
+        Object.fromEntries(Object.entries(caMap).map(([k, arr]) => [k, sumMoney(arr)])),
+      )
+
       if (ouverte) {
-        const tRes = await fetch(`/api/client/pos/ventes?societe_id=${societeId}&session_id=${ouverte.id}`)
-        const tData = await tRes.json()
-        if (tRes.ok) setTickets(tData.items || [])
+        setTickets(allVentes.filter((v) => v.session_caisse_id === ouverte.id))
       } else {
         setTickets([])
       }
@@ -186,14 +283,96 @@ export default function PosPage() {
 
   const totaux = useMemo(() => calculerTotaux(panier), [panier])
 
+  const ticketsValides = useMemo(
+    () => tickets.filter((t) => t.statut === "validee"),
+    [tickets],
+  )
+
   const totalEspecesSession = useMemo(
     () =>
-      tickets
-        .filter((t) => t.statut === "validee")
-        .flatMap((t) => t.paiements_pos || [])
-        .filter((p) => p.moyen_paiement === "especes")
-        .reduce((s, p) => s + (Number(p.montant) || 0), 0),
-    [tickets],
+      sumMoney(
+        ticketsValides
+          .flatMap((t) => t.paiements_pos || [])
+          .filter((p) => p.moyen_paiement === "especes")
+          .map((p) => Number(p.montant) || 0),
+      ),
+    [ticketsValides],
+  )
+
+  /* ── Analytics du shift ──────────────────────────────────────────── */
+  const analytics = useMemo(() => {
+    const caShift = sumMoney(ticketsValides.map((t) => Number(t.montant_ttc) || 0))
+    const nbTickets = ticketsValides.length
+    const panierMoyen = nbTickets > 0 ? caShift / nbTickets : 0
+
+    // Répartition par moyen de paiement (donut).
+    const parMoyen = MOYENS_PAIEMENT.map((moyen) => ({
+      moyen,
+      name: LIBELLES_MOYEN_PAIEMENT[moyen],
+      value: sumMoney(
+        ticketsValides
+          .flatMap((t) => t.paiements_pos || [])
+          .filter((p) => p.moyen_paiement === moyen)
+          .map((p) => Number(p.montant) || 0),
+      ),
+    })).filter((d) => d.value > 0)
+
+    // CA par heure d'ouverture (bar).
+    const parHeureMap = new Map<number, number[]>()
+    for (const t of ticketsValides) {
+      const h = new Date(t.date_vente).getHours()
+      const arr = parHeureMap.get(h) ?? []
+      arr.push(Number(t.montant_ttc) || 0)
+      parHeureMap.set(h, arr)
+    }
+    const caParHeure = Array.from(parHeureMap.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([h, arr]) => ({ heure: `${String(h).padStart(2, "0")}h`, ca: sumMoney(arr) }))
+
+    // Top produits vendus (par CA TTC).
+    const prodMap = new Map<string, { designation: string; qte: number; ca: number[] }>()
+    for (const t of ticketsValides) {
+      for (const l of t.lignes_vente_pos || []) {
+        const key = l.produit_id
+        const cur = prodMap.get(key) ?? {
+          designation: l.produits?.designation || l.produits?.sku || "Produit",
+          qte: 0,
+          ca: [],
+        }
+        cur.qte += Number(l.quantite) || 0
+        cur.ca.push(Number(l.montant_ttc) || 0)
+        prodMap.set(key, cur)
+      }
+    }
+    const topProduits = Array.from(prodMap.values())
+      .map((p) => ({ designation: p.designation, qte: p.qte, ca: sumMoney(p.ca) }))
+      .sort((a, b) => b.ca - a.ca)
+      .slice(0, 6)
+
+    return { caShift, nbTickets, panierMoyen, parMoyen, caParHeure, topProduits }
+  }, [ticketsValides])
+
+  const especesTheoriques = (session?.fond_ouverture || 0) + totalEspecesSession
+  const dernierEcart = historique.find((h) => h.ecart_caisse !== null)?.ecart_caisse ?? null
+
+  const insightsPayload = useMemo(
+    () => ({
+      ca_shift: analytics.caShift,
+      nb_tickets: analytics.nbTickets,
+      panier_moyen: analytics.panierMoyen,
+      fond_ouverture: session?.fond_ouverture || 0,
+      especes_encaissees: totalEspecesSession,
+      especes_theoriques_en_caisse: especesTheoriques,
+      repartition_moyens_paiement: analytics.parMoyen.map((m) => ({
+        moyen: m.moyen,
+        montant: m.value,
+      })),
+      ca_par_heure: analytics.caParHeure,
+      top_produits: analytics.topProduits,
+      ecart_derniere_cloture: dernierEcart,
+      nb_sessions_cloturees: historique.length,
+    }),
+    [analytics, session, totalEspecesSession, especesTheoriques, dernierEcart, historique.length],
   )
 
   const ajouterAuPanier = (p: ProduitRow) => {
@@ -233,6 +412,18 @@ export default function PosPage() {
         )
         .filter((l) => l.quantite > 0),
     )
+  }
+
+  /** Entrée dans la recherche : ajoute le 1er produit vendable au panier (scan-like). */
+  const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter") return
+    e.preventDefault()
+    const cible = produitsFiltres.find((p) => !(p.gere_en_stock && stockDe(p) <= 0))
+    if (cible) {
+      ajouterAuPanier(cible)
+      setSearch("")
+      searchRef.current?.focus()
+    }
   }
 
   const ouvrirSession = async () => {
@@ -332,12 +523,15 @@ export default function PosPage() {
     }
   }
 
+  const aDesTickets = ticketsValides.length > 0
+
   return (
     <ClientPageShell
       breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Point de vente" }]}
       kicker="Gestion commerciale"
       title="Point de vente"
-      subtitle="Caisse tactile : panier, TVA, encaissement multi-moyens, déduction de stock temps réel et écritures automatiques (journal POS)."
+      subtitle="Caisse tactile et pilotage du shift : panier, TVA, encaissement multi-moyens, déduction de stock temps réel, écritures automatiques et analytics de session."
+      disableParticles
       actions={
         session ? (
           <Button variant="outline" size="sm" onClick={() => setClotureOpen(true)}>
@@ -348,6 +542,7 @@ export default function PosPage() {
     >
       {toast && (
         <div
+          role="status"
           className={`mb-4 rounded-md px-4 py-2 text-sm ${
             toast.type === "success" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"
           }`}
@@ -357,116 +552,289 @@ export default function PosPage() {
       )}
 
       {loading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
+        <OpsSkeleton kpis={4} chart rows={3} />
       ) : !session ? (
         /* ── Ouverture de session ─────────────────────────────────── */
-        <Card className="max-w-md mx-auto">
-          <CardContent className="pt-6 space-y-4">
-            <div className="text-center">
-              <Banknote className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-              <h2 className="font-semibold">Ouvrir une session de caisse</h2>
-              <p className="text-sm text-muted-foreground">
-                Saisissez le fond de caisse initial (espèces) pour démarrer le shift.
-              </p>
-            </div>
-            <div>
-              <Label>Fond de caisse d&apos;ouverture (MUR)</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={fondOuverture}
-                onChange={(e) => setFondOuverture(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <Button className="w-full" onClick={ouvrirSession} disabled={submitting}>
-              {submitting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Ouvrir la caisse
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+          <Card className="max-w-md mx-auto">
+            <CardContent className="pt-6 space-y-4">
+              <div className="text-center">
+                <div
+                  className="w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center"
+                  style={{ backgroundColor: "rgba(212,175,55,0.12)" }}
+                >
+                  <Banknote className="h-6 w-6 text-[#A88925]" />
+                </div>
+                <h2 className="font-semibold text-[#0B0F2E]">Ouvrir une session de caisse</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Saisissez le fond de caisse initial (espèces) pour démarrer le shift.
+                </p>
+              </div>
+              <div>
+                <Label>Fond de caisse d&apos;ouverture (MUR)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={fondOuverture}
+                  onChange={(e) => setFondOuverture(e.target.value)}
+                  placeholder="0.00"
+                  autoFocus
+                />
+              </div>
+              <Button className="w-full" onClick={ouvrirSession} disabled={submitting}>
+                {submitting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Ouvrir la caisse
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Historique visible même caisse fermée */}
+          <HistoriqueSessions historique={historique} caParSession={caParSession} />
+        </div>
       ) : (
-        <>
-          <div className="mb-4 flex items-center gap-2 flex-wrap text-sm">
+        <div className="space-y-6">
+          {/* ── Bandeau session ──────────────────────────────────────── */}
+          <div className="flex items-center gap-2 flex-wrap text-sm">
             <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
               Session ouverte
             </Badge>
             <span className="text-muted-foreground">
-              {session.depots?.nom || "Caisse"} · fond d&apos;ouverture {fmt(session.fond_ouverture)} ·
-              espèces encaissées {fmt(totalEspecesSession)} · {tickets.length} ticket
-              {tickets.length > 1 ? "s" : ""}
+              {session.depots?.nom || "Caisse"} · ouverte à{" "}
+              {new Date(session.ouverte_at).toLocaleTimeString("fr-FR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}{" "}
+              · fond d&apos;ouverture {fmt(session.fond_ouverture)}
             </span>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[1fr_400px]">
-            {/* ── Produits ─────────────────────────────────────────── */}
-            <Card>
-              <CardContent className="pt-4">
-                <div className="relative mb-3">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Rechercher un produit (SKU, désignation)…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-8"
-                  />
+          {/* ── KPIs du shift ────────────────────────────────────────── */}
+          <KpiGrid cols={4}>
+            <KpiCard
+              label="CA du shift (TTC)"
+              value={formatMUR(analytics.caShift)}
+              icon={TrendingUp}
+              color="#0F766E"
+              hint={`${formatNumber(analytics.nbTickets)} ticket${analytics.nbTickets > 1 ? "s" : ""}`}
+            />
+            <KpiCard
+              label="Tickets validés"
+              value={formatNumber(analytics.nbTickets)}
+              icon={Receipt}
+              color="#0B0F2E"
+            />
+            <KpiCard
+              label="Panier moyen"
+              value={formatMUR(analytics.panierMoyen)}
+              icon={ShoppingCart}
+              color="#A88925"
+            />
+            <KpiCard
+              label="Espèces en caisse (théorique)"
+              value={formatMUR(especesTheoriques)}
+              icon={Wallet}
+              color="#0B0F2E"
+              hint={`fond ${formatMUR(session.fond_ouverture)} + encaissé ${formatMUR(totalEspecesSession)}`}
+            />
+          </KpiGrid>
+
+          {/* ── Graphiques analytics ─────────────────────────────────── */}
+          {aDesTickets ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <ChartCard
+                title="Répartition par moyen de paiement"
+                subtitle="Encaissements du shift (TTC)"
+                height={260}
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={analytics.parMoyen}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={58}
+                      outerRadius={92}
+                      paddingAngle={2}
+                      stroke="none"
+                    >
+                      {analytics.parMoyen.map((d) => (
+                        <Cell key={d.moyen} fill={COULEUR_MOYEN[d.moyen]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v: number, n) => [fmt(v), n as string]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1">
+                  {analytics.parMoyen.map((d) => (
+                    <div key={d.moyen} className="flex items-center gap-1.5 text-xs text-gray-600">
+                      <span
+                        className="inline-block w-2.5 h-2.5 rounded-sm"
+                        style={{ backgroundColor: COULEUR_MOYEN[d.moyen] }}
+                        aria-hidden="true"
+                      />
+                      {d.name} · <span className="font-medium">{formatMUR(d.value)}</span>
+                    </div>
+                  ))}
                 </div>
-                {produitsFiltres.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-8 text-center">
-                    Aucun produit vendable — créez vos articles dans Stock &amp; inventaire.
-                  </p>
-                ) : (
-                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                    {produitsFiltres.map((p) => {
-                      const stock = stockDe(p)
-                      const rupture = p.gere_en_stock && stock <= 0
-                      return (
-                        <button
-                          key={p.id}
-                          onClick={() => !rupture && ajouterAuPanier(p)}
-                          disabled={rupture}
-                          className={`rounded-md border p-3 text-left transition hover:border-primary hover:bg-accent ${
-                            rupture ? "opacity-50 cursor-not-allowed" : ""
-                          }`}
+              </ChartCard>
+
+              <ChartCard title="Chiffre d'affaires par heure" subtitle="TTC encaissé" height={260}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={analytics.caParHeure} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef1f5" />
+                    <XAxis dataKey="heure" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip formatter={(v: number) => fmt(v)} />
+                    <Bar dataKey="ca" name="CA" fill="#D4AF37" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartCard>
+            </div>
+          ) : (
+            <SectionCard title="Analytics du shift" subtitle="Répartition, CA horaire et top produits">
+              <OpsEmpty
+                icon={PieIcon}
+                title="Aucune vente pour l'instant"
+                description="Les graphiques du shift (moyens de paiement, CA par heure, top produits) apparaîtront dès le premier ticket encaissé."
+              />
+            </SectionCard>
+          )}
+
+          {/* ── Top produits ─────────────────────────────────────────── */}
+          {aDesTickets && analytics.topProduits.length > 0 && (
+            <SectionCard title="Top produits vendus" subtitle="Sur la session en cours" contentClassName="pt-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Produit</TableHead>
+                      <TableHead className="text-right">Qté</TableHead>
+                      <TableHead className="text-right">CA TTC</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {analytics.topProduits.map((p, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-medium">{p.designation}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatNumber(p.qte, 0)}</TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">
+                          {formatMUR(p.ca)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </SectionCard>
+          )}
+
+          {/* ── Caisse (produits + panier) ───────────────────────────── */}
+          <div className="grid gap-4 lg:grid-cols-[1fr_400px]">
+            {/* Produits */}
+            <SectionCard
+              title="Caisse"
+              subtitle="Cliquez ou scannez pour ajouter au panier"
+              contentClassName="pt-3"
+            >
+              <div className="relative mb-3">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  ref={searchRef}
+                  placeholder="Rechercher un produit (SKU, désignation)…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={onSearchKeyDown}
+                  className="pl-8 pr-24"
+                  aria-label="Rechercher un produit"
+                  autoFocus
+                />
+                <span className="pointer-events-none absolute right-2 top-1.5 hidden items-center gap-1 rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground sm:flex">
+                  <CornerDownLeft className="h-3 w-3" /> ajouter
+                </span>
+              </div>
+              {produitsFiltres.length === 0 ? (
+                <OpsEmpty
+                  icon={Package}
+                  title={search ? "Aucun résultat" : "Aucun produit vendable"}
+                  description={
+                    search
+                      ? "Aucun produit ne correspond à votre recherche."
+                      : "Créez vos articles dans Stock & inventaire pour les vendre en caisse."
+                  }
+                />
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {produitsFiltres.map((p) => {
+                    const stock = stockDe(p)
+                    const rupture = p.gere_en_stock && stock <= 0
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => !rupture && ajouterAuPanier(p)}
+                        disabled={rupture}
+                        aria-label={`Ajouter ${p.designation}${rupture ? " (rupture)" : ""}`}
+                        className={`group flex gap-2.5 rounded-lg border p-3 text-left transition hover:border-[#D4AF37] hover:shadow-sm ${
+                          rupture ? "opacity-50 cursor-not-allowed" : "hover:bg-[#D4AF37]/5"
+                        }`}
+                      >
+                        <div
+                          className="w-9 h-9 shrink-0 rounded-md flex items-center justify-center text-xs font-semibold text-[#0B0F2E]"
+                          style={{ backgroundColor: "rgba(11,15,46,0.06)" }}
+                          aria-hidden="true"
                         >
-                          <div className="font-mono text-[11px] text-muted-foreground">{p.sku}</div>
-                          <div className="text-sm font-medium truncate">{p.designation}</div>
-                          <div className="mt-1 flex items-center justify-between text-xs">
-                            <span className="font-semibold">{fmt(p.prix_vente_ht)} HT</span>
+                          {initiales(p.designation)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-mono text-[10px] text-muted-foreground">{p.sku}</div>
+                          <div className="text-sm font-medium leading-tight truncate">{p.designation}</div>
+                          <div className="mt-1 flex items-center justify-between gap-1 text-xs">
+                            <span className="font-semibold text-[#0B0F2E]">{fmt(p.prix_vente_ht)} HT</span>
                             {p.gere_en_stock ? (
-                              <span className={rupture ? "text-red-600" : "text-muted-foreground"}>
-                                {rupture ? "Rupture" : `Stock ${stock}`}
-                              </span>
+                              <Badge
+                                variant="secondary"
+                                className={
+                                  rupture
+                                    ? "bg-[#9F1239]/10 text-[#9F1239] hover:bg-[#9F1239]/10"
+                                    : stock <= 5
+                                      ? "bg-amber-100 text-amber-800 hover:bg-amber-100"
+                                      : "bg-emerald-50 text-emerald-700 hover:bg-emerald-50"
+                                }
+                              >
+                                {rupture ? "Rupture" : `Stock ${formatNumber(stock)}`}
+                              </Badge>
                             ) : (
-                              <span className="text-muted-foreground">Service</span>
+                              <Badge variant="secondary">Service</Badge>
                             )}
                           </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </SectionCard>
 
-            {/* ── Panier ───────────────────────────────────────────── */}
-            <Card className="h-fit lg:sticky lg:top-4">
-              <CardContent className="pt-4">
-                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            {/* Panier */}
+            <Card className="h-fit lg:sticky lg:top-4 py-0">
+              <CardContent className="p-4">
+                <h3 className="text-sm font-semibold text-[#0B0F2E] mb-3 flex items-center gap-2">
                   <ShoppingCart className="h-4 w-4" /> Panier ({panier.length})
                 </h3>
                 {panier.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-6 text-center">
-                    Cliquez sur un produit pour l&apos;ajouter.
-                  </p>
+                  <div className="py-8 text-center">
+                    <ShoppingCart className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
+                    <p className="text-sm text-muted-foreground">
+                      Cliquez sur un produit pour l&apos;ajouter.
+                    </p>
+                  </div>
                 ) : (
                   <div className="space-y-3">
                     {panier.map((l) => {
                       const m = calculerLigne(l)
                       return (
-                        <div key={l.produit_id} className="rounded-md border p-2.5">
+                        <div key={l.produit_id} className="rounded-lg border p-2.5 bg-gray-50/50">
                           <div className="flex items-center justify-between gap-2">
                             <div className="min-w-0">
                               <div className="text-sm font-medium truncate">{l.designation}</div>
@@ -475,6 +843,7 @@ export default function PosPage() {
                             <Button
                               variant="ghost"
                               size="sm"
+                              aria-label={`Retirer ${l.designation}`}
                               onClick={() => setPanier((prev) => prev.filter((x) => x.produit_id !== l.produit_id))}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -482,11 +851,23 @@ export default function PosPage() {
                           </div>
                           <div className="mt-2 flex items-center gap-2 flex-wrap">
                             <div className="flex items-center gap-1">
-                              <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => changerQuantite(l.produit_id, -1)}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                aria-label="Diminuer la quantité"
+                                onClick={() => changerQuantite(l.produit_id, -1)}
+                              >
                                 <Minus className="h-3 w-3" />
                               </Button>
-                              <span className="w-8 text-center text-sm">{l.quantite}</span>
-                              <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => changerQuantite(l.produit_id, 1)}>
+                              <span className="w-8 text-center text-sm tabular-nums">{l.quantite}</span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                aria-label="Augmenter la quantité"
+                                onClick={() => changerQuantite(l.produit_id, 1)}
+                              >
                                 <Plus className="h-3 w-3" />
                               </Button>
                             </div>
@@ -497,6 +878,7 @@ export default function PosPage() {
                                 min="0"
                                 max="100"
                                 step="0.01"
+                                aria-label={`Remise sur ${l.designation}`}
                                 className="h-7 w-16 text-xs"
                                 value={l.remise_pct || ""}
                                 onChange={(e) =>
@@ -506,7 +888,7 @@ export default function PosPage() {
                                 }
                               />
                             </div>
-                            <span className="ml-auto text-sm font-semibold">{fmt(m.montant_ttc)}</span>
+                            <span className="ml-auto text-sm font-semibold tabular-nums">{fmt(m.montant_ttc)}</span>
                           </div>
                         </div>
                       )
@@ -515,15 +897,15 @@ export default function PosPage() {
                     <div className="border-t pt-3 space-y-1 text-sm">
                       <div className="flex justify-between text-muted-foreground">
                         <span>Total HT</span>
-                        <span>{fmt(totaux.total_ht)}</span>
+                        <span className="tabular-nums">{fmt(totaux.total_ht)}</span>
                       </div>
                       <div className="flex justify-between text-muted-foreground">
                         <span>TVA</span>
-                        <span>{fmt(totaux.total_tva)}</span>
+                        <span className="tabular-nums">{fmt(totaux.total_tva)}</span>
                       </div>
-                      <div className="flex justify-between text-base font-bold">
+                      <div className="flex justify-between text-base font-bold text-[#0B0F2E]">
                         <span>Total TTC</span>
-                        <span>{fmt(totaux.total_ttc)}</span>
+                        <span className="tabular-nums">{fmt(totaux.total_ttc)}</span>
                       </div>
                     </div>
                     <Button className="w-full" size="lg" onClick={ouvrirEncaissement}>
@@ -536,50 +918,65 @@ export default function PosPage() {
           </div>
 
           {/* ── Tickets du shift ─────────────────────────────────────── */}
-          <Card className="mt-4">
-            <CardContent className="pt-4">
-              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <SectionCard
+            title={
+              <span className="flex items-center gap-2">
                 <Receipt className="h-4 w-4" /> Tickets de la session
-              </h3>
-              {tickets.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">Aucun ticket pour l&apos;instant.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Ticket</TableHead>
-                        <TableHead>Heure</TableHead>
-                        <TableHead>Paiement</TableHead>
-                        <TableHead className="text-right">Montant TTC</TableHead>
+              </span>
+            }
+            subtitle={`${tickets.length} ticket${tickets.length > 1 ? "s" : ""}`}
+            contentClassName="pt-0"
+          >
+            {tickets.length === 0 ? (
+              <OpsEmpty
+                icon={Receipt}
+                title="Aucun ticket"
+                description="Les tickets encaissés durant ce shift s'afficheront ici."
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Ticket</TableHead>
+                      <TableHead>Heure</TableHead>
+                      <TableHead>Paiement</TableHead>
+                      <TableHead className="text-right">Montant TTC</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {tickets.map((t) => (
+                      <TableRow key={t.id}>
+                        <TableCell className="font-mono text-xs">{t.numero_ticket}</TableCell>
+                        <TableCell>
+                          {new Date(t.date_vente).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1 flex-wrap">
+                            {(t.paiements_pos || []).map((p, i) => (
+                              <Badge key={i} variant="secondary">
+                                {LIBELLES_MOYEN_PAIEMENT[p.moyen_paiement] || p.moyen_paiement} · {fmt(p.montant)}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">{fmt(t.montant_ttc)}</TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {tickets.map((t) => (
-                        <TableRow key={t.id}>
-                          <TableCell className="font-mono text-xs">{t.numero_ticket}</TableCell>
-                          <TableCell>
-                            {new Date(t.date_vente).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-1 flex-wrap">
-                              {(t.paiements_pos || []).map((p, i) => (
-                                <Badge key={i} variant="secondary">
-                                  {LIBELLES_MOYEN_PAIEMENT[p.moyen_paiement] || p.moyen_paiement} · {fmt(p.montant)}
-                                </Badge>
-                              ))}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right font-medium">{fmt(t.montant_ttc)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </SectionCard>
+
+          {/* ── Analyse IA ───────────────────────────────────────────── */}
+          <SectionCard contentClassName="pt-4">
+            <OperationsInsights module="pos" societeId={societeId} payload={insightsPayload} />
+          </SectionCard>
+
+          {/* ── Historique des sessions ──────────────────────────────── */}
+          <HistoriqueSessions historique={historique} caParSession={caParSession} />
+        </div>
       )}
 
       {/* ── Dialog encaissement ────────────────────────────────────── */}
@@ -627,6 +1024,7 @@ export default function PosPage() {
                   <Button
                     variant="ghost"
                     size="sm"
+                    aria-label="Retirer ce moyen de paiement"
                     onClick={() => setPaiements((prev) => prev.filter((_, j) => j !== i))}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -685,6 +1083,7 @@ export default function PosPage() {
                 step="0.01"
                 value={fondCompte}
                 onChange={(e) => setFondCompte(e.target.value)}
+                autoFocus
               />
             </div>
             <p className="text-xs text-muted-foreground">
@@ -747,5 +1146,76 @@ export default function PosPage() {
         </DialogContent>
       </Dialog>
     </ClientPageShell>
+  )
+}
+
+/* ── Historique des sessions clôturées ──────────────────────────────── */
+function HistoriqueSessions({
+  historique,
+  caParSession,
+}: {
+  historique: HistoriqueSession[]
+  caParSession: Record<string, number>
+}) {
+  return (
+    <SectionCard
+      title={
+        <span className="flex items-center gap-2">
+          <History className="h-4 w-4" /> Historique des sessions
+        </span>
+      }
+      subtitle="Sessions clôturées, CA et écart de caisse"
+      contentClassName="pt-0"
+    >
+      {historique.length === 0 ? (
+        <OpsEmpty
+          icon={History}
+          title="Aucune session clôturée"
+          description="L'historique des shifts précédents (CA, fond compté, écart) apparaîtra ici après la première clôture."
+        />
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Clôturée le</TableHead>
+                <TableHead>Caisse</TableHead>
+                <TableHead className="text-right">CA TTC</TableHead>
+                <TableHead className="text-right">Fond compté</TableHead>
+                <TableHead className="text-right">Écart</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {historique.map((h) => {
+                const ca = caParSession[h.id] ?? 0
+                const ecart = h.ecart_caisse
+                return (
+                  <TableRow key={h.id}>
+                    <TableCell className="whitespace-nowrap">
+                      {h.fermee_at
+                        ? new Date(h.fermee_at).toLocaleString("fr-FR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—"}
+                    </TableCell>
+                    <TableCell>{h.depots?.nom || "Caisse"}</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">{formatMUR(ca)}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatMUR(h.fond_fermeture_compte)}
+                    </TableCell>
+                    <TableCell className={`text-right tabular-nums font-medium ${signedClass(ecart)}`}>
+                      {ecart === null ? "—" : formatMUR(ecart)}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </SectionCard>
   )
 }
