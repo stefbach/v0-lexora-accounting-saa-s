@@ -1,0 +1,258 @@
+/**
+ * Extraction TOLÉRANTE des données bancaires depuis les réponses JSON de l'API
+ * interne du portail (Backbase pour MCB : `ibpro.mcb.mu/api/...`).
+ *
+ * Pourquoi : cliquer/scroller dans un SPA est fragile (« à l'aveugle, étape par
+ * étape »). Le SPA, lui, charge ses données depuis sa propre API REST. Une fois
+ * la session authentifiée (cookies), on capte ces réponses et on lit comptes /
+ * transactions / relevés en DONNÉES STRUCTURÉES — sans navigation ni sélecteurs.
+ *
+ * L'intelligence est ici : on ne connaît pas la nomenclature exacte des champs
+ * (elle varie entre banques et versions), donc on reconnaît les données par
+ * MOTIF, en marchant récursivement dans n'importe quel JSON :
+ *   - un compte = un objet avec un numéro de compte (9-18 chiffres) + un/des
+ *     soldes (booked/ledger, available) ;
+ *   - une transaction = un élément de tableau avec une date + un montant ;
+ *   - un montant Backbase peut être un objet { amount, currencyCode }.
+ *
+ * Déterministe, pur, testé. Réutilise les types AccountRow / RawTransactionRow /
+ * RawStatementRow des autres modules pour que le downstream ne change pas.
+ */
+
+import type { AccountRow } from './accounts-parse'
+import type { RawTransactionRow } from './transactions-parse'
+import type { RawStatementRow } from './statements-parse'
+
+const ACCOUNT_RE = /\b\d{9,18}\b/
+
+type Json = unknown
+
+/** Applique `cb` sur chaque objet simple rencontré (récursif, sûr). */
+function walkObjects(root: Json, cb: (obj: Record<string, unknown>) => void, depth = 0): void {
+  if (root == null || depth > 12) return
+  if (Array.isArray(root)) {
+    for (const item of root) walkObjects(item, cb, depth + 1)
+    return
+  }
+  if (typeof root === 'object') {
+    cb(root as Record<string, unknown>)
+    for (const v of Object.values(root as Record<string, unknown>)) walkObjects(v, cb, depth + 1)
+  }
+}
+
+/** Applique `cb` sur chaque tableau rencontré (récursif, sûr). */
+function walkArrays(root: Json, cb: (arr: unknown[]) => void, depth = 0): void {
+  if (root == null || depth > 12) return
+  if (Array.isArray(root)) {
+    cb(root)
+    for (const item of root) walkArrays(item, cb, depth + 1)
+    return
+  }
+  if (typeof root === 'object') {
+    for (const v of Object.values(root as Record<string, unknown>)) walkArrays(v, cb, depth + 1)
+  }
+}
+
+/** Normalise une valeur monétaire (nombre, chaîne, ou objet Backbase {amount,…}). */
+export function moneyToString(v: unknown): string | undefined {
+  if (v == null) return undefined
+  if (typeof v === 'number') return Number.isFinite(v) ? String(v) : undefined
+  if (typeof v === 'string') return /\d/.test(v) ? v : undefined
+  if (typeof v === 'object') {
+    const o = v as Record<string, unknown>
+    if ('amount' in o) return moneyToString(o.amount)
+    if ('value' in o) return moneyToString(o.value)
+  }
+  return undefined
+}
+
+/** Devise depuis une valeur (chaîne ISO ou objet {currencyCode|currency}). */
+function currencyOf(v: unknown): string | undefined {
+  if (typeof v === 'string' && /^[A-Z]{3}$/.test(v.trim())) return v.trim()
+  if (v && typeof v === 'object') {
+    const o = v as Record<string, unknown>
+    const c = o.currencyCode ?? o.currency ?? o.ccy
+    if (typeof c === 'string' && /^[A-Z]{3}$/.test(c.trim())) return c.trim()
+  }
+  return undefined
+}
+
+/**
+ * Extrait les comptes trouvés dans un JSON d'API quelconque.
+ * Reconnaît un compte à : un numéro (9-18 chiffres, clé type BBAN/IBAN/number)
+ * + au moins un solde (available / booked-ledger / balance).
+ */
+export function findAccountsInJson(root: Json): AccountRow[] {
+  const out: AccountRow[] = []
+  const seen = new Set<string>()
+
+  walkObjects(root, (obj) => {
+    // 1) Numéro de compte : clé explicite d'abord, sinon toute chaîne-numéro.
+    let number: string | undefined
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v !== 'string') continue
+      if (/bban|iban|accountnumber|account_no|acctid|\bnumber\b/i.test(k)) {
+        const m = v.match(ACCOUNT_RE)
+        if (m) { number = m[0]; break }
+      }
+    }
+    if (!number) return // pas d'indice de numéro de compte → pas un compte
+
+    // 2) Devise (clé dédiée ou objet monétaire imbriqué).
+    let currency: string | undefined
+    for (const [k, v] of Object.entries(obj)) {
+      if (/curr|ccy/i.test(k)) { currency = currencyOf(v); if (currency) break }
+    }
+
+    // 3) Soldes : available / booked-ledger / générique.
+    let available: string | undefined
+    let ledger: string | undefined
+    let generic: string | undefined
+    for (const [k, v] of Object.entries(obj)) {
+      if (!/balance|amount/i.test(k)) continue
+      const s = moneyToString(v)
+      if (s == null) continue
+      if (!currency) currency = currencyOf(v)
+      if (/avail/i.test(k)) available = available ?? s
+      else if (/book|ledger/i.test(k)) ledger = ledger ?? s
+      else generic = generic ?? s
+    }
+    if (ledger == null) ledger = generic
+    if (available == null && ledger == null) return // aucun solde exploitable
+
+    const key = number.replace(/\D/g, '').replace(/^0+/, '')
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push({ number, currency, available, ledger })
+  })
+
+  return out
+}
+
+function transactionFromObject(o: Record<string, unknown>): RawTransactionRow | null {
+  let transactionDate: string | undefined
+  let valueDate: string | undefined
+  let amount: string | undefined
+  let balance: string | undefined
+  let reference: string | undefined
+  let description: string | undefined
+
+  for (const [k, v] of Object.entries(o)) {
+    const isString = typeof v === 'string'
+    if (/value.*date|date.*value/i.test(k) && isString) valueDate = valueDate ?? (v as string)
+    else if (/(booking|transaction|posting|operation|entry)?.*date|^date$/i.test(k) && isString) transactionDate = transactionDate ?? (v as string)
+
+    if (/amount/i.test(k) && amount == null) amount = moneyToString(v)
+    if (/running.*balance|balance.*after|\bbalance\b/i.test(k) && balance == null) balance = moneyToString(v)
+    if (/reference|endtoend|paymentid|transactionid/i.test(k) && isString && reference == null) reference = v as string
+    if (/description|narrative|counterparty|remittance|details|\btype\b/i.test(k) && isString && description == null) {
+      description = v as string
+    }
+  }
+
+  // Date de valeur peut avoir capté la seule date : replier.
+  if (!transactionDate && valueDate) transactionDate = valueDate
+  if (!transactionDate || amount == null) return null
+
+  return {
+    transactionDate,
+    valueDate: valueDate || transactionDate,
+    reference,
+    description,
+    amount,
+    balance,
+  }
+}
+
+/**
+ * Extrait les transactions du plus grand tableau d'objets « transaction » (une
+ * date + un montant) trouvé dans le JSON. Robuste aux enveloppes ({ data: [...],
+ * _embedded: { transactions: [...] } }, etc.).
+ */
+export function findTransactionsInJson(root: Json): RawTransactionRow[] {
+  let best: RawTransactionRow[] = []
+  walkArrays(root, (arr) => {
+    const rows: RawTransactionRow[] = []
+    for (const el of arr) {
+      if (el && typeof el === 'object' && !Array.isArray(el)) {
+        const r = transactionFromObject(el as Record<string, unknown>)
+        if (r) rows.push(r)
+      }
+    }
+    if (rows.length > best.length) best = rows
+  })
+  return best
+}
+
+function statementFromObject(o: Record<string, unknown>): RawStatementRow | null {
+  let dateGenerated: string | undefined
+  let docType: string | undefined
+  let filename: string | undefined
+  let downloadHref: string | undefined
+
+  for (const [k, v] of Object.entries(o)) {
+    const isString = typeof v === 'string'
+    if (/generat|created|statementdate|period|^date$|from|to/i.test(k) && isString && dateGenerated == null) {
+      dateGenerated = v as string
+    }
+    if (/type|category|kind/i.test(k) && isString && docType == null) docType = v as string
+    if (/name|filename|title|label/i.test(k) && isString && filename == null) filename = v as string
+    if (/url|href|link|download|uri/i.test(k) && isString && /http|\/|\.pdf/i.test(v as string) && downloadHref == null) {
+      downloadHref = v as string
+    }
+  }
+
+  if (!dateGenerated) return null
+  return { dateGenerated, docType, filename, downloadHref }
+}
+
+/** Extrait les relevés (métadonnées + lien) du plus grand tableau adéquat. */
+export function findStatementsInJson(root: Json): RawStatementRow[] {
+  let best: RawStatementRow[] = []
+  walkArrays(root, (arr) => {
+    const rows: RawStatementRow[] = []
+    for (const el of arr) {
+      if (el && typeof el === 'object' && !Array.isArray(el)) {
+        const r = statementFromObject(el as Record<string, unknown>)
+        if (r) rows.push(r)
+      }
+    }
+    if (rows.length > best.length) best = rows
+  })
+  return best
+}
+
+/** Une réponse d'API captée pendant le scrape (URL + JSON décodé). */
+export interface CapturedApiResponse {
+  url: string
+  status: number
+  json: Json
+}
+
+/** L'URL ressemble-t-elle à une API de données bancaires (à capter) ? */
+export function isBankApiUrl(url: string): boolean {
+  return /\/api\/|arrangement|product-summary|account|balance|transaction|statement|document/i.test(url)
+}
+
+/**
+ * Agrège l'extraction sur toutes les réponses captées. Prend, pour chaque type,
+ * le meilleur résultat (le plus complet) parmi les réponses.
+ */
+export function extractFromCaptured(responses: CapturedApiResponse[]): {
+  accounts: AccountRow[]
+  transactions: RawTransactionRow[]
+  statements: RawStatementRow[]
+} {
+  let accounts: AccountRow[] = []
+  let transactions: RawTransactionRow[] = []
+  let statements: RawStatementRow[] = []
+  for (const r of responses || []) {
+    const a = findAccountsInJson(r.json)
+    if (a.length > accounts.length) accounts = a
+    const t = findTransactionsInJson(r.json)
+    if (t.length > transactions.length) transactions = t
+    const s = findStatementsInJson(r.json)
+    if (s.length > statements.length) statements = s
+  }
+  return { accounts, transactions, statements }
+}
