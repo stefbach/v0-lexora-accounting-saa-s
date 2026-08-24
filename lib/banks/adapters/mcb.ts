@@ -506,30 +506,46 @@ export async function loginAndScrapeMcb(
       // qu'on a l'arrangementId du compte dans la réponse productsummary captée,
       // on interroge l'API directement avec la session authentifiée (page.request).
       let apiTx = extractFromCaptured(apiResponses).transactions
+      let txApiDebug = ''
       if (apiTx.length === 0) {
         const origin = new URL(page.url()).origin // https://ibpro.mcb.mu
-        const arr = arrangementsFromCaptured(apiResponses).find((a) =>
-          accountNumbersMatch(a.number, options.numero_compte),
-        )
+        const allArr = arrangementsFromCaptured(apiResponses)
+        const arr = allArr.find((a) => accountNumbersMatch(a.number, options.numero_compte))
+        const dbg: string[] = [
+          `arrangements=${allArr.length} [${allArr.map((a) => `${a.number}:${a.id.slice(0, 8)}`).join(',')}]`,
+          `matched=${arr ? arr.id : 'AUCUN'}`,
+        ]
+
+        // Endpoints/params Backbase à tester (l'appel direct via page.request est
+        // authentifié par les cookies de session mais n'apparaît PAS dans les URLs
+        // captées — d'où l'instrumentation ci-dessous qui remonte statut + taille
+        // + nb de transactions parsées, pour figer l'intégration à coup sûr).
+        const tryUrls: string[] = []
         if (arr) {
-          const base = `${origin}/api/transaction-manager/client-api/v2/transactions`
-          // Variantes de paramètres Backbase connues (arrangementId singulier /
-          // pluriel), tri par date décroissante, taille bornée.
-          const queries = [
-            `?arrangementId=${encodeURIComponent(arr.id)}&from=0&size=${maxN}`,
-            `?arrangementsIds=${encodeURIComponent(arr.id)}&from=0&size=${maxN}`,
-            `?arrangementId=${encodeURIComponent(arr.id)}&from=0&size=${maxN}&orderBy=bookingDate&direction=DESC`,
-          ]
-          for (const qs of queries) {
-            const json = await page.request.get(base + qs, { timeout: 15000 })
-              .then((r) => (r.ok() ? r.json() : null))
-              .catch(() => null)
-            if (json) {
-              const raws = findTransactionsInJson(json)
-              if (raws.length > 0) { apiTx = raws; break }
-            }
+          for (const ver of ['v2', 'v3']) {
+            const base = `${origin}/api/transaction-manager/client-api/${ver}/transactions`
+            tryUrls.push(`${base}?arrangementId=${encodeURIComponent(arr.id)}&from=0&size=${maxN}`)
+            tryUrls.push(`${base}?arrangementsIds=${encodeURIComponent(arr.id)}&from=0&size=${maxN}`)
           }
         }
+        // Sans arrangement (contexte société courant) — repli de diagnostic.
+        tryUrls.push(`${origin}/api/transaction-manager/client-api/v2/transactions?from=0&size=${maxN}`)
+
+        for (const url of tryUrls.slice(0, 6)) {
+          const resp = await page.request.get(url, { timeout: 15000 }).catch(() => null)
+          const tag = url.replace(origin, '').replace(/\?.*$/, '') +
+            (url.includes('arrangementsIds') ? '?arrangementsIds' : url.includes('arrangementId') ? '?arrangementId' : '?none')
+          if (!resp) { dbg.push(`${tag}=ERR`); continue }
+          const body = await resp.text().catch(() => '')
+          let parsedN = 0
+          let rows: ReturnType<typeof findTransactionsInJson> = []
+          if (resp.ok() && body) {
+            try { rows = findTransactionsInJson(JSON.parse(body)); parsedN = rows.length } catch { /* non-JSON */ }
+          }
+          dbg.push(`${tag}=${resp.status()}/len${body.length}/tx${parsedN}`)
+          if (parsedN > 0) { apiTx = rows; break }
+        }
+        txApiDebug = dbg.join(' || ')
       }
 
       // Repli final : DOM (grille Backbase) si l'API n'a rien donné.
@@ -584,10 +600,11 @@ export async function loginAndScrapeMcb(
         error:
           `Solde lu ✅ (${acct.balance} ${acct.currency || ''}) — transactions non extraites ` +
           `(0 ligne, ${apiTx.length} via API, ${allRowTexts.length} lignes DOM, sélection compte ${gotTxApi ? 'OK' : 'KO'}). ` +
+          `[API tx directe] ${txApiDebug || 'non tentée'}. ` +
           (apiUrls.length
             ? `API captées : ${apiUrls.join(' | ')}`
-            : `Aucune API transaction captée — copie le diagnostic de la page Transactions.`),
-        raw_excerpt: apiUrls.join('\n'),
+            : `Aucune API transaction captée.`),
+        raw_excerpt: [txApiDebug, apiUrls.join('\n')].filter(Boolean).join('\n---\n'),
         screenshot_b64: await captureScreenshot(page),
         diagnostic: await capturePageDiagnostic(page),
         duration_ms: Date.now() - t0,
