@@ -21,6 +21,7 @@
 
 import type { AccountRow } from './accounts-parse'
 import type { RawTransactionRow } from './transactions-parse'
+import { dedupeRawTransactions } from './transactions-parse'
 import type { RawStatementRow } from './statements-parse'
 
 const ACCOUNT_RE = /\b\d{9,18}\b/
@@ -263,6 +264,25 @@ export function findTransactionsInJson(root: Json): RawTransactionRow[] {
     if (rows.length > best.length) best = rows
   })
   return best
+}
+
+/**
+ * Union DÉDOUBLONNÉE des transactions trouvées dans TOUTES les réponses captées.
+ *
+ * Différence clé avec extractFromCaptured (qui ne garde que la plus grosse
+ * réponse) : quand le relevé est PAGINÉ, chaque page est une réponse API
+ * distincte captée au fil des clics « suivant / load more ». Ne prendre que la
+ * plus grosse ferait perdre les autres pages. Ici on concatène les transactions
+ * de chaque réponse puis on dédoublonne (référence FT… ou date+montant+libellé),
+ * de sorte que le total couvre toutes les pages chargées par le SPA.
+ */
+export function transactionsFromCaptured(responses: CapturedApiResponse[]): RawTransactionRow[] {
+  const all: RawTransactionRow[] = []
+  for (const r of responses || []) {
+    const rows = findTransactionsInJson(r.json)
+    if (rows.length > 0) all.push(...rows)
+  }
+  return dedupeRawTransactions(all)
 }
 
 function statementFromObject(o: Record<string, unknown>): RawStatementRow | null {
