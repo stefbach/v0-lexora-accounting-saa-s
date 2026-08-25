@@ -217,13 +217,33 @@ export async function processDocument(params: ProcessDocumentParams): Promise<Pr
     // Step 4: Call Anthropic
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
-    const contentBlock = isPdf
-      ? { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } }
-      : { type: 'image' as const, source: { type: 'base64' as const, media_type: imageMime, data: base64 } }
+    // Relevé bancaire de source de confiance (robot) : on OCRise le PDF en TEXTE
+    // via Mistral OCR (→ unpdf en repli) AVANT le modèle, comme la voie d'upload
+    // web (extractBankPdfText). La vision Claude échoue sur les PDF de relevé MCB
+    // (dynamiques/XFA → pages blanches en rasterisation → extraction vide,
+    // format « inconnu »). Mistral OCR lit le texte/les tableaux de façon fiable.
+    let statementOcrText: string | null = null
+    if (isPdf && forcedType === 'releve_bancaire') {
+      try {
+        const { extractBankPdfText } = await import('@/lib/ai/bank-statement-extraction')
+        statementOcrText = await extractBankPdfText(base64)
+        if (statementOcrText) {
+          console.warn(`[process-document] relevé OCRisé en texte (${statementOcrText.length} car.) — envoi en mode texte au modèle`)
+        }
+      } catch (e: any) {
+        console.warn('[process-document] extractBankPdfText a échoué, repli vision:', e?.message)
+      }
+    }
+
+    const contentBlock = statementOcrText
+      ? { type: 'text' as const, text: `Contenu texte d'un relevé bancaire (OCR serveur Mistral/unpdf). Identifie-le comme « releve_bancaire » et lis TOUTES les lignes du tableau de transactions.\n\n---DEBUT_RELEVE---\n${statementOcrText.slice(0, 120000)}\n---FIN_RELEVE---` }
+      : isPdf
+        ? { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } }
+        : { type: 'image' as const, source: { type: 'base64' as const, media_type: imageMime, data: base64 } }
 
     // Modèle : haiku par défaut ; modèle plus fort pour un relevé bancaire imposé
-    // (robot bancaire) — les relevés sont denses et haiku retournait une
-    // extraction vide (format « inconnu ») sur les PDF de relevé MCB.
+    // (robot bancaire) — relevés denses. Le texte OCRisé se traite bien, mais on
+    // garde sonnet pour la robustesse de l'extraction des tableaux.
     const ocrModel = forcedType === 'releve_bancaire' ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001'
     const response = await anthropic.messages.create({
       model: ocrModel,
