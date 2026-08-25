@@ -37,6 +37,7 @@ import { parseTransactions, parseTransactionsFromTexts, findBalanceBreaks, recon
 import { parseStatements, selectStatementsForBackfill, type RawStatementRow } from '../agentic/statements-parse'
 import {
   isBankApiUrl, extractFromCaptured, transactionsFromCaptured, arrangementsFromCaptured, findTransactionsInJson,
+  findStatementsInJson,
   type CapturedApiResponse,
 } from '../agentic/api-extract'
 
@@ -898,6 +899,38 @@ async function downloadMcbStatements(
     .click({ timeout: 3000 }).catch(() => {})
   await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {})
 
+  // ── Déclencher la LISTE des relevés ──
+  // Diagnostic réel : le SPA charge d'office /account-statements/category-options
+  // (juste les onglets Statements/Advices/Reports), mais la LISTE elle-même
+  // n'arrive qu'après sélection de la catégorie + une action « Search/View ».
+  // On sélectionne un éventuel type/période et on clique les boutons d'action
+  // plausibles, puis on ATTEND qu'une réponse « account-statements » (hors
+  // category-options / *-options / enumvalues) contenant des relevés soit captée
+  // — même principe éprouvé que pour la liste des transactions.
+  const isStatementList = (u: string) =>
+    /account-statement|statements/i.test(u) && !/category-options|type-options|enum-?values|[-/]options(\?|$)/i.test(u)
+  // Sélectionne le 1er choix d'un éventuel <select> de type/période de relevé.
+  await page.evaluate(() => {
+    for (const sel of Array.from(document.querySelectorAll('select'))) {
+      const s = sel as HTMLSelectElement
+      if (s.options.length > 1 && s.selectedIndex <= 0) {
+        s.selectedIndex = 1
+        s.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+    }
+  }).catch(() => {})
+  for (const rx of [/search|view|afficher|rechercher|generate|apply|submit|display|list|voir|valider|ok/i]) {
+    await page.getByRole('button', { name: rx }).first().click({ timeout: 1500 }).catch(() => {})
+  }
+  // Attend la vraie liste (jusqu'à 12 s) — le listener réseau alimente `captured`.
+  {
+    const start = Date.now()
+    while (Date.now() - start < 12000) {
+      if (captured.some((r) => isStatementList(r.url) && findStatementsInJson(r.json).length > 0)) break
+      await page.waitForTimeout(500)
+    }
+  }
+
   // 2) Extraire les relevés de la vue courante — agnostique à la structure
   //    (table OU grille de <div> Backbase). Ligne candidate = date de génération
   //    + mot « statement »/« relevé », avec éventuellement un href PDF. Le parse
@@ -967,13 +1000,23 @@ async function downloadMcbStatements(
     if (diag.parsed === 0) {
       diag.url = page.url()
       diag.navLabels = await collectNavLabels()
-      // Dump d'un échantillon de la/les réponse(s) API relevé (URL contenant
-      // statement/document/advice) pour figer le parseur au prochain run.
-      const stResp = captured.filter((r) => /statement|document|advice/i.test(r.url)).slice(-1)[0]
+      // Toutes les URLs de l'API relevés captées (chemins) — pour repérer
+      // l'endpoint exact de la LISTE (vs category-options déjà connu).
+      diag.apiUrls = Array.from(new Set(
+        captured
+          .filter((r) => /account-statement|statements|document|advice/i.test(r.url))
+          .map((r) => r.url.replace(/^https?:\/\/[^/]+/, ''))
+      )).slice(0, 15)
+      // Dump de la réponse « relevés » la plus grosse (hors category-options),
+      // pour figer le parseur au prochain run.
+      const stResp = captured
+        .filter((r) => isStatementList(r.url))
+        .sort((a, b) => JSON.stringify(b.json).length - JSON.stringify(a.json).length)[0]
+        || captured.filter((r) => /account-statement|statements/i.test(r.url)).slice(-1)[0]
       if (stResp) {
         try { diag.sampleRaw = `${stResp.url.replace(/^https?:\/\/[^/]+/, '')} → ${JSON.stringify(stResp.json).slice(0, 1500)}` } catch { /* nonjson */ }
       }
-      diag.note = "Navigué mais 0 relevé listé — structure de la réponse « statements » à confirmer (voir sampleRaw/url)."
+      diag.note = "Navigué mais 0 relevé listé — la LISTE des relevés n'est pas captée (voir apiUrls/sampleRaw)."
     } else {
       diag.note = "Tous les relevés listés sont déjà ingérés (rien de neuf à télécharger)."
     }
