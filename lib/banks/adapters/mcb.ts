@@ -657,7 +657,7 @@ export async function loginAndScrapeMcb(
       }
       // Résumé lisible de la phase PDF, persisté dans bank_scrape_runs.raw_excerpt.
       const pdfSummary = statementsDiag
-        ? `Relevés PDF: nav=${statementsDiag.navigated} compte=${statementsDiag.accountSelected} listés=${statementsDiag.parsed} téléchargés=${statementsDiag.downloaded}${statementsDiag.note ? ` — ${statementsDiag.note}` : ''}`
+        ? `Relevés PDF: nav=${statementsDiag.navigated} compte=${statementsDiag.accountSelected} listés=${statementsDiag.parsed} téléchargés=${statementsDiag.downloaded}${statementsDiag.pdfInfo ? ` [${statementsDiag.pdfInfo}]` : ''}${statementsDiag.note ? ` — ${statementsDiag.note}` : ''}`
         : ''
 
       // Solde toujours retourné ; transactions désormais mappées. Si l'extraction
@@ -1073,7 +1073,23 @@ async function downloadMcbStatements(
     // Choisit un PDF NON-XFA en priorité ; sinon le premier valide (dernier recours).
     const chosen = cand.find((b) => !isXfa(b)) || cand[0] || null
     if (chosen) {
-      if (pdfNotes.length < 6) pdfNotes.push(`${s.period}:${isXfa(chosen) ? 'XFA-dynamique!' : 'ok'} ${Math.round(chosen.length / 1024)}ko`)
+      // Caractérise le PDF (persisté dans le journal) : XFA/AcroForm/chiffré,
+      // présence de ressources texte (/Font) et d'images (/XObject), nb de pages,
+      // producteur. Permet de diagnostiquer « pourquoi l'OCR ne lit rien » sans
+      // avoir accès au fichier ni au navigateur.
+      if (pdfNotes.length < 6) {
+        const head = chosen.slice(0, Math.min(chosen.length, 800000)).toString('latin1')
+        const producer = (head.match(/\/Producer\s*\(([^)]{0,40})\)/) || [])[1]
+        const marks = [
+          isXfa(chosen) ? 'XFA' : '',
+          /\/AcroForm/.test(head) ? 'AcroForm' : '',
+          /\/Encrypt\b/.test(head) ? 'CHIFFRÉ' : '',
+          /\/Font\b/.test(head) ? 'font' : 'sans-font',
+          /\/Image\b|\/XObject/.test(head) ? 'image' : '',
+          `pages~${(head.match(/\/Type\s*\/Page\b/g) || []).length}`,
+        ].filter(Boolean).join(',')
+        pdfNotes.push(`${s.period}[${marks} ${Math.round(chosen.length / 1024)}ko${producer ? ' prod=' + producer.trim() : ''}]`)
+      }
       out.push({
         date_generated: s.date_generated,
         period: s.period,
