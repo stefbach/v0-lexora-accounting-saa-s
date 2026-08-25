@@ -93,6 +93,7 @@ export type StatementsDiagnostic = {
   navLabels?: string[]        // libellés cliquables visibles (si navigation KO)
   url?: string
   note?: string
+  sampleRaw?: string          // échantillon JSON de la réponse relevés (si 0 parsé)
 }
 
 export type BankScrapeResult = {

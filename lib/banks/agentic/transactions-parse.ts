@@ -72,6 +72,16 @@ export function normalizeStatementDate(raw?: string): string | null {
   const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`
 
+  // ISO datetime « 2026-07-31T00:00:00.000+04:00 » / « 2026-07-31 00:00:00 »
+  // (format courant des API Backbase). On garde la partie date.
+  const isoDateTime = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ]/)
+  if (isoDateTime) return `${isoDateTime[1]}-${isoDateTime[2]}-${isoDateTime[3]}`
+
+  // Période seule « 2026-07 » (YYYY-MM) → 1er du mois (le jour n'importe pas,
+  // la période comptable est dérivée par slice(0,7)).
+  const ym = s.match(/^(\d{4})-(\d{2})$/)
+  if (ym && Number(ym[2]) >= 1 && Number(ym[2]) <= 12) return `${ym[1]}-${ym[2]}-01`
+
   // « 20 Aug 2026 » / « 20 August 2026 » / « 20-Aug-2026 »
   const named = s.match(/^(\d{1,2})[\s\-]+([A-Za-zÀ-ÿ]{3,})\.?[\s\-]+(\d{2,4})$/)
   if (named) {

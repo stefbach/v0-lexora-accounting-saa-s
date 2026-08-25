@@ -857,11 +857,6 @@ async function downloadMcbStatements(
     apiListed: 0, domRows: 0, parsed: 0, toDownload: 0, downloaded: 0, errors: [],
   }
 
-  // 0) Source PRIMAIRE = relevés listés par l'API interne (avec lien direct).
-  //    Si l'API a exposé la liste, pas besoin de naviguer/scraper le SPA.
-  const apiStatements = extractFromCaptured(captured).statements
-  diag.apiListed = apiStatements.length
-
   // Diagnostic : récupère les libellés cliquables visibles — sert à trouver le
   // VRAI libellé du menu quand notre sélecteur de navigation ne matche pas.
   const collectNavLabels = (): Promise<string[]> => page.evaluate(() => {
@@ -955,6 +950,13 @@ async function downloadMcbStatements(
   }
   diag.domRows = rawRows.length
 
+  // Source API captée — calculée MAINTENANT (après navigation vers la page
+  // relevés) : la réponse de l'API « statements » n'est émise par le SPA qu'une
+  // fois cette page ouverte. La calculer avant la navigation captait de faux
+  // positifs (transactions/soldes) — c'était la cause du « API 10 → parsés 0 ».
+  const apiStatements = extractFromCaptured(captured).statements
+  diag.apiListed = apiStatements.length
+
   // Fusionne API captée + DOM (multi-années), dédoublonne, EXCLUT les mois déjà
   // ingérés (backfill progressif) et priorise le plus récent, borné à maxN.
   const parsedAll = parseStatements([...apiStatements, ...rawRows])
@@ -965,7 +967,13 @@ async function downloadMcbStatements(
     if (diag.parsed === 0) {
       diag.url = page.url()
       diag.navLabels = await collectNavLabels()
-      diag.note = "Navigué mais 0 relevé listé — structure de la page « Statements » à confirmer (voir navLabels/url)."
+      // Dump d'un échantillon de la/les réponse(s) API relevé (URL contenant
+      // statement/document/advice) pour figer le parseur au prochain run.
+      const stResp = captured.filter((r) => /statement|document|advice/i.test(r.url)).slice(-1)[0]
+      if (stResp) {
+        try { diag.sampleRaw = `${stResp.url.replace(/^https?:\/\/[^/]+/, '')} → ${JSON.stringify(stResp.json).slice(0, 1500)}` } catch { /* nonjson */ }
+      }
+      diag.note = "Navigué mais 0 relevé listé — structure de la réponse « statements » à confirmer (voir sampleRaw/url)."
     } else {
       diag.note = "Tous les relevés listés sont déjà ingérés (rien de neuf à télécharger)."
     }
