@@ -115,7 +115,7 @@ export type BankScrapeResult = {
   error?: string
   duration_ms?: number
   /** Résultat de l'alimentation du relevé Lexora (relevés_bancaires + solde compte). */
-  ingestion?: { ingested: boolean; nb_transactions?: number; releve_id?: string; reason?: string }
+  ingestion?: { ingested: boolean; nb_transactions?: number; releve_id?: string; reason?: string; pdf_attached?: boolean; document_id?: string }
 }
 
 const BANK_LOGIN_URLS: Record<BankCode, string> = {
@@ -320,6 +320,12 @@ export async function scrapeBankAccount(input: BankScrapeInput): Promise<BankScr
           numero_compte: null,
           result,
         })
+        if (result.ingestion?.ingested) {
+          result.raw_excerpt = [
+            result.raw_excerpt,
+            `Relevé rapprochement : ${result.ingestion.nb_transactions ?? 0} tx${result.ingestion.pdf_attached ? ', PDF Lexora généré' : ' (PDF non attaché)'}.`,
+          ].filter(Boolean).join(' ')
+        }
       } catch (e) {
         result.ingestion = { ingested: false, reason: e instanceof Error ? e.message : 'ingestion_failed' }
       }

@@ -34,6 +34,9 @@ export interface IngestScrapeResult {
   reason?: string
   releve_id?: string
   nb_transactions?: number
+  /** true si un PDF de relevé lisible a été généré + attaché (document_id). */
+  pdf_attached?: boolean
+  document_id?: string
 }
 
 /** Coerce best-effort en YYYY-MM-DD. */
@@ -144,9 +147,45 @@ export async function ingestScrapedTransactions(
     }
   } catch { /* non-fatal */ }
 
+  // Génère un PDF de relevé LISIBLE à partir des transactions scrapées et
+  // l'attache au relevé (releves_bancaires.document_id). Le PDF officiel MCB
+  // est un formulaire XFA téléchargé « à blanc » (illisible) ; ce relevé
+  // reconstitué donne enfin à l'utilisateur un document consultable et
+  // téléchargeable. Best-effort : n'échoue jamais l'ingestion.
+  let pdf_attached = false
+  let document_id: string | undefined
+  try {
+    if (upserted.releve_id) {
+      const { generateAndAttachRelevePdf } = await import('./releve-pdf')
+      const gen = await generateAndAttachRelevePdf(supabase, {
+        releve_id: upserted.releve_id,
+        compte_bancaire_id: input.compte_bancaire_id,
+        societe_id: input.societe_id,
+        periode: dateFin.substring(0, 7),
+        date_debut: dateDebut,
+        date_fin: dateFin,
+        solde_ouverture: soldeOuverture,
+        solde_cloture: soldeCloture,
+        total_debits: totalDebits,
+        total_credits: totalCredits,
+        transactions: normalized.map((t) => ({
+          date: t.date,
+          libelle: t.libelle,
+          debit: t.debit,
+          credit: t.credit,
+          reference: t.reference,
+        })),
+      })
+      pdf_attached = gen.attached
+      document_id = gen.document_id
+    }
+  } catch { /* non-fatal : le relevé reste valide sans PDF */ }
+
   return {
     ingested: true,
     releve_id: upserted.releve_id,
     nb_transactions: normalized.length,
+    pdf_attached,
+    document_id,
   }
 }
