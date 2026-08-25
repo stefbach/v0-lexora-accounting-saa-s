@@ -93,6 +93,11 @@ export interface ProcessDocumentParams {
   documentId: string
   storagePath: string
   nomFichier: string
+  /** Type imposé par une source de confiance (ex. robot bancaire : on SAIT que
+   *  c'est un relevé). Court-circuite la classification LLM (qui, sur un PDF de
+   *  relevé MCB, retombait à tort sur « autre ») et route vers l'extracteur
+   *  relevé. Déclenche aussi un modèle plus fort pour l'extraction. */
+  forcedType?: string
 }
 
 export type ProcessDocumentResult =
@@ -111,7 +116,7 @@ export type ProcessDocumentResult =
   | { ok: false; error: string }
 
 export async function processDocument(params: ProcessDocumentParams): Promise<ProcessDocumentResult> {
-  const { documentId, storagePath, nomFichier } = params
+  const { documentId, storagePath, nomFichier, forcedType } = params
   const startTime = Date.now()
   const pipelineWarnings: string[] = []
   const supabase = getSupabase()
@@ -216,8 +221,12 @@ export async function processDocument(params: ProcessDocumentParams): Promise<Pr
       ? { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } }
       : { type: 'image' as const, source: { type: 'base64' as const, media_type: imageMime, data: base64 } }
 
+    // Modèle : haiku par défaut ; modèle plus fort pour un relevé bancaire imposé
+    // (robot bancaire) — les relevés sont denses et haiku retournait une
+    // extraction vide (format « inconnu ») sur les PDF de relevé MCB.
+    const ocrModel = forcedType === 'releve_bancaire' ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001'
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: ocrModel,
       max_tokens: 8192,
       temperature: 0,
       system: `Tu es un expert-comptable mauricien chargé d'identifier ET d'extraire le contenu de N'IMPORTE QUEL document commercial :
@@ -451,7 +460,12 @@ ${excelText}`
       }
     }
 
-    let typeDoc = parsed.routing?.type_document || 'autre'
+    // Type imposé par une source de confiance (robot bancaire) prioritaire sur la
+    // classification LLM : sur un PDF de relevé MCB, le modèle retombait à tort
+    // sur « autre » → aucun relevé créé. Le robot SAIT que c'est un relevé.
+    let typeDoc = (forcedType && ALLOWED_TYPE_DOCUMENT.has(forcedType))
+      ? forcedType
+      : parsed.routing?.type_document || 'autre'
     if (!ALLOWED_TYPE_DOCUMENT.has(typeDoc)) {
       console.warn(`[process-document] type_document inconnu "${typeDoc}" → "autre"`)
       typeDoc = 'autre'
@@ -520,7 +534,7 @@ ${excelText}`
       extraction,
       metadata: {
         processing_time_ms: duration,
-        model: 'claude-haiku-4-5-20251001',
+        model: ocrModel,
         format_detecte: formatDetecte,
         confiance_extraction: confianceExtraction,
         file_size_bytes: fileSizeBytes,
