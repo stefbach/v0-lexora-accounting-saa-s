@@ -1023,58 +1023,63 @@ async function downloadMcbStatements(
     return { statements: [], diagnostic: diag }
   }
 
+  // Un formulaire XFA/dynamique (coquille Adobe LiveCycle) rend des pages
+  // BLANCHES en rasterisation → OCR vide (Mistral, unpdf ET vision échouent).
+  // Un GET brut du lien peut renvoyer cette coquille ; le CLIC de téléchargement
+  // déclenche souvent la génération serveur d'un PDF plat lisible. On tente donc
+  // les deux voies et on PRÉFÈRE un PDF non-XFA.
+  const XFA = Buffer.from('/XFA')
+  const isValidPdf = (buf: Buffer) => buf.length > 500 && buf.slice(0, 5).toString('latin1') === '%PDF-'
+  const isXfa = (buf: Buffer) => buf.includes(XFA)
+
+  const getViaHref = async (href: string): Promise<Buffer | null> =>
+    page.request.get(href, { timeout: 20000 })
+      .then(async (resp) => (resp.ok() ? Buffer.from(await resp.body()) : null))
+      .catch(() => null)
+
+  const getViaClick = async (dateGenerated: string): Promise<Buffer | null> => {
+    try {
+      const rowLoc = page.getByText(new RegExp(dateGenerated.replace(/-/g, '.').slice(0, 4))).first()
+      const [download] = await Promise.all([
+        page.waitForEvent('download', { timeout: 15000 }),
+        rowLoc.click({ timeout: 5000 }).catch(() => {}),
+      ])
+      const stream = await download.createReadStream().catch(() => null)
+      if (!stream) return null
+      const chunks: Buffer[] = []
+      for await (const chunk of stream) chunks.push(chunk as Buffer)
+      return Buffer.concat(chunks)
+    } catch {
+      return null
+    }
+  }
+
   const out: ScrapedStatement[] = []
+  const pdfNotes: string[] = []
   for (const s of statements) {
     if (Date.now() > deadline) break // budget temps épuisé → on finit au prochain run
-    let base64: string | null = null
 
-    // Voie 1 : requête HTTP authentifiée (réutilise la session/les cookies).
+    const cand: Buffer[] = []
     if (s.download_href) {
-      base64 = await page.request.get(s.download_href, { timeout: 20000 })
-        .then(async (resp) => {
-          if (!resp.ok()) return null
-          const ct = (resp.headers()['content-type'] || '').toLowerCase()
-          const buf = Buffer.from(await resp.body())
-          // Valide que c'est bien un PDF (signature %PDF) — évite d'ingérer une
-          // page HTML d'erreur/login renvoyée à la place du fichier.
-          const isPdf = ct.includes('pdf') || buf.slice(0, 5).toString('latin1') === '%PDF-'
-          return isPdf && buf.length > 500 ? buf.toString('base64') : null
-        })
-        .catch(() => null)
+      const b = await getViaHref(s.download_href)
+      if (b && isValidPdf(b)) cand.push(b)
+    }
+    // On déclenche le clic si aucun PDF, OU si le seul obtenu est un XFA (coquille).
+    if (cand.length === 0 || cand.every(isXfa)) {
+      const b = await getViaClick(s.date_generated)
+      if (b && isValidPdf(b)) cand.push(b)
     }
 
-    // Voie 2 : capture de l'événement de téléchargement (clic sur l'icône ↓).
-    if (!base64) {
-      base64 = await (async () => {
-        try {
-          const rowLoc = page.getByText(
-            new RegExp(s.date_generated.replace(/-/g, '.').slice(0, 4)),
-          ).first()
-          const [download] = await Promise.all([
-            page.waitForEvent('download', { timeout: 15000 }),
-            rowLoc.click({ timeout: 5000 }).catch(() => {}),
-          ])
-          const stream = await download.createReadStream().catch(() => null)
-          if (!stream) return null
-          const chunks: Buffer[] = []
-          for await (const chunk of stream) chunks.push(chunk as Buffer)
-          const buf = Buffer.concat(chunks)
-          return buf.length > 500 && buf.slice(0, 5).toString('latin1') === '%PDF-'
-            ? buf.toString('base64')
-            : null
-        } catch {
-          return null
-        }
-      })()
-    }
-
-    if (base64) {
+    // Choisit un PDF NON-XFA en priorité ; sinon le premier valide (dernier recours).
+    const chosen = cand.find((b) => !isXfa(b)) || cand[0] || null
+    if (chosen) {
+      if (pdfNotes.length < 6) pdfNotes.push(`${s.period}:${isXfa(chosen) ? 'XFA-dynamique!' : 'ok'} ${Math.round(chosen.length / 1024)}ko`)
       out.push({
         date_generated: s.date_generated,
         period: s.period,
         doc_type: s.doc_type,
         filename: s.filename,
-        pdf_base64: base64,
+        pdf_base64: chosen.toString('base64'),
       })
     } else if (diag.errors.length < 5) {
       diag.errors.push(`${s.period}: téléchargement échoué (href=${s.download_href ? 'oui' : 'non'})`)
@@ -1082,7 +1087,10 @@ async function downloadMcbStatements(
   }
 
   diag.downloaded = out.length
-  if (out.length === 0 && !diag.note) {
+  if (pdfNotes.length > 0) diag.pdfInfo = pdfNotes.join(' · ')
+  if (out.length > 0 && pdfNotes.some((n) => n.includes('XFA'))) {
+    diag.note = "PDF de relevé au format XFA/dynamique (pages blanches en OCR) — le lien de téléchargement ne renvoie pas le PDF rendu."
+  } else if (out.length === 0 && !diag.note) {
     diag.note = `${statements.length} relevé(s) listé(s) mais 0 téléchargé — lien/clic de téléchargement à confirmer.`
   }
   return { statements: out, diagnostic: diag }

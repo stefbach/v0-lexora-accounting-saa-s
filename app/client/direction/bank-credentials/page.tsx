@@ -422,7 +422,7 @@ export default function BankCredentialsPage() {
             {/* Diagnostic RELEVÉS PDF — affiché dès qu'un scrape a tourné et
                 qu'aucun PDF n'a été récupéré, y compris en cas de succès du
                 solde/transactions. Permet de voir OÙ la récupération s'arrête. */}
-            {scrapeDiag[cb.id]?.statements_diagnostic && (scrapeDiag[cb.id].statements_diagnostic.downloaded || 0) === 0 && (
+            {scrapeDiag[cb.id]?.statements_diagnostic && ((scrapeDiag[cb.id].statements_diagnostic.downloaded || 0) === 0 || String(scrapeDiag[cb.id].statements_diagnostic.pdfInfo || '').includes('XFA')) && (
               <div className="border-t pt-3 space-y-2">
                 <div className="text-xs font-semibold text-amber-700 flex items-center gap-1.5">
                   <AlertCircle className="h-3.5 w-3.5" /> Diagnostic relevés PDF (aucun PDF récupéré)
@@ -442,6 +442,9 @@ export default function BankCredentialsPage() {
                       )}
                       {Array.isArray(sd.apiUrls) && sd.apiUrls.length > 0 && (
                         <div className="text-slate-600 break-all">URLs API relevés : {sd.apiUrls.join(' · ')}</div>
+                      )}
+                      {sd.pdfInfo && (
+                        <div className="text-slate-600 break-all">PDF téléchargés : {sd.pdfInfo}</div>
                       )}
                       {sd.sampleRaw && (
                         <div className="text-slate-600 break-all">échantillon API : {sd.sampleRaw}</div>
