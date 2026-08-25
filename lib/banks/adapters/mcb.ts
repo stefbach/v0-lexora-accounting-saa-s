@@ -29,7 +29,7 @@
  */
 
 import type { Page } from 'playwright-core'
-import type { BankScrapeResult, ScrapedTransaction, ScrapedStatement } from '../scraper'
+import type { BankScrapeResult, ScrapedTransaction, ScrapedStatement, StatementsDiagnostic } from '../scraper'
 import { captureScreenshot, capturePageDiagnostic } from '../playwright-launcher'
 import { pickBestCompany } from '../agentic/company-match'
 import { findAccountBalance, parseAccounts, accountNumbersMatch } from '../agentic/accounts-parse'
@@ -646,9 +646,18 @@ export async function loginAndScrapeMcb(
       // Récupère les N relevés récents ; l'ingestion + OCR + dédoublonnage se
       // font côté scraper.ts via le pipeline documentaire existant. N'échoue
       // jamais le scrape principal (solde + transactions déjà obtenus).
-      const statements = (options.max_statements ?? 3) > 0
-        ? await downloadMcbStatements(page, options, apiResponses).catch(() => [] as ScrapedStatement[])
-        : []
+      let statements: ScrapedStatement[] = []
+      let statementsDiag: StatementsDiagnostic | undefined
+      if ((options.max_statements ?? 3) > 0) {
+        const st = await downloadMcbStatements(page, options, apiResponses)
+          .catch(() => ({ statements: [] as ScrapedStatement[], diagnostic: undefined as StatementsDiagnostic | undefined }))
+        statements = st.statements
+        statementsDiag = st.diagnostic
+      }
+      // Résumé lisible de la phase PDF, persisté dans bank_scrape_runs.raw_excerpt.
+      const pdfSummary = statementsDiag
+        ? `Relevés PDF: nav=${statementsDiag.navigated} compte=${statementsDiag.accountSelected} listés=${statementsDiag.parsed} téléchargés=${statementsDiag.downloaded}${statementsDiag.note ? ` — ${statementsDiag.note}` : ''}`
+        : ''
 
       // Solde toujours retourné ; transactions désormais mappées. Si l'extraction
       // n'a rien donné (tableau non chargé / structure inattendue), on renvoie
@@ -661,11 +670,14 @@ export async function loginAndScrapeMcb(
           nb_transactions: transactions.length,
           transactions,
           statements,
-          // Signal d'intégrité : une rupture de suite du solde = extraction
-          // probablement incomplète (pagination manquée) ou montant mal lu.
-          raw_excerpt: balanceBreaks.length
-            ? `⚠ ${balanceBreaks.length} rupture(s) de suite du solde détectée(s) — vérifier la pagination.`
-            : undefined,
+          statements_diagnostic: statementsDiag,
+          // Signal d'intégrité : rupture de suite du solde = extraction
+          // probablement incomplète. Toujours joindre le résumé PDF pour ne
+          // plus être à l'aveugle sur la récupération des relevés.
+          raw_excerpt: [
+            balanceBreaks.length ? `⚠ ${balanceBreaks.length} rupture(s) de suite du solde — vérifier la pagination.` : '',
+            pdfSummary,
+          ].filter(Boolean).join(' | ') || undefined,
           duration_ms: Date.now() - t0,
         }
       }
@@ -833,29 +845,56 @@ async function downloadMcbStatements(
   page: Page,
   options: McbAdapterOptions,
   captured: CapturedApiResponse[] = [],
-): Promise<ScrapedStatement[]> {
+): Promise<{ statements: ScrapedStatement[]; diagnostic: StatementsDiagnostic }> {
   const maxN = options.max_statements ?? 3
   const knownPeriods = new Set(options.known_statement_periods || [])
   // Budget temps : borne la phase relevés sous la limite serverless (120 s
   // Vercel). On s'arrête proprement avant, quitte à finir l'historique au run
   // suivant (les mois déjà pris sont sautés via knownPeriods → progression).
   const deadline = Date.now() + (options.statement_time_budget_ms ?? 70000)
+  const diag: StatementsDiagnostic = {
+    navigated: false, accountSelected: false, yearTabs: 0,
+    apiListed: 0, domRows: 0, parsed: 0, toDownload: 0, downloaded: 0, errors: [],
+  }
 
   // 0) Source PRIMAIRE = relevés listés par l'API interne (avec lien direct).
   //    Si l'API a exposé la liste, pas besoin de naviguer/scraper le SPA.
   const apiStatements = extractFromCaptured(captured).statements
+  diag.apiListed = apiStatements.length
+
+  // Diagnostic : récupère les libellés cliquables visibles — sert à trouver le
+  // VRAI libellé du menu quand notre sélecteur de navigation ne matche pas.
+  const collectNavLabels = (): Promise<string[]> => page.evaluate(() => {
+    const out: string[] = []
+    const sel = 'a, button, [role="tab"], [role="link"], [role="menuitem"], [role="button"]'
+    for (const el of Array.from(document.querySelectorAll(sel))) {
+      const t = ((el as HTMLElement).innerText || (el as HTMLElement).getAttribute('aria-label') || '')
+        .replace(/\s+/g, ' ').trim()
+      if (t && t.length <= 40) out.push(t)
+    }
+    return Array.from(new Set(out)).slice(0, 60)
+  }).catch(() => [] as string[])
 
   // 1) Naviguer vers « Documents & statements » (lien de menu / nav latérale).
-  const navLink = page.getByRole('link', { name: /documents\s*&?\s*statements|statements|relev/i })
+  //    Libellés élargis (e-documents / e-statements) + rôle bouton en plus du lien.
+  const navLink = page.getByRole('link', { name: /documents\s*&?\s*statements|e-?statements|e-?documents|statements|relev/i })
+    .or(page.getByRole('button', { name: /documents\s*&?\s*statements|e-?statements|statements|relev/i }))
     .or(page.getByText(/documents\s*&?\s*statements/i)).first()
   const navigated = await navLink.click({ timeout: 6000 }).then(() => true).catch(() => false)
-  if (!navigated) return []
+  diag.navigated = navigated
+  if (!navigated) {
+    diag.url = page.url()
+    diag.navLabels = await collectNavLabels()
+    diag.note = "Lien « Documents & statements » introuvable — voir navLabels pour le vrai libellé du menu."
+    return { statements: [], diagnostic: diag }
+  }
   await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {})
 
   // La page « Documents & statements » est globale et affiche « You did not
   // select an account yet » tant qu'aucun compte n'est choisi → on sélectionne
   // le compte cible avant de lister les relevés.
-  await selectMcbAccount(page, options.numero_compte).catch(() => {})
+  diag.accountSelected = await selectMcbAccount(page, options.numero_compte)
+    .then(() => true).catch(() => false)
   await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {})
 
   // S'assurer d'être sur l'onglet « Statements » (vs Advices / Reports).
@@ -907,21 +946,31 @@ async function downloadMcbStatements(
     .or(page.getByRole('button', { name: /^20\d{2}$/ }))
     .or(page.getByRole('link', { name: /^20\d{2}$/ }))
   const yearCount = await yearTabs.count().catch(() => 0)
+  diag.yearTabs = yearCount
   for (let i = 0; i < yearCount; i++) {
     if (Date.now() > deadline) break
     await yearTabs.nth(i).click({ timeout: 3000 }).catch(() => {})
     await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {})
     rawRows.push(...(await extractRows()))
   }
+  diag.domRows = rawRows.length
 
   // Fusionne API captée + DOM (multi-années), dédoublonne, EXCLUT les mois déjà
   // ingérés (backfill progressif) et priorise le plus récent, borné à maxN.
-  const statements = selectStatementsForBackfill(
-    parseStatements([...apiStatements, ...rawRows]),
-    knownPeriods,
-    maxN,
-  )
-  if (statements.length === 0) return []
+  const parsedAll = parseStatements([...apiStatements, ...rawRows])
+  diag.parsed = parsedAll.length
+  const statements = selectStatementsForBackfill(parsedAll, knownPeriods, maxN)
+  diag.toDownload = statements.length
+  if (statements.length === 0) {
+    if (diag.parsed === 0) {
+      diag.url = page.url()
+      diag.navLabels = await collectNavLabels()
+      diag.note = "Navigué mais 0 relevé listé — structure de la page « Statements » à confirmer (voir navLabels/url)."
+    } else {
+      diag.note = "Tous les relevés listés sont déjà ingérés (rien de neuf à télécharger)."
+    }
+    return { statements: [], diagnostic: diag }
+  }
 
   const out: ScrapedStatement[] = []
   for (const s of statements) {
@@ -976,8 +1025,14 @@ async function downloadMcbStatements(
         filename: s.filename,
         pdf_base64: base64,
       })
+    } else if (diag.errors.length < 5) {
+      diag.errors.push(`${s.period}: téléchargement échoué (href=${s.download_href ? 'oui' : 'non'})`)
     }
   }
 
-  return out
+  diag.downloaded = out.length
+  if (out.length === 0 && !diag.note) {
+    diag.note = `${statements.length} relevé(s) listé(s) mais 0 téléchargé — lien/clic de téléchargement à confirmer.`
+  }
+  return { statements: out, diagnostic: diag }
 }

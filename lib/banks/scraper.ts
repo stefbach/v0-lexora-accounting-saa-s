@@ -78,6 +78,23 @@ export type ScrapeDiagnostic = {
   clickables?: PageFieldDiagnostic[]
 }
 
+/** Diagnostic de la phase « relevés PDF » : où ça s'arrête, pour corriger sans
+ *  être à l'aveugle. Rendu même quand 0 PDF n'est récupéré. */
+export type StatementsDiagnostic = {
+  navigated: boolean          // le lien « Documents & statements » a été cliqué
+  accountSelected: boolean    // le compte cible a été sélectionné
+  yearTabs: number            // nb d'onglets année détectés
+  apiListed: number           // relevés vus dans l'API captée
+  domRows: number             // lignes relevé extraites du DOM
+  parsed: number              // relevés parsés (API + DOM)
+  toDownload: number          // relevés retenus (après exclusion des déjà-ingérés)
+  downloaded: number          // PDF réellement téléchargés
+  errors: string[]            // échecs de téléchargement (échantillon)
+  navLabels?: string[]        // libellés cliquables visibles (si navigation KO)
+  url?: string
+  note?: string
+}
+
 export type BankScrapeResult = {
   status: 'success' | 'failed' | 'manual_needed' | 'partial'
   balance_mur?: number
@@ -86,6 +103,8 @@ export type BankScrapeResult = {
   transactions?: ScrapedTransaction[]
   /** Relevés PDF récupérés depuis « Documents & statements » (best-effort). */
   statements?: ScrapedStatement[]
+  /** Diagnostic de la phase relevés PDF (où ça s'arrête). */
+  statements_diagnostic?: StatementsDiagnostic
   raw_excerpt?: string
   screenshot_b64?: string
   /** Diagnostic capturé quand un sélecteur manque : aide à corriger l'adapter. */
