@@ -94,6 +94,7 @@ export type StatementsDiagnostic = {
   url?: string
   note?: string
   sampleRaw?: string          // échantillon JSON de la réponse relevés (si 0 parsé)
+  apiUrls?: string[]          // URLs de l'API relevés captées (pour cibler la liste)
 }
 
 export type BankScrapeResult = {
