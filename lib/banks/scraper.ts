@@ -352,7 +352,13 @@ export async function scrapeBankAccount(input: BankScrapeInput): Promise<BankScr
               uploaded_by: uploadedBy,
             },
             result.statements,
-            (documentId: string) => enqueueDocumentProcessing({ documentId, source: 'manual' }),
+            // forced_type : le robot SAIT que c'est un relevé bancaire → le
+            // pipeline ne re-classe pas à tort en « autre » et utilise un modèle
+            // d'extraction plus fort. Sans ça, le PDF scrapé était archivé mais
+            // jamais transformé en relevé.
+            (documentId: string) => enqueueDocumentProcessing({
+              documentId, source: 'manual', payload: { forced_type: 'releve_bancaire' },
+            }),
           )
           result.raw_excerpt = [
             result.raw_excerpt,

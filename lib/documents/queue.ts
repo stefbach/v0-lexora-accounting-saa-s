@@ -165,6 +165,9 @@ async function processClaimedJob(supabase: ReturnType<typeof getAdminClient>, ro
     documentId: row.document_id,
     storagePath: doc.storage_path,
     nomFichier: doc.nom_fichier,
+    // Type imposé transmis par une source de confiance (ex. robot bancaire :
+    // payload.forced_type='releve_bancaire') → court-circuite la classification.
+    forcedType: typeof row.payload?.forced_type === 'string' ? row.payload.forced_type : undefined,
   })
 
   await finalizeJob(supabase, row, result)
