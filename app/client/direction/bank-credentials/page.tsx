@@ -160,13 +160,15 @@ export default function BankCredentialsPage() {
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || t('cui.error_generic', locale))
-      // Mémorise screenshot + diagnostic (sélecteurs détectés) pour l'affichage.
-      setScrapeDiag(p => ({ ...p, [compteId]: { screenshot_b64: j.screenshot_b64, diagnostic: j.diagnostic, status: j.status, error: j.error } }))
+      // Mémorise screenshot + diagnostic (sélecteurs détectés) + diagnostic
+      // relevés PDF (où la récupération s'arrête) pour l'affichage.
+      setScrapeDiag(p => ({ ...p, [compteId]: { screenshot_b64: j.screenshot_b64, diagnostic: j.diagnostic, statements_diagnostic: j.statements_diagnostic, status: j.status, error: j.error } }))
       if (j.status === 'manual_needed') {
         setError(`${t('scp.cred_robot_not_active', locale)} ${j.error || t('scp.cred_pw_not_installed', locale)}`)
       } else if (j.status === 'success') {
         const inj = j.ingestion?.ingested ? ` — ${j.ingestion.nb_transactions || 0} tx injectées dans le rapprochement` : ''
-        setSuccess(`${t('scp.cred_scrape_ok', locale)} ${j.balance_mur || '?'} ${j.balance_devise || 'MUR'}, ${j.nb_transactions || 0} tx${inj}`)
+        const pdf = j.statements_diagnostic ? `, ${j.statements_diagnostic.downloaded || 0} relevé(s) PDF` : ''
+        setSuccess(`${t('scp.cred_scrape_ok', locale)} ${j.balance_mur || '?'} ${j.balance_devise || 'MUR'}, ${j.nb_transactions || 0} tx${pdf}${inj}`)
       } else {
         setError(`${t('scp.cred_scrape_label', locale)} ${j.status} : ${j.error || t('scp.cred_unknown', locale)}`)
       }
@@ -414,6 +416,34 @@ export default function BankCredentialsPage() {
                   </div>
                 )}
                 <p className="text-[11px] text-slate-500">Copie-moi ce bloc (URL + champs + boutons) — pas tes identifiants — pour que je fige les sélecteurs MCB.</p>
+              </div>
+            )}
+
+            {/* Diagnostic RELEVÉS PDF — affiché dès qu'un scrape a tourné et
+                qu'aucun PDF n'a été récupéré, y compris en cas de succès du
+                solde/transactions. Permet de voir OÙ la récupération s'arrête. */}
+            {scrapeDiag[cb.id]?.statements_diagnostic && (scrapeDiag[cb.id].statements_diagnostic.downloaded || 0) === 0 && (
+              <div className="border-t pt-3 space-y-2">
+                <div className="text-xs font-semibold text-amber-700 flex items-center gap-1.5">
+                  <AlertCircle className="h-3.5 w-3.5" /> Diagnostic relevés PDF (aucun PDF récupéré)
+                </div>
+                {(() => {
+                  const sd = scrapeDiag[cb.id].statements_diagnostic
+                  return (
+                    <div className="text-[11px] font-mono bg-slate-50 border border-slate-200 rounded p-2 overflow-auto max-h-64 space-y-0.5">
+                      <div>navigation « Documents &amp; statements » : <b>{sd.navigated ? 'OK' : 'ÉCHEC'}</b></div>
+                      <div>compte sélectionné : <b>{sd.accountSelected ? 'OK' : 'non'}</b> · onglets année : {sd.yearTabs}</div>
+                      <div>relevés listés (API {sd.apiListed} / DOM {sd.domRows}) → parsés : <b>{sd.parsed}</b> · à télécharger : {sd.toDownload} · téléchargés : <b>{sd.downloaded}</b></div>
+                      {sd.note && <div className="text-amber-700">→ {sd.note}</div>}
+                      {sd.url && <div className="text-slate-500">URL : {sd.url}</div>}
+                      {Array.isArray(sd.errors) && sd.errors.length > 0 && <div className="text-red-600">erreurs : {sd.errors.join(' ; ')}</div>}
+                      {Array.isArray(sd.navLabels) && sd.navLabels.length > 0 && (
+                        <div className="text-slate-600">menus visibles : {sd.navLabels.join(' · ')}</div>
+                      )}
+                    </div>
+                  )
+                })()}
+                <p className="text-[11px] text-slate-500">Copie-moi ce bloc (surtout « menus visibles » et l'URL) pour que je corrige la navigation vers les relevés PDF.</p>
               </div>
             )}
 
