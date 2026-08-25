@@ -440,6 +440,9 @@ export default function BankCredentialsPage() {
                       {Array.isArray(sd.navLabels) && sd.navLabels.length > 0 && (
                         <div className="text-slate-600">menus visibles : {sd.navLabels.join(' · ')}</div>
                       )}
+                      {sd.sampleRaw && (
+                        <div className="text-slate-600 break-all">échantillon API : {sd.sampleRaw}</div>
+                      )}
                     </div>
                   )
                 })()}

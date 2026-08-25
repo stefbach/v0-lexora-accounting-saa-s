@@ -145,6 +145,33 @@ describe('findStatementsInJson', () => {
     expect(st[0].dateGenerated).toBe('2026-07-31')
     expect(st[0].downloadHref).toBe('https://ibpro.mcb.mu/api/doc/123.pdf')
   })
+
+  it('gère les dates ISO datetime et YYYY-MM (Backbase)', () => {
+    const payload = {
+      _embedded: {
+        documents: [
+          { statementDate: '2026-07-31T00:00:00.000+04:00', type: 'Current account statement', downloadUrl: 'https://x/1.pdf' },
+          { period: '2026-06', type: 'Current account statement', downloadUrl: 'https://x/2.pdf' },
+        ],
+      },
+    }
+    const st = findStatementsInJson(payload)
+    expect(st).toHaveLength(2)
+    // Se branche sur parseStatements → période dérivée correcte.
+    expect(st.map((s) => s.dateGenerated)).toEqual(['2026-07-31T00:00:00.000+04:00', '2026-06'])
+  })
+
+  it('NE prend PAS de faux relevés (objets avec montant mais sans vraie date)', () => {
+    // Cas réel : findStatementsInJson tombait sur un tableau de transactions/soldes
+    // et fabriquait de faux « relevés » sans date valide (API 10 → parsés 0).
+    const payload = {
+      data: [
+        { total: '14564.21', currencyCode: 'MUR', accountNumber: '000447954555' },
+        { total: '8926.87', currencyCode: 'EUR', accountNumber: '000447954587' },
+      ],
+    }
+    expect(findStatementsInJson(payload)).toEqual([])
+  })
 })
 
 describe('findArrangementIds — productsummary Backbase', () => {

@@ -37,6 +37,14 @@ describe('normalizeStatementDate', () => {
     expect(normalizeStatementDate('05 déc 2026')).toBe('2026-12-05')
   })
   it('déjà ISO', () => expect(normalizeStatementDate('2026-08-20')).toBe('2026-08-20'))
+  it('ISO datetime (API Backbase) → partie date', () => {
+    expect(normalizeStatementDate('2026-07-31T00:00:00.000+04:00')).toBe('2026-07-31')
+    expect(normalizeStatementDate('2026-07-31 00:00:00')).toBe('2026-07-31')
+  })
+  it('période seule YYYY-MM → 1er du mois', () => {
+    expect(normalizeStatementDate('2026-06')).toBe('2026-06-01')
+    expect(normalizeStatementDate('2026-13')).toBeNull()
+  })
   it('numérique JJ/MM/AAAA', () => {
     expect(normalizeStatementDate('20/08/2026')).toBe('2026-08-20')
     expect(normalizeStatementDate('20.08.26')).toBe('2026-08-20')
