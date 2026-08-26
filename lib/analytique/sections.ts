@@ -56,10 +56,6 @@ export function validateSectionPayload(body: unknown): Resultat {
 
   const type = b.type as SectionType
   if (!SECTION_TYPES.includes(type)) return { ok: false, error: 'type invalide' }
-  // Création manuelle réservée aux centres de coût et projets.
-  if (type !== 'centre_cout' && type !== 'projet') {
-    return { ok: false, error: 'Seuls les centres de coût et projets se créent manuellement' }
-  }
 
   const budget_montant = optNum(b.budget_montant)
   if (budget_montant !== null && budget_montant < 0) return { ok: false, error: 'budget_montant invalide' }

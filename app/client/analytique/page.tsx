@@ -232,12 +232,15 @@ function CreateSectionDialog({
         <DialogHeader><DialogTitle>Nouvelle section analytique</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <p className="text-xs text-slate-500">
-            Les chantiers et ordres de fabrication créent automatiquement leur section.
-            Ici on crée un <strong>centre de coût</strong> ou un <strong>projet</strong>.
+            Crée une section analytique : <strong>chantier</strong>, <strong>production</strong>,
+            <strong> centre de coût</strong> ou <strong>projet</strong>. Les charges et produits
+            s'y ventilent ensuite depuis la comptabilité.
           </p>
           <div>
             <Label>Type</Label>
             <select className="w-full border rounded px-3 py-2 text-sm bg-white mt-1" value={type} onChange={(e) => setType(e.target.value as SectionType)}>
+              <option value="chantier">Chantier / Affaire</option>
+              <option value="production">Production</option>
               <option value="centre_cout">Centre de coût</option>
               <option value="projet">Projet</option>
             </select>

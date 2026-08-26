@@ -12,9 +12,13 @@ describe('validateSectionPayload', () => {
     expect(r.ok).toBe(true)
     if (r.ok) expect(r.data.code).toBe('CC-01')
   })
-  it('refuse un type créé automatiquement (chantier/production)', () => {
-    expect(validateSectionPayload({ code: 'X', libelle: 'Y', type: 'chantier' }).ok).toBe(false)
-    expect(validateSectionPayload({ code: 'X', libelle: 'Y', type: 'production' }).ok).toBe(false)
+  it('accepte les 4 types de section', () => {
+    for (const type of ['chantier', 'production', 'centre_cout', 'projet'] as const) {
+      expect(validateSectionPayload({ code: 'X', libelle: 'Y', type }).ok).toBe(true)
+    }
+  })
+  it('refuse un type inconnu', () => {
+    expect(validateSectionPayload({ code: 'X', libelle: 'Y', type: 'foo' }).ok).toBe(false)
   })
   it('code et libellé requis', () => {
     expect(validateSectionPayload({ libelle: 'Y', type: 'projet' }).ok).toBe(false)
