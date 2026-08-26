@@ -17,7 +17,7 @@ import {
   Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
   CalendarDays, FilePlus2, SlidersHorizontal, Menu, X, FilePen, UserCircle,
   Sparkles, Package, Send, Repeat, MessageCircle, Mail, Inbox, KeyRound, ArrowRightLeft,
-  TrendingUp, FolderKanban, ShieldCheck, ShoppingCart, Layers
+  TrendingUp, FolderKanban, ShieldCheck, ShoppingCart, Layers, Factory, Briefcase
 } from "lucide-react"
 
 /* ------------------------------------------------------------------ */
@@ -139,6 +139,7 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/inventaire", label: "Inventaire & Stock", icon: Package },
       { href: "/client/pos", label: "Point de vente", icon: ShoppingCart },
+      { href: "/client/manufacturing", label: "Production", icon: Factory },
       { href: "/client/analytique", label: "Comptabilité analytique", icon: Layers },
     ]
   },
