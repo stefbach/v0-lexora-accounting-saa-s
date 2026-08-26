@@ -260,6 +260,14 @@ export async function scrapeBankAccount(input: BankScrapeInput): Promise<BankScr
           // le dédoublonnage par chemin de stockage se font côté scraper.ts.
           max_statements: 24,
           known_statement_periods: knownPeriods,
+          // Budget temps du backfill relevés. Un scrape MANUEL (déclenché par
+          // l'utilisateur, exécuté en arrière-plan via after() avec maxDuration
+          // 300 s) vise UN compte : on lui accorde un gros budget pour récupérer
+          // plusieurs relevés manquants en une fois. Le CRON, lui, parcourt TOUS
+          // les comptes en séquence dans une seule invocation de 300 s : on garde
+          // un budget modeste par compte pour ne pas l'affamer (backfill étalé
+          // sur plusieurs jours).
+          statement_time_budget_ms: input.trigger_source === 'manual' ? 180000 : 60000,
           company_name: soc?.nom || null,
           // URL configurée par l'utilisateur, sinon URL par défaut de la banque.
           login_url: credentials.login_url || BANK_LOGIN_URLS[bankCode],
