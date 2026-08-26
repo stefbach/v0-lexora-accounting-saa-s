@@ -145,9 +145,15 @@ export async function ingestScrapedStatements(
   for (const p of toStore) {
     try {
       const bytes = Uint8Array.from(Buffer.from(p.statement.pdf_base64, 'base64'))
+      // upsert:true : le dédoublonnage réel se fait AU-DESSUS via l'existence
+      // d'une ligne `documents` pour ce storage_path (existingPaths). Si on arrive
+      // ici, c'est qu'aucun document ne référence ce chemin → on écrit. `upsert:false`
+      // faisait échouer l'écriture quand un OBJET orphelin traînait au même chemin
+      // (ex. un relevé mal étiqueté supprimé côté `documents` mais pas côté storage)
+      // → le mois restait irrécupérable. `upsert:true` auto-répare ce cas.
       const up = await admin.storage
         .from(STATEMENT_BUCKET)
-        .upload(p.storage_path, bytes, { contentType: 'application/pdf', upsert: false })
+        .upload(p.storage_path, bytes, { contentType: 'application/pdf', upsert: true })
       if (up.error) {
         result.errors++
         continue
