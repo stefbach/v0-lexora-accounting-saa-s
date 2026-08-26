@@ -44,10 +44,40 @@ export async function GET(request: Request) {
       .limit(50000)
 
     const bySection = groupBySection(ecritures || [])
-    const items = (sections || []).map((s) => ({
-      ...s,
-      pnl: computeSectionPnl(bySection.get(s.id) || []),
-    }))
+
+    // Ventilations (répartition analytique des charges/produits non tagués).
+    const { data: vents } = await supabase
+      .from('ventilations_analytiques')
+      .select('section_analytique_id, montant, ecritures_comptables_v2(numero_compte)')
+      .eq('societe_id', societe_id)
+      .limit(50000)
+    const ventBySection = new Map<string, { produits: number; charges: number; n: number }>()
+    for (const v of vents || []) {
+      const cls = String((v as any).ecritures_comptables_v2?.numero_compte || '').charAt(0)
+      const cur = ventBySection.get(v.section_analytique_id) || { produits: 0, charges: 0, n: 0 }
+      const m = Number(v.montant) || 0
+      if (cls === '7') cur.produits += m
+      else if (cls === '6') cur.charges += m
+      cur.n += 1
+      ventBySection.set(v.section_analytique_id, cur)
+    }
+
+    const r2 = (x: number) => Math.round((x + Number.EPSILON) * 100) / 100
+    const items = (sections || []).map((s) => {
+      const direct = computeSectionPnl(bySection.get(s.id) || [])
+      const vent = ventBySection.get(s.id) || { produits: 0, charges: 0, n: 0 }
+      const produits = r2(direct.produits + vent.produits)
+      const charges = r2(direct.charges + vent.charges)
+      const marge = r2(produits - charges)
+      return {
+        ...s,
+        pnl: {
+          produits, charges, marge,
+          marge_pct: produits !== 0 ? r2((marge / produits) * 100) : null,
+          nb_ecritures: direct.nb_ecritures + vent.n,
+        },
+      }
+    })
 
     return NextResponse.json({ items })
   } catch (e: any) {
