@@ -122,6 +122,7 @@ const CLIENT_SECTIONS: NavSection[] = [
     items: [
       { href: "/client/bilan", label: "Bilan & P&L", labelKey: "fin.balance_sheet", icon: BookOpen },
       { href: "/client/echeances", label: "Échéances", labelKey: "fin.deadlines", icon: CalendarDays },
+      { href: "/comptable/cloture", label: "Clôture & Exercices", icon: CalendarDays },
     ],
   },
   {
