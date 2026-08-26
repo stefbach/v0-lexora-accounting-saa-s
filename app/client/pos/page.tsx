@@ -51,6 +51,7 @@ import {
   ShoppingCart,
   Trash2,
   Banknote,
+  Undo2,
   LockKeyhole,
   Plus,
   Minus,
@@ -538,6 +539,25 @@ export default function PosPage() {
     }
   }
 
+  const rembourserTicket = async (venteId: string, numero: string, statut: "remboursee" | "annulee") => {
+    if (!societeId) return
+    const action = statut === "annulee" ? "annuler" : "rembourser"
+    if (!window.confirm(`Confirmer : ${action} le ticket ${numero} ? Le stock est ré-entré et l'encaissement contrepassé.`)) return
+    try {
+      const res = await fetch(`/api/client/pos/ventes/${venteId}/rembourser`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ societe_id: societeId, statut }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Erreur")
+      showToast(`Ticket ${numero} ${statut === "annulee" ? "annulé" : "remboursé"}`)
+      load()
+    } catch (e: any) {
+      showToast(e?.message || "Erreur", "error")
+    }
+  }
+
   const fermerSession = async () => {
     if (!societeId || !session) return
     setSubmitting(true)
@@ -980,6 +1000,7 @@ export default function PosPage() {
                       <TableHead>Heure</TableHead>
                       <TableHead>Paiement</TableHead>
                       <TableHead className="text-right">Montant TTC</TableHead>
+                      <TableHead className="text-right">Statut</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -999,6 +1020,20 @@ export default function PosPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right font-medium tabular-nums">{fmt(t.montant_ttc)}</TableCell>
+                        <TableCell className="text-right">
+                          {t.statut === "validee" ? (
+                            <Button
+                              variant="ghost" size="sm" className="h-7 text-red-600 hover:text-red-700"
+                              onClick={() => rembourserTicket(t.id, t.numero_ticket, "remboursee")}
+                            >
+                              <Undo2 className="h-3.5 w-3.5 mr-1" /> Rembourser
+                            </Button>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px]">
+                              {t.statut === "annulee" ? "Annulé" : t.statut === "remboursee" ? "Remboursé" : t.statut}
+                            </Badge>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

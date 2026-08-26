@@ -64,6 +64,11 @@ export function refFolioVente(venteId: string): string {
   return `POS-${venteId}`
 }
 
+/** ref_folio de la contrepassation d'encaissement (remboursement / annulation). */
+export function refFolioRemboursement(venteId: string): string {
+  return `POS-${venteId}-REMB`
+}
+
 /** ref_folio de l'écart de caisse d'une session. */
 export function refFolioSession(sessionId: string): string {
   return `POS-SES-${sessionId}`
@@ -168,6 +173,59 @@ export function buildEcrituresVentePos(
   return out
 }
 
+/**
+ * Contrepassation d'encaissement d'un ticket remboursé / annulé : miroir exact
+ * de buildEcrituresVentePos (débits/crédits inversés). Pure — R1 vérifiée.
+ *   D ventes (HT, par compte) + D TVA collectée / C encaissement (TTC, par moyen)
+ */
+export function buildEcrituresRemboursementVentePos(
+  vente: VentePourEcritures,
+  lignes: LignePourEcritures[],
+  paiements: PaiementPourEcritures[],
+  statut: 'remboursee' | 'annulee' = 'remboursee',
+): EcriturePosLine[] {
+  if (lignes.length === 0 || paiements.length === 0) return []
+
+  const libelle = `${statut === 'annulee' ? 'Annulation' : 'Remboursement'} POS ${vente.numero_ticket}`
+  const base = baseLine(
+    vente.societe_id,
+    vente.dossier_id ?? null,
+    vente.date_vente,
+    refFolioRemboursement(vente.id),
+    libelle,
+  )
+
+  const creditsParCompte = new Map<string, number>()
+  for (const p of paiements) {
+    const compte = p.compte_comptable || COMPTE_CAISSE
+    creditsParCompte.set(compte, round2(money(creditsParCompte.get(compte) || 0).plus(money(p.montant))))
+  }
+  const htParCompte = new Map<string, number>()
+  for (const l of lignes) {
+    const compte = l.compte_vente || COMPTE_VENTES_DEFAUT
+    htParCompte.set(compte, round2(money(htParCompte.get(compte) || 0).plus(money(l.montant_ht))))
+  }
+
+  const out: EcriturePosLine[] = []
+  for (const [compte, montant] of htParCompte) {
+    if (montant <= 0) continue
+    out.push({ ...base, numero_compte: compte, nom_compte: nomComptePos(compte), debit_mur: montant, credit_mur: 0 })
+  }
+  const tva = round2(vente.montant_tva)
+  if (tva > 0) {
+    out.push({ ...base, numero_compte: COMPTE_TVA_COLLECTEE, nom_compte: nomComptePos(COMPTE_TVA_COLLECTEE), debit_mur: tva, credit_mur: 0 })
+  }
+  for (const [compte, montant] of creditsParCompte) {
+    if (montant <= 0) continue
+    out.push({ ...base, numero_compte: compte, nom_compte: nomComptePos(compte), debit_mur: 0, credit_mur: montant })
+  }
+
+  if (!isBalanced(out.map((l) => l.debit_mur), out.map((l) => l.credit_mur))) {
+    throw new Error(`R1 violée — contrepassation POS déséquilibrée pour ${vente.numero_ticket}`)
+  }
+  return out
+}
+
 export interface SessionPourEcritures {
   id: string
   societe_id: string
@@ -259,6 +317,26 @@ export async function createEcrituresForVentePos(
     const dossierId = await resolveDossierId(supabase, vente.societe_id, vente.dossier_id)
     const ecritures = buildEcrituresVentePos({ ...vente, dossier_id: dossierId }, lignes, paiements)
     return await insertIdempotent(supabase, vente.societe_id, refFolioVente(vente.id), ecritures)
+  } catch (e: any) {
+    return { ok: false, nb_entries: 0, error: e?.message || 'Erreur inconnue' }
+  }
+}
+
+/**
+ * Insère la contrepassation d'encaissement d'un ticket remboursé / annulé.
+ * Idempotent par ref_folio POS-<vente_id>-REMB.
+ */
+export async function createEcrituresForRemboursementPos(
+  supabase: SupabaseClient,
+  vente: VentePourEcritures,
+  lignes: LignePourEcritures[],
+  paiements: PaiementPourEcritures[],
+  statut: 'remboursee' | 'annulee' = 'remboursee',
+): Promise<{ ok: boolean; nb_entries: number; error?: string }> {
+  try {
+    const dossierId = await resolveDossierId(supabase, vente.societe_id, vente.dossier_id)
+    const ecritures = buildEcrituresRemboursementVentePos({ ...vente, dossier_id: dossierId }, lignes, paiements, statut)
+    return await insertIdempotent(supabase, vente.societe_id, refFolioRemboursement(vente.id), ecritures)
   } catch (e: any) {
     return { ok: false, nb_entries: 0, error: e?.message || 'Erreur inconnue' }
   }

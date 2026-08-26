@@ -3,9 +3,11 @@ import { createMockSupabase } from '@/tests/__mocks__/supabase'
 import {
   buildEcrituresEcartCaisse,
   buildEcrituresVentePos,
+  buildEcrituresRemboursementVentePos,
   createEcrituresForEcartCaisse,
   createEcrituresForVentePos,
   nomComptePos,
+  refFolioRemboursement,
   refFolioSession,
   refFolioVente,
   type SessionPourEcritures,
@@ -197,9 +199,30 @@ describe('createEcrituresForEcartCaisse', () => {
   })
 })
 
+describe('buildEcrituresRemboursementVentePos', () => {
+  it('miroir de la vente : débits/crédits inversés, équilibré', () => {
+    const v = vente({ montant_tva: 15 })
+    const lignes = [{ montant_ht: 100, compte_vente: '701' }]
+    const paiements = [{ compte_comptable: '530', montant: 115 }]
+    const remb = buildEcrituresRemboursementVentePos(v, lignes, paiements)
+    // D 701 (HT) + D 4457 (TVA) / C 530 (TTC)
+    const d701 = remb.find((l) => l.numero_compte === '701')!
+    const d4457 = remb.find((l) => l.numero_compte === '4457')!
+    const c530 = remb.find((l) => l.numero_compte === '530')!
+    expect(d701.debit_mur).toBe(100)
+    expect(d4457.debit_mur).toBe(15)
+    expect(c530.credit_mur).toBe(115)
+    const totD = remb.reduce((s, l) => s + l.debit_mur, 0)
+    const totC = remb.reduce((s, l) => s + l.credit_mur, 0)
+    expect(totD).toBeCloseTo(totC, 2)
+    expect(remb[0].ref_folio).toBe(refFolioRemboursement(v.id))
+  })
+})
+
 describe('helpers', () => {
   it('refFolio / nomComptePos', () => {
     expect(refFolioVente('abc')).toBe('POS-abc')
+    expect(refFolioRemboursement('abc')).toBe('POS-abc-REMB')
     expect(refFolioSession('abc')).toBe('POS-SES-abc')
     expect(nomComptePos('5118')).toBe('Monétique en transit')
     expect(nomComptePos('9999')).toBe('Compte 9999')
