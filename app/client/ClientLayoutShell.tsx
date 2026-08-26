@@ -2,6 +2,8 @@
 import { ClientSidebarFull } from "@/components/layout/ClientSidebarFull"
 import { ComptableSidebarNew } from "@/components/layout/ComptableSidebarNew"
 import { SocieteActiveProvider } from "@/components/client/SocieteActiveProvider"
+import { ExerciceActiveProvider } from "@/components/client/ExerciceActiveProvider"
+import { ExerciceSelector } from "@/components/client/ExerciceSelector"
 import { CabinetBanner } from "@/components/client/CabinetBanner"
 import { FloatingPageHelp } from "@/components/help/FloatingPageHelp"
 import { FloatingAgentChat } from "@/components/agent/FloatingAgentChat"
@@ -38,25 +40,31 @@ export function ClientLayoutShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SocieteActiveProvider>
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:bg-[#0B0F2E] focus:text-white focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-      >
-        Aller au contenu principal
-      </a>
-      <CabinetBanner />
-      <div className="flex min-h-screen bg-gray-50">
-        {useClientSidebar ? <ClientSidebarFull /> : <ComptableSidebarNew />}
-        <main
-          id="main-content"
-          tabIndex={-1}
-          className="flex-1 overflow-auto md:ml-64 focus:outline-none"
+      <ExerciceActiveProvider>
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:bg-[#0B0F2E] focus:text-white focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
         >
-          {children}
-        </main>
-        <FloatingPageHelp />
-        <FloatingAgentChat />
-      </div>
+          Aller au contenu principal
+        </a>
+        <CabinetBanner />
+        <div className="flex min-h-screen bg-gray-50">
+          {useClientSidebar ? <ClientSidebarFull /> : <ComptableSidebarNew />}
+          <main
+            id="main-content"
+            tabIndex={-1}
+            className="flex-1 overflow-auto md:ml-64 focus:outline-none"
+          >
+            {/* Bandeau global : exercice fiscal actif (propagé aux écrans de reporting) */}
+            <div className="flex items-center justify-end gap-3 border-b bg-white/70 px-4 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-white/60 sticky top-0 z-20">
+              <ExerciceSelector />
+            </div>
+            {children}
+          </main>
+          <FloatingPageHelp />
+          <FloatingAgentChat />
+        </div>
+      </ExerciceActiveProvider>
     </SocieteActiveProvider>
   )
 }

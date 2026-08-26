@@ -44,6 +44,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { useExerciceActive } from "@/components/client/ExerciceActiveProvider"
 import { t, getLocale, type Locale } from '@/lib/i18n'
 
 interface CompteSolde {
@@ -154,6 +155,8 @@ function fmt(n: number): string {
 export default function ClientGrandLivrePage() {
   const locale = getLocale()
   const { societeId } = useSocieteActive()
+  const exerciceCtx = useExerciceActive()
+  const activeExercice = exerciceCtx?.exercice ?? null
   const [comptes, setComptes] = useState<CompteSolde[]>([])
   const [ecritures, setEcritures] = useState<Ecriture[]>([])
   const [pcm, setPcm] = useState<PCMEntry[]>([])
@@ -175,8 +178,10 @@ export default function ClientGrandLivrePage() {
     if (!societeId) return
     setLoading(true)
     try {
+      // Exercice actif global (bandeau comptable) → filtre la période du grand-livre.
+      const exParam = activeExercice ? `&exercice=${encodeURIComponent(activeExercice)}` : ""
       const [finRes, pcmRes] = await Promise.all([
-        fetch(`/api/client/financial?societe_id=${societeId}`).then((r) => r.json()),
+        fetch(`/api/client/financial?societe_id=${societeId}${exParam}`).then((r) => r.json()),
         fetch(`/api/client/plan-comptable?societe_id=${societeId}`).then((r) => r.json()),
       ])
       const fin = finRes?.financial || {}
@@ -222,7 +227,7 @@ export default function ClientGrandLivrePage() {
     finally {
       setLoading(false)
     }
-  }, [societeId])
+  }, [societeId, activeExercice])
   useEffect(() => {
     load()
   }, [load])
