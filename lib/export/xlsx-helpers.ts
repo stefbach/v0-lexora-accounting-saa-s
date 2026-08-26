@@ -95,7 +95,11 @@ export function buildWorkbook(
     const safe = name.slice(0, 31).replace(/[[\]:*?/\\]/g, '_')
     XLSX.utils.book_append_sheet(wb, ws, safe)
   }
-  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', compression: true }) as Buffer
+  // bookSST:true → table de chaînes partagées (t="s"). SANS ça, SheetJS écrit
+  // les cellules texte en t="str" (chaîne « résultat de formule » sans formule) :
+  // Excel / Numbers / Google Sheets les affichent VIDES → le fichier semble vide
+  // alors que les données sont présentes. Indispensable pour la compatibilité.
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', compression: true, bookSST: true }) as Buffer
 }
 
 /** Helper Response xlsx avec headers HTTP corrects */

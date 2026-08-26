@@ -74,6 +74,21 @@ describe('xlsx-helpers — buildWorkbook()', () => {
     expect(sheet['B2']?.v).toBe(42)
   })
 
+  it('écrit les chaînes en table partagée (t="s"), pas en t="str" (sinon Excel affiche VIDE)', () => {
+    const ws = aoaSheet([[cell('Compte'), cell('Libellé')], [cell('4330'), cell('PAYE')]])
+    const buf = buildWorkbook([{ name: 'PCM', ws }])
+    // La table de chaînes partagées doit exister, et AUCUNE cellule ne doit être en t="str".
+    const zip = XLSX.read(buf, { type: 'buffer', bookFiles: true }) as any
+    const files: Record<string, any> = zip.files || {}
+    const names = Object.keys(files)
+    expect(names.some((n) => /sharedStrings\.xml$/.test(n))).toBe(true)
+    const sheetXml = String(
+      files[names.find((n) => /worksheets\/sheet1\.xml$/.test(n)) as string]?.content ?? '',
+    )
+    expect(sheetXml).not.toContain('t="str"')
+    expect(sheetXml).toContain('t="s"')
+  })
+
   it('sanitizes invalid characters in sheet names', () => {
     const ws = aoaSheet([[cell('x')]])
     const buf = buildWorkbook([{ name: 'has[brackets]/slash', ws }])
