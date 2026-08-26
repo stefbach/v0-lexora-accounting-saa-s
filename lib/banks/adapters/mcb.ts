@@ -1146,8 +1146,14 @@ async function downloadMcbStatements(
   const pdfNotes: string[] = []
   const dlDbg: string[] = []
   const takenFp = new Map<string, string>()
+  const takenPeriods = new Set<string>()
   for (const s of statements) {
     if (Date.now() > deadline) break // budget temps épuisé → on finit au prochain run
+
+    // Un seul relevé stocké par période dans ce run (garde-fou : la sélection
+    // dédoublonne déjà par période, mais on ne re-télécharge jamais un mois
+    // déjà pris — évite tout doublon « Statement »/« Current account statement »).
+    if (takenPeriods.has(s.period)) continue
 
     const got = await fetchStatement(s)
     if (!got) {
@@ -1167,6 +1173,7 @@ async function downloadMcbStatements(
       continue
     }
     takenFp.set(f, s.period)
+    takenPeriods.add(s.period)
 
     // Caractérise le PDF (persisté) : XFA/AcroForm/chiffré, /Font, /XObject,
     // nb pages, producteur. Diagnostique « pourquoi l'OCR ne lit rien ».

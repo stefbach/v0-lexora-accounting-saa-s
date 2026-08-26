@@ -141,10 +141,23 @@ export function selectStatementsForBackfill(
   knownPeriods: Set<string>,
   maxN: number,
 ): StatementRef[] {
-  return selectNewStatements(statements, new Set())
+  const ranked = selectNewStatements(statements, new Set())
     .filter((s) => !knownPeriods.has(s.period))
     .sort((a, b) => b.period.localeCompare(a.period))
-    .slice(0, Math.max(0, maxN))
+  // UN SEUL relevé par PÉRIODE. MCB liste souvent le même mois DEUX fois — via
+  // l'API (doc_type « Statement ») ET via le DOM (« Current account statement »).
+  // Sans ce dédoublonnage, on tentait deux téléchargements pour juin ; le 2e clic
+  // ciblé ne se redéclenchait pas et retombait sur le href générique = juillet →
+  // un doc parasite « juin » au contenu de juillet. On garde le 1er (le clic
+  // ciblé, tenté en premier, ramène le bon mois).
+  const seenPeriod = new Set<string>()
+  const out: StatementRef[] = []
+  for (const s of ranked) {
+    if (seenPeriod.has(s.period)) continue
+    seenPeriod.add(s.period)
+    out.push(s)
+  }
+  return out.slice(0, Math.max(0, maxN))
 }
 
 /**

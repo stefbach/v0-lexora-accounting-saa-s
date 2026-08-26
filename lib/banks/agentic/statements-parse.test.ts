@@ -142,4 +142,18 @@ describe('selectStatementsForBackfill — backfill historique progressif', () =>
     const picked = selectStatementsForBackfill([...parsed, parsed[0]], new Set(), 10)
     expect(picked).toHaveLength(4)
   })
+
+  it('UN SEUL relevé par période même si deux doc_type pour le même mois', () => {
+    // MCB liste juin via l'API (« Statement ») ET le DOM (« Current account
+    // statement ») → un seul téléchargement de juin doit être retenu (sinon le 2e
+    // retombe sur le href générique = juillet, doc parasite observé en prod).
+    const dual: RawStatementRow[] = [
+      { dateGenerated: '30 Jun 2026', docType: 'Statement', filename: 'x' },
+      { dateGenerated: '30 Jun 2026', docType: 'Current account statement', filename: 'x' },
+      { dateGenerated: '29 May 2026', docType: 'Statement', filename: 'x' },
+      { dateGenerated: '29 May 2026', docType: 'Current account statement', filename: 'x' },
+    ]
+    const picked = selectStatementsForBackfill(parseStatements(dual), new Set(), 10)
+    expect(picked.map((s) => s.period)).toEqual(['2026-06', '2026-05'])
+  })
 })
