@@ -34,7 +34,7 @@ import { captureScreenshot, capturePageDiagnostic } from '../playwright-launcher
 import { pickBestCompany } from '../agentic/company-match'
 import { findAccountBalance, parseAccounts, accountNumbersMatch } from '../agentic/accounts-parse'
 import { parseTransactions, parseTransactionsFromTexts, findBalanceBreaks, reconcileAmountsFromBalance, dedupeRawTransactions } from '../agentic/transactions-parse'
-import { parseStatements, selectStatementsForBackfill, type RawStatementRow } from '../agentic/statements-parse'
+import { parseStatements, selectStatementsForBackfill, mcbDisplayDatePattern, type RawStatementRow } from '../agentic/statements-parse'
 import {
   isBankApiUrl, extractFromCaptured, transactionsFromCaptured, arrangementsFromCaptured, findTransactionsInJson,
   findStatementsInJson,
@@ -1039,7 +1039,13 @@ async function downloadMcbStatements(
 
   const getViaClick = async (dateGenerated: string): Promise<Buffer | null> => {
     try {
-      const rowLoc = page.getByText(new RegExp(dateGenerated.replace(/-/g, '.').slice(0, 4))).first()
+      // Cible la ligne du BON relevé par sa date affichée (« 30 Jun 2026 »).
+      // Avant : on ne matchait que l'année → toujours la 1re ligne (la plus
+      // récente) → on téléchargeait juillet pour tous les mois.
+      const pat = mcbDisplayDatePattern(dateGenerated)
+      const rowLoc = pat
+        ? page.getByText(new RegExp(pat, 'i')).first()
+        : page.getByText(new RegExp(dateGenerated.replace(/-/g, '.').slice(0, 4))).first()
       const [download] = await Promise.all([
         page.waitForEvent('download', { timeout: 15000 }),
         rowLoc.click({ timeout: 5000 }).catch(() => {}),

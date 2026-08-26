@@ -47,6 +47,29 @@ function periodOf(isoDate: string): string {
   return isoDate.slice(0, 7)
 }
 
+const MONTHS_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/**
+ * Motif regex (source) ciblant la date telle qu'affichée par MCB (« 30 Jun
+ * 2026 ») à partir d'une date ISO (YYYY-MM-DD). Sert à CLIQUER la BONNE ligne de
+ * relevé au téléchargement.
+ *
+ * ⚠️ Bug corrigé : le sélecteur de ligne ne matchait que l'ANNÉE (`slice(0,4)`
+ * → « 2026 »), donc `.first()` cliquait toujours le relevé le PLUS RÉCENT, quel
+ * que soit le mois demandé → on téléchargeait juillet en croyant récupérer juin.
+ * En ciblant jour+mois+année, chaque mois est atteint correctement.
+ */
+export function mcbDisplayDatePattern(iso: string): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((iso || '').trim())
+  if (!m) return null
+  const [, y, mo, d] = m
+  const mon = MONTHS_ABBR[parseInt(mo, 10) - 1]
+  if (!mon) return null
+  const day = String(parseInt(d, 10)) // sans zéro initial (MCB affiche « 3 » ou « 30 »)
+  // Tolère un éventuel zéro initial et un séparateur d'espace variable.
+  return `\\b0?${day}\\s+${mon}\\s+${y}\\b`
+}
+
 /**
  * Parse une ligne brute. `null` si la ligne n'est pas un relevé exploitable
  * (date de génération illisible) — ignore en-têtes / lignes vides.

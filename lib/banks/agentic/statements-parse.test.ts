@@ -6,9 +6,33 @@ import {
   selectNewStatements,
   selectStatementsForBackfill,
   statementStorageName,
+  mcbDisplayDatePattern,
   type RawStatementRow,
   type StatementRef,
 } from './statements-parse'
+
+describe('mcbDisplayDatePattern — cible la BONNE ligne de relevé au clic', () => {
+  it('cible la date exacte (jour+mois+année), pas seulement l\'année', () => {
+    const pat = mcbDisplayDatePattern('2026-06-30')
+    expect(pat).toBeTruthy()
+    const rx = new RegExp(pat as string, 'i')
+    expect(rx.test('30 Jun 2026')).toBe(true)
+    // Ne doit PAS matcher un autre mois de la même année (le bug d\'origine).
+    expect(rx.test('31 Jul 2026')).toBe(false)
+    expect(rx.test('30 Jun 2025')).toBe(false)
+  })
+
+  it('tolère le zéro initial du jour', () => {
+    const rx = new RegExp(mcbDisplayDatePattern('2026-05-03') as string, 'i')
+    expect(rx.test('3 May 2026')).toBe(true)
+    expect(rx.test('03 May 2026')).toBe(true)
+  })
+
+  it('renvoie null sur une date non ISO', () => {
+    expect(mcbDisplayDatePattern('31 Jul 2026')).toBeNull()
+    expect(mcbDisplayDatePattern('')).toBeNull()
+  })
+})
 
 // Tableau réel MCB « Documents & statements » (compte EUR 000447954587, 2026).
 const MCB_ROWS: RawStatementRow[] = [
