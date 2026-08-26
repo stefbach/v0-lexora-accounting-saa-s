@@ -46,6 +46,7 @@ import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { useExerciceActive } from "@/components/client/ExerciceActiveProvider"
 import { t, getLocale, type Locale } from '@/lib/i18n'
+import { afficherCompte } from '@/lib/accounting/compte-display'
 
 interface CompteSolde {
   numero_compte: string
@@ -593,19 +594,14 @@ export default function ClientGrandLivrePage() {
                                         )}
                                         <Badge
                                           variant="outline"
-                                          className={`text-[11px] font-mono ${cls.bgLight} ${cls.text}`}
+                                          className={`text-[11px] ${cls.bgLight} ${cls.text}`}
                                         >
-                                          {c.numero_compte}
+                                          {afficherCompte({ compte: c.numero_compte, libelle: c.libelle })}
                                         </Badge>
                                         <span className="text-xs text-muted-foreground">
                                           {c.nb_ecritures} {c.nb_ecritures > 1 ? t('acc.gl.entry_plural', locale) : t('acc.gl.entry_singular', locale)}
                                         </span>
                                       </div>
-                                      {c.libelle && (
-                                        <p className="text-sm mt-1 break-words pl-5">
-                                          {c.libelle}
-                                        </p>
-                                      )}
                                     </div>
                                     <div className="text-right flex-shrink-0 font-mono text-sm space-y-0.5">
                                       <p className="text-[11px] text-muted-foreground">

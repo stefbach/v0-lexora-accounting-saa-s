@@ -36,6 +36,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { useComptesLibelles } from "@/lib/accounting/use-comptes-libelles"
 import { t, getLocale, type Locale } from '@/lib/i18n'
 
 interface Ecriture {
@@ -94,6 +95,7 @@ export default function ClientEcrituresPage() {
 function ClientEcrituresContent() {
   const locale = getLocale()
   const { societeId } = useSocieteActive()
+  const { libelle: libelleCompte } = useComptesLibelles(societeId)
   const searchParams = useSearchParams()
   const [ecritures, setEcritures] = useState<Ecriture[]>([])
   const [loading, setLoading] = useState(false)
@@ -379,8 +381,8 @@ function ClientEcrituresContent() {
                               <Badge className={`text-[10px] border ${jLabel.color}`}>
                                 {jLabel.label}
                               </Badge>
-                              <Badge variant="outline" className="text-[10px] font-mono">
-                                {e.numero_compte}
+                              <Badge variant="outline" className="text-[10px]">
+                                {libelleCompte(e.numero_compte)}
                               </Badge>
                               {e.lettre && (
                                 <Badge className="text-[10px] bg-green-100 text-green-700 border-green-300 font-mono">
