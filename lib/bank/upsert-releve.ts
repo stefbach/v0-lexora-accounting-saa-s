@@ -51,6 +51,37 @@ export interface OverlapWarning {
   kind: 'partiel' | 'contenu_dans_existant'
 }
 
+/**
+ * Classe le recouvrement entre une nouvelle plage de relevé et une plage
+ * existante, à la granularité MOIS (les relevés bancaires sont alignés sur les
+ * mois : un relevé mensuel « janvier » = 01→31, un relevé semestriel peut
+ * commencer au 05 car c'est la 1re opération, mais il couvre bien tout janvier).
+ *
+ *  - 'absorb' : l'existant est couvert (au mois près) par le nouveau → à
+ *    superséder (le nouveau, plus large, devient la source unique).
+ *  - 'contenu_dans_existant' : le nouveau est couvert par un existant plus large.
+ *  - 'partiel' : recoupement partiel (mois débordants de part et d'autre).
+ *  - 'none' : pas de recoupement.
+ *
+ * Fonction pure → testable. `date_*` au format YYYY-MM-DD.
+ */
+export function classifyReleveOverlap(
+  neu: { date_debut: string; date_fin: string },
+  existing: { date_debut: string; date_fin: string },
+): 'absorb' | 'contenu_dans_existant' | 'partiel' | 'none' {
+  const m = (d: string) => (d || '').slice(0, 7) // YYYY-MM
+  const nd = m(neu.date_debut), nf = m(neu.date_fin)
+  const od = m(existing.date_debut), of = m(existing.date_fin)
+  if (!nd || !nf || !od || !of) return 'none'
+  // Recoupement au mois près.
+  if (!(od <= nf && of >= nd)) return 'none'
+  // Existant entièrement couvert (au mois près) par le nouveau → absorber.
+  if (od >= nd && of <= nf) return 'absorb'
+  // Nouveau entièrement couvert par un existant plus large → ne pas toucher.
+  if (nd >= od && nf <= of) return 'contenu_dans_existant'
+  return 'partiel'
+}
+
 export interface ReleveUpsertResult {
   releve_id: string
   version: number
@@ -125,24 +156,18 @@ export async function upsertReleveBancaire(
       .not('date_debut', 'is', null)
       .not('date_fin', 'is', null)
 
-    const nd = input.date_debut
-    const nf = input.date_fin
     const toAbsorb: string[] = []
     for (const r of (actifs || []) as Array<{ id: string; periode: string; date_debut: string; date_fin: string }>) {
-      const od = r.date_debut
-      const of = r.date_fin
-      const chevauche = od <= nf && of >= nd // les plages se recoupent
-      if (!chevauche) continue
-      if (od >= nd && of <= nf) {
-        // existant entièrement contenu dans le nouveau → absorber
+      // Décision au mois près : un relevé mensuel (01→31) est bien absorbé par un
+      // relevé semestriel qui démarre le 05 (1re opération) mais couvre le mois.
+      const verdict = classifyReleveOverlap(input, { date_debut: r.date_debut, date_fin: r.date_fin })
+      if (verdict === 'absorb') {
         toAbsorb.push(r.id)
-        absorbed.push({ id: r.id, periode: r.periode, date_debut: od, date_fin: of })
-      } else if (nd >= od && nf <= of) {
-        // nouveau contenu dans un existant plus large → ne pas toucher, signaler
-        overlaps.push({ id: r.id, periode: r.periode, date_debut: od, date_fin: of, kind: 'contenu_dans_existant' })
-      } else {
-        // chevauchement partiel → signaler
-        overlaps.push({ id: r.id, periode: r.periode, date_debut: od, date_fin: of, kind: 'partiel' })
+        absorbed.push({ id: r.id, periode: r.periode, date_debut: r.date_debut, date_fin: r.date_fin })
+      } else if (verdict === 'contenu_dans_existant') {
+        overlaps.push({ id: r.id, periode: r.periode, date_debut: r.date_debut, date_fin: r.date_fin, kind: 'contenu_dans_existant' })
+      } else if (verdict === 'partiel') {
+        overlaps.push({ id: r.id, periode: r.periode, date_debut: r.date_debut, date_fin: r.date_fin, kind: 'partiel' })
       }
     }
 
