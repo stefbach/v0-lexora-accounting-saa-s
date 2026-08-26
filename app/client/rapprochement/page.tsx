@@ -2417,8 +2417,8 @@ function AffectDialog({
                           libelle: ecartTreatment.libelle,
                         }
                       return (
-                        <p className="text-[10px] text-amber-700 font-mono">
-                          → {disp.compte} ({disp.libelle})
+                        <p className="text-[10px] text-amber-700">
+                          → {disp.libelle || disp.compte}
                         </p>
                       )
                     })()}
