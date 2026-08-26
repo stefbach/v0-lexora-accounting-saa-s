@@ -60,6 +60,7 @@ import {
   Percent,
   TriangleAlert,
   ClipboardList,
+  FileSpreadsheet,
 } from "lucide-react"
 import {
   AreaChart,
@@ -78,6 +79,7 @@ import {
 } from "recharts"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { ImportProduitsDialog } from "@/components/inventaire/ImportProduitsDialog"
 import {
   KpiCard,
   SectionCard,
@@ -209,6 +211,7 @@ export default function InventairePage() {
   const [tab, setTab] = useState("produits")
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   const [produits, setProduits] = useState<ProduitRow[]>([])
   const [niveaux, setNiveaux] = useState<NiveauRow[]>([])
@@ -574,6 +577,9 @@ export default function InventairePage() {
           </Button>
           <Button variant="outline" size="sm" onClick={() => openMouvement()}>
             <ArrowDownToLine className="h-4 w-4 mr-1" /> Mouvement
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+            <FileSpreadsheet className="h-4 w-4 mr-1" /> Importer
           </Button>
           <Button size="sm" onClick={() => setProduitDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-1" /> Produit
@@ -1076,6 +1082,13 @@ export default function InventairePage() {
       )}
 
       {/* ── Dialog nouveau produit ─────────────────────────────────────── */}
+      <ImportProduitsDialog
+        societeId={societeId}
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={(summary) => { showToast(summary); load() }}
+      />
+
       <Dialog open={produitDialogOpen} onOpenChange={setProduitDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
