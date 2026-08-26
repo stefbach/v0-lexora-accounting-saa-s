@@ -140,6 +140,7 @@ const MENU: MenuSection[] = [
       { href: "/client/inventaire", label: "Inventaire & Stock", icon: Package },
       { href: "/client/pos", label: "Point de vente", icon: ShoppingCart },
       { href: "/client/manufacturing", label: "Production", icon: Factory },
+      { href: "/client/jobs", label: "Chantiers & affaires", icon: Briefcase },
       { href: "/client/analytique", label: "Comptabilité analytique", icon: Layers },
     ]
   },
