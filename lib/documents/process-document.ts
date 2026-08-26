@@ -17,6 +17,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createEcrituresForFacture } from '@/lib/accounting/ecritures-factures'
 import { getTauxChange } from '@/lib/taux-change'
 import { processReleveBancaire } from '@/lib/bank/process-releve'
+import { tryParseFullJson } from '@/lib/ai/bank-statement-extraction'
 import { autoCreateNoteDeFrais } from '@/lib/expenses/auto-create'
 import { isBalanced, balanceDelta, round2 } from '@/lib/money'
 
@@ -249,9 +250,14 @@ export async function processDocument(params: ProcessDocumentParams): Promise<Pr
     // (robot bancaire) — relevés denses. Le texte OCRisé se traite bien, mais on
     // garde sonnet pour la robustesse de l'extraction des tableaux.
     const ocrModel = forcedType === 'releve_bancaire' ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001'
+    // Relevé bancaire dense (ex. juin, 6 pages / ~50+ transactions) : le JSON de
+    // sortie dépasse 8192 tokens → réponse TRONQUÉE → JSON invalide → parse échoue
+    // → on retombait sur { routing: autre, extraction: {} } (aucun relevé créé).
+    // On élargit donc le budget de sortie pour les relevés forcés.
+    const ocrMaxTokens = forcedType === 'releve_bancaire' ? 32000 : 8192
     const response = await anthropic.messages.create({
       model: ocrModel,
-      max_tokens: 8192,
+      max_tokens: ocrMaxTokens,
       temperature: 0,
       system: `Tu es un expert-comptable mauricien chargé d'identifier ET d'extraire le contenu de N'IMPORTE QUEL document commercial :
 - factures A4 structurées (PDF logiciels comptables)
@@ -463,6 +469,10 @@ ${excelText}`
     const text = response.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')
       .map(b => b.text).join('')
+    if (isPdf && forcedType === 'releve_bancaire') {
+      extractDebug.model_stop_reason = response.stop_reason
+      extractDebug.model_out_chars = text.length
+    }
 
     let parsed: any = {}
     let parseError: string | null = null
@@ -478,6 +488,16 @@ ${excelText}`
         }
       } else {
         parseError = 'Aucun bloc JSON trouvé dans la réponse Claude'
+      }
+      // Récupération d'un JSON TRONQUÉ (réponse coupée par max_tokens sur un relevé
+      // dense) : ferme les accolades/crochets ouverts pour sauver les transactions
+      // déjà extraites, au lieu de tout jeter en { extraction: {} }.
+      if (!parsed || Object.keys(parsed).length === 0) {
+        const recovered = tryParseFullJson(text)
+        if (recovered && Object.keys(recovered).length > 0) {
+          parsed = recovered
+          parseError = parseError ? `${parseError} (récupéré partiellement)` : null
+        }
       }
       if (!parsed || Object.keys(parsed).length === 0) {
         parsed = { routing: { type_document: 'autre', societe: 'INCONNU', confiance_type: 0 }, extraction: {} }

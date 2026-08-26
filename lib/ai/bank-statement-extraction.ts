@@ -57,7 +57,7 @@ const tryParseTransactionsArray = (text: string): any[] | null => {
   return null
 }
 
-const tryParseFullJson = (text: string): any | null => {
+export const tryParseFullJson = (text: string): any | null => {
   const trimmed = text.trim()
   try { return JSON.parse(trimmed) } catch { /* noop */ }
   const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/)
