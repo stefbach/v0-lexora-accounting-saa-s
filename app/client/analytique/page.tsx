@@ -29,6 +29,7 @@ import {
 } from "lucide-react"
 import { SECTION_TYPE_LABELS, type SectionType } from "@/lib/analytique/sections"
 import { VentilationDialog } from "@/components/analytique/VentilationDialog"
+import { GrilleView } from "@/components/analytique/GrilleView"
 
 const NAVY = "#0B0F2E"
 const TEAL = "#0F766E"
@@ -67,6 +68,7 @@ export default function AnalytiquePage() {
   const [sections, setSections] = useState<Section[]>([])
   const [loading, setLoading] = useState(false)
   const [tab, setTab] = useState("tous")
+  const [vue, setVue] = useState<"sections" | "grille">("sections")
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [ventilOpen, setVentilOpen] = useState(false)
@@ -136,13 +138,28 @@ export default function AnalytiquePage() {
         <p className="text-slate-500">Sélectionnez une société.</p>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <KpiCard label="Produits analytiques" value={fmt(totals.produits)} icon={TrendingUp} color={TEAL} hint="Comptes classe 7" />
             <KpiCard label="Charges analytiques" value={fmt(totals.charges)} icon={TrendingDown} color={RED} hint="Comptes classe 6" />
             <KpiCard label="Marge globale" value={fmt(totals.marge)} icon={Wallet} color={totals.marge < 0 ? RED : GOLD} hint="Produits − charges" />
             <KpiCard label="Sections actives" value={totals.actives} icon={Layers} color={NAVY} hint={`${sections.length} au total`} />
           </div>
 
+          <div className="inline-flex rounded-lg border p-0.5 mb-4">
+            <button
+              className={`px-3 py-1 text-sm rounded-md ${vue === "sections" ? "bg-slate-900 text-white" : "text-slate-600"}`}
+              onClick={() => setVue("sections")}
+            >Sections</button>
+            <button
+              className={`px-3 py-1 text-sm rounded-md ${vue === "grille" ? "bg-slate-900 text-white" : "text-slate-600"}`}
+              onClick={() => setVue("grille")}
+            >Grille (compte × section)</button>
+          </div>
+
+          {vue === "grille" ? (
+            <GrilleView societeId={societeId} />
+          ) : (
+          <>
           <Tabs value={tab} onValueChange={setTab} className="mb-4">
             <TabsList>
               {TYPE_TABS.map((t) => <TabsTrigger key={t.key} value={t.key}>{t.label}</TabsTrigger>)}
@@ -191,6 +208,8 @@ export default function AnalytiquePage() {
               </tbody>
             </table>
           </div>
+          </>
+          )}
         </>
       )}
 
