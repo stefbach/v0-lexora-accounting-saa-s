@@ -57,9 +57,55 @@ export async function GET(req: NextRequest) {
 
   const credByCompte = new Map((creds || []).map((c: any) => [c.compte_bancaire_id, c]))
 
+  // Couverture des relevés PDF par compte : périodes déjà récupérées avec un
+  // document lié (has_pdf). Sert au panneau « historique » + au backfill auto
+  // (l'UI détecte qu'un run n'a rien ajouté → rattrapage terminé).
+  const { data: releves } = ids.length > 0
+    ? await admin.from('releves_bancaires')
+        .select('compte_bancaire_id, periode, document_id')
+        .in('compte_bancaire_id', ids)
+        .not('document_id', 'is', null)
+    : { data: [] }
+  const periodsByCompte = new Map<string, Set<string>>()
+  for (const r of (releves || []) as { compte_bancaire_id: string; periode: string | null }[]) {
+    if (!r.periode) continue
+    if (!periodsByCompte.has(r.compte_bancaire_id)) periodsByCompte.set(r.compte_bancaire_id, new Set())
+    periodsByCompte.get(r.compte_bancaire_id)!.add(r.periode)
+  }
+
+  // Relevés MCB officiels déjà TÉLÉCHARGÉS (documents en storage), même si l'OCR
+  // n'a pas encore créé le relevé lié. Signal de PROGRESSION du backfill : il
+  // avance dès le téléchargement, sans attendre l'OCR (qui vient minutes après).
+  // On rattache au compte via le numéro dans le nom de fichier.
+  const { data: stmtDocs } = await admin
+    .from('documents')
+    .select('nom_fichier, storage_path')
+    .eq('type_document', 'releve_bancaire')
+    .like('storage_path', `bank-statements/${societeId}/%`)
+  const numeroToId = new Map(
+    (comptes || []).filter(c => c.numero_compte).map(c => [c.numero_compte as string, c.id]),
+  )
+  const downloadedByCompte = new Map<string, Set<string>>()
+  for (const d of (stmtDocs || []) as { nom_fichier: string | null; storage_path: string | null }[]) {
+    const name = `${d.nom_fichier || ''} ${d.storage_path || ''}`
+    if (/Releve_Lexora/i.test(name)) continue // PDF générés par Lexora, pas les officiels MCB
+    let compteId: string | undefined
+    for (const [num, id] of numeroToId) { if (name.includes(num)) { compteId = id; break } }
+    if (!compteId) continue
+    const m = name.match(/(\d{4})[-_](\d{2})(?:[-_]\d{2})?[-_]?Statement/i) || name.match(/(\d{4})[-_](\d{2})/)
+    if (!m) continue
+    if (!downloadedByCompte.has(compteId)) downloadedByCompte.set(compteId, new Set())
+    downloadedByCompte.get(compteId)!.add(`${m[1]}-${m[2]}`)
+  }
+
   return NextResponse.json({
     comptes: (comptes || []).map(cb => {
       const cred = credByCompte.get(cb.id) as any
+      const periods = [...(periodsByCompte.get(cb.id) || [])].sort()
+      const downloadedPeriods = [...(downloadedByCompte.get(cb.id) || [])].sort()
+      // Union « présents » = relevés OCRisés (consultables) + relevés téléchargés
+      // (PDF en storage, OCR en cours). Sert au panneau de couverture.
+      const allPeriods = [...new Set([...periods, ...downloadedPeriods])].sort()
       return {
         id: cb.id,
         banque: cb.banque,
@@ -68,6 +114,10 @@ export async function GET(req: NextRequest) {
         devise: cb.devise,
         solde_actuel: cb.solde_actuel,
         actif: cb.actif,
+        // Couverture relevés : `periods` = mois consultables (relevé OCRisé) ;
+        // `downloaded` = mois dont le PDF officiel est déjà récupéré (signal de
+        // progression du backfill, avance avant l'OCR).
+        statements: { count: allPeriods.length, periods: allPeriods, ocr_count: periods.length, downloaded: downloadedPeriods.length },
         scraping: cred ? {
           configured: true,
           has_username: !!cred.username_enc,

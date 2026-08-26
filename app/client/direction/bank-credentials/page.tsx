@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Building2, Eye, EyeOff, AlertCircle, CheckCircle2, Save, Play, Plus, KeyRound } from "lucide-react"
+import { Loader2, Building2, Eye, EyeOff, AlertCircle, CheckCircle2, Save, Play, Plus, KeyRound, History, Download } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { PageHelp } from "@/components/help/PageHelp"
 import { t, getLocale } from "@/lib/i18n"
@@ -29,6 +29,12 @@ type Compte = {
     last_scrape_error?: string | null
     last_balance_mur?: number | null
   }
+  statements?: {
+    count: number
+    periods: string[]
+    ocr_count?: number
+    downloaded?: number
+  }
 }
 
 export default function BankCredentialsPage() {
@@ -41,6 +47,9 @@ export default function BankCredentialsPage() {
   const [editing, setEditing] = useState<string | null>(null)
   const [scrapingNow, setScrapingNow] = useState<string | null>(null)
   const [scrapeDiag, setScrapeDiag] = useState<Record<string, any>>({})
+  const [backfilling, setBackfilling] = useState<string | null>(null)
+  const [backfillMsg, setBackfillMsg] = useState<Record<string, string>>({})
+  const [justCreatedId, setJustCreatedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [newAccount, setNewAccount] = useState({ banque: 'MCB', nom_compte: '', numero_compte: '', iban: '', swift: '', devise: 'MUR', compte_principal: false })
   // Identifiants Internet Banking saisis directement dans le formulaire de création
@@ -149,6 +158,8 @@ export default function BankCredentialsPage() {
       await load()
       // Si aucun identifiant saisi, ouvre d'emblée la saisie login/mot de passe
       if (newId && !credSaved) setEditing(newId)
+      // Identifiants fournis → propose d'importer tout l'historique des relevés.
+      if (newId && credSaved) setJustCreatedId(newId)
     } catch (e: any) { setError(e?.message || t('cui.error_generic', locale)) }
   }
 
@@ -218,6 +229,83 @@ export default function BankCredentialsPage() {
       setSuccess('Le scrape continue en arrière-plan. Rafraîchis la page dans 1 minute pour voir le résultat.')
       await load()
     } catch (e: any) { setError(e?.message || t('cui.error_generic', locale)) } finally { setScrapingNow(null) }
+  }
+
+  // Backfill AUTO de l'historique des relevés : enchaîne des scrapes en
+  // arrière-plan (chacun récupère plusieurs mois manquants — le robot cible les
+  // périodes sans PDF) jusqu'à ce qu'un run n'ajoute plus rien (historique
+  // complet) ou qu'un plafond de sécurité soit atteint. Orchestration côté
+  // navigateur : garder l'onglet ouvert pendant l'import. La progression se lit
+  // sur `statements.downloaded` (avance dès le téléchargement, avant l'OCR).
+  const backfillHistory = async (compteId: string) => {
+    if (backfilling || scrapingNow) return
+    setBackfilling(compteId); setError(null); setSuccess(null); setJustCreatedId(null)
+    const MAX_RUNS = 10
+    const TIMEOUT_MS = 295000
+    const POLL_MS = 6000
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+    const findFresh = async (): Promise<Compte[] | null> => {
+      try {
+        const gr = await fetch(`/api/client/direction/bank-credentials?societe_id=${societeId}`, { cache: 'no-store' })
+        const gj = await gr.json().catch(() => ({}))
+        return gr.ok ? (gj.comptes as Compte[]) : null
+      } catch { return null }
+    }
+    try {
+      let list = comptes
+      let baselineAt = list.find(c => c.id === compteId)?.scraping?.last_scrape_at || null
+      let prevDownloaded = list.find(c => c.id === compteId)?.statements?.downloaded ?? 0
+      let dryRuns = 0
+      for (let run = 1; run <= MAX_RUNS; run++) {
+        setBackfillMsg(p => ({ ...p, [compteId]: `Import de l'historique en cours… (étape ${run}) — ${prevDownloaded} relevé(s) récupéré(s). Garde cet onglet ouvert.` }))
+        const r = await fetch(`/api/client/direction/bank-credentials/scrape?compte_id=${compteId}`, { method: 'POST' })
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(j.error || t('cui.error_generic', locale))
+
+        // Attend la fin du run (last_scrape_at avance).
+        const started = Date.now()
+        let done = false
+        while (Date.now() - started < TIMEOUT_MS) {
+          await sleep(POLL_MS)
+          const fresh = await findFresh()
+          const c = fresh?.find(x => x.id === compteId)
+          if (fresh && c?.scraping?.last_scrape_at && c.scraping.last_scrape_at !== baselineAt) {
+            list = fresh; setComptes(fresh); baselineAt = c.scraping.last_scrape_at; done = true; break
+          }
+        }
+        if (!done) {
+          setBackfillMsg(p => ({ ...p, [compteId]: `Un import continue en arrière-plan. Rafraîchis dans 1-2 min, puis relance l'import s'il reste des mois manquants.` }))
+          break
+        }
+
+        // Laisse l'ingestion des relevés téléchargés créer les documents (juste
+        // après l'enregistrement du run), puis relit la couverture.
+        await sleep(12000)
+        const after = await findFresh()
+        if (after) { list = after; setComptes(after) }
+        const nowDownloaded = list.find(c => c.id === compteId)?.statements?.downloaded ?? prevDownloaded
+        const added = nowDownloaded - prevDownloaded
+        prevDownloaded = nowDownloaded
+
+        if (added <= 0) {
+          dryRuns++
+          if (dryRuns >= 2) {
+            setBackfillMsg(p => ({ ...p, [compteId]: `Historique complet — ${nowDownloaded} relevé(s) récupéré(s). L'OCR finalise les derniers en arrière-plan.` }))
+            break
+          }
+        } else {
+          dryRuns = 0
+        }
+        if (run === MAX_RUNS) {
+          setBackfillMsg(p => ({ ...p, [compteId]: `${nowDownloaded} relevé(s) récupéré(s). Relance l'import s'il reste des mois manquants.` }))
+        }
+      }
+      await load()
+    } catch (e: any) {
+      setError(e?.message || t('cui.error_generic', locale))
+    } finally {
+      setBackfilling(null)
+    }
   }
 
   if (!societeId) return <div className="p-8"><div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{t('cui.no_societe', locale)}</div></div>
@@ -415,6 +503,57 @@ export default function BankCredentialsPage() {
                 {cb.scraping?.last_scrape_error && <div className="text-red-600 text-[10px] mt-1">{cb.scraping.last_scrape_error.slice(0, 100)}</div>}
               </div>
             </div>
+
+            {/* Onboarding : proposer d'importer tout l'historique juste après création */}
+            {justCreatedId === cb.id && cb.scraping?.configured && (
+              <div className="rounded border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 flex items-start justify-between gap-3">
+                <span className="flex items-start gap-1.5">
+                  <History className="h-4 w-4 mt-0.5 shrink-0" />
+                  Compte configuré. Tu peux importer tout l'historique des relevés PDF disponibles chez la banque en une fois.
+                </span>
+                <Button size="sm" disabled={!!backfilling || !!scrapingNow} onClick={() => backfillHistory(cb.id)} className="bg-blue-600 hover:bg-blue-700 text-white shrink-0">
+                  <Download className="h-3.5 w-3.5 mr-1" /> Importer l'historique
+                </Button>
+              </div>
+            )}
+
+            {/* Panneau couverture relevés PDF + backfill de l'historique */}
+            {cb.scraping?.configured && (
+              <div className="border-t pt-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                    <History className="h-3.5 w-3.5 text-slate-500" />
+                    Relevés PDF récupérés : {cb.statements?.count ?? 0}
+                  </div>
+                  <Button
+                    size="sm" variant="outline"
+                    disabled={backfilling === cb.id || !!scrapingNow || (backfilling !== null && backfilling !== cb.id)}
+                    onClick={() => backfillHistory(cb.id)}
+                    className="text-xs h-7"
+                  >
+                    {backfilling === cb.id
+                      ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Import en cours…</>
+                      : <><Download className="h-3.5 w-3.5 mr-1" /> Récupérer l'historique</>}
+                  </Button>
+                </div>
+                {(cb.statements?.periods?.length ?? 0) > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {cb.statements!.periods.map(p => (
+                      <span key={p} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600">{p}</span>
+                    ))}
+                  </div>
+                )}
+                {backfillMsg[cb.id] && (
+                  <div className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5 flex items-start gap-1.5">
+                    {backfilling === cb.id && <Loader2 className="h-3 w-3 mt-0.5 animate-spin shrink-0" />}
+                    {backfillMsg[cb.id]}
+                  </div>
+                )}
+                <div className="text-[10px] text-slate-400">
+                  L'import enchaîne plusieurs récupérations jusqu'à ce que tout l'historique disponible soit rapatrié. Garde cet onglet ouvert pendant l'opération.
+                </div>
+              </div>
+            )}
 
             {scrapeDiag[cb.id] && scrapeDiag[cb.id].status !== 'success' && (
               <div className="border-t pt-3 space-y-2">
