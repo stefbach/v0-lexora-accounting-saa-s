@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { apiError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
@@ -9,8 +9,15 @@ import { scrapeBankAccount, detectAnomalies } from '@/lib/banks/scraper'
  * POST /api/client/direction/bank-credentials/scrape?compte_id=Y
  * Trigger manuel d'un scrape bancaire depuis l'UI.
  * Accès : direction / admin uniquement.
+ *
+ * ⚠️ Exécution ASYNCHRONE. Un scrape Playwright (login + navigation SPA MCB +
+ * téléchargement relevés + OCR) dure 60–140 s. Une requête HTTP aussi longue est
+ * coupée par les réseaux mobiles (4G) et les passerelles → l'UI affichait
+ * « Load failed » alors que le scrape RÉUSSISSAIT côté serveur. On lance donc le
+ * scrape en arrière-plan via `after()` et on répond immédiatement (202) ; l'UI
+ * sonde la fin via `last_scrape_at` (GET bank-credentials).
  */
-export const maxDuration = 120 // Playwright peut être lent
+export const maxDuration = 300 // le scrape en arrière-plan peut atteindre ~140 s
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -33,17 +40,28 @@ export async function POST(req: NextRequest) {
     return apiError('management_only', 403)
   }
 
-  const result = await scrapeBankAccount({
-    compte_bancaire_id: compteId,
-    societe_id: compte.societe_id,
-    trigger_source: 'manual',
+  const societeId = compte.societe_id
+  const startedAt = new Date().toISOString()
+
+  // Lance le scrape en arrière-plan (voir en-tête). `scrapeBankAccount` journalise
+  // lui-même le run (bank_scrape_runs + comptes_bancaires_scraping_creds.last_scrape_*)
+  // pour TOUS les statuts, ce qui sert de signal de fin au polling de l'UI.
+  // L'alimentation du rapprochement + la mise à jour du solde sont faites DANS
+  // scrapeBankAccount (cron ET manuel).
+  after(async () => {
+    try {
+      const result = await scrapeBankAccount({
+        compte_bancaire_id: compteId,
+        societe_id: societeId,
+        trigger_source: 'manual',
+      })
+      if (result.status === 'success') {
+        await detectAnomalies(compteId, result)
+      }
+    } catch {
+      // Best-effort : l'échec est déjà journalisé par recordRun côté scraper.
+    }
   })
-  if (result.status === 'success') {
-    await detectAnomalies(compteId, result)
-  }
-  // L'alimentation du rapprochement (relevés_bancaires.transactions_json) + la
-  // mise à jour du solde du compte sont désormais faites DANS scrapeBankAccount
-  // (pour cron ET manuel), et exposées via result.ingestion — plus de second
-  // appel ici qui doublonnait les lignes dans transactions_bancaires.
-  return NextResponse.json({ ...result, ingestion: result.ingestion ?? null })
+
+  return NextResponse.json({ started: true, started_at: startedAt }, { status: 202 })
 }
