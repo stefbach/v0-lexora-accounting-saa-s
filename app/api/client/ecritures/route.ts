@@ -97,7 +97,7 @@ export async function PATCH(request: Request) {
     if (!user) return apiError('unauthorized', 401)
 
     const body = await request.json()
-    const { id, numero_compte, libelle, debit_mur, credit_mur, date_ecriture, lettre } = body
+    const { id, numero_compte, libelle, debit_mur, credit_mur, date_ecriture, lettre, section_analytique_id } = body
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
 
     const supabase = getAdminClient()
@@ -131,6 +131,8 @@ export async function PATCH(request: Request) {
     if (credit_mur !== undefined) updates.credit_mur = Math.round((Number(credit_mur) || 0) * 100) / 100
     if (date_ecriture !== undefined) updates.date_ecriture = date_ecriture
     if (lettre !== undefined) updates.lettre = lettre || null
+    // Affectation analytique à la source (mig 500) — '' ou null = désaffecter.
+    if (section_analytique_id !== undefined) updates.section_analytique_id = section_analytique_id || null
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'Aucun champ à modifier' }, { status: 400 })

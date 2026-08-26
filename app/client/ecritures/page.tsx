@@ -103,8 +103,9 @@ function ClientEcrituresContent() {
   const [search, setSearch] = useState(searchParams.get('compte') || '')
   const [editing, setEditing] = useState<Ecriture | null>(null)
   const [editFields, setEditFields] = useState<{
-    numero_compte: string; libelle: string; debit_mur: string; credit_mur: string; date_ecriture: string
-  }>({ numero_compte: '', libelle: '', debit_mur: '', credit_mur: '', date_ecriture: '' })
+    numero_compte: string; libelle: string; debit_mur: string; credit_mur: string; date_ecriture: string; section_analytique_id: string
+  }>({ numero_compte: '', libelle: '', debit_mur: '', credit_mur: '', date_ecriture: '', section_analytique_id: '' })
+  const [sectionsAnalytiques, setSectionsAnalytiques] = useState<Array<{ id: string; code: string; libelle: string; statut: string }>>([])
   const [saving, setSaving] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
@@ -122,6 +123,7 @@ function ClientEcrituresContent() {
       debit_mur: String(e.debit_mur || 0),
       credit_mur: String(e.credit_mur || 0),
       date_ecriture: e.date_ecriture || '',
+      section_analytique_id: (e as any).section_analytique_id || '',
     })
   }
 
@@ -139,6 +141,7 @@ function ClientEcrituresContent() {
           debit_mur: Number(editFields.debit_mur) || 0,
           credit_mur: Number(editFields.credit_mur) || 0,
           date_ecriture: editFields.date_ecriture || undefined,
+          section_analytique_id: editFields.section_analytique_id || null,
         }),
       })
       if (!res.ok) {
@@ -226,6 +229,15 @@ function ClientEcrituresContent() {
   useEffect(() => {
     load()
   }, [load])
+
+  // Sections analytiques (affectation à la source depuis l'édition).
+  useEffect(() => {
+    if (!societeId) return
+    fetch(`/api/client/analytique/sections?societe_id=${societeId}`)
+      .then((r) => r.json())
+      .then((d) => setSectionsAnalytiques((d.items || []).filter((s: any) => s.statut !== 'clos')))
+      .catch(() => setSectionsAnalytiques([]))
+  }, [societeId])
 
   const filtered = useMemo(() => {
     let list = ecritures
@@ -519,6 +531,21 @@ function ClientEcrituresContent() {
                   />
                 </div>
               </div>
+              {sectionsAnalytiques.length > 0 && (
+                <div className="mt-3">
+                  <label className="text-xs font-medium text-slate-600">Section analytique</label>
+                  <select
+                    value={editFields.section_analytique_id}
+                    onChange={(e) => setEditFields({ ...editFields, section_analytique_id: e.target.value })}
+                    className="mt-1 h-9 w-full border rounded px-2 text-sm bg-white"
+                  >
+                    <option value="">— Aucune —</option>
+                    {sectionsAnalytiques.map((s) => (
+                      <option key={s.id} value={s.id}>{s.code} · {s.libelle}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-6">
               <Button variant="outline" onClick={() => setEditing(null)} disabled={saving} className="w-full sm:w-auto">
