@@ -89,6 +89,7 @@ import { calculerLigne, calculerTotaux, resteAPayer, type LignePanier } from "@/
 import { appliquerRemiseGlobale, montantRemiseGlobale, type RemiseGlobale } from "@/lib/pos/remise-globale"
 import { buildTicketModel, computeChange, type TicketModel } from "@/lib/pos/ticket"
 import { TicketReceipt } from "@/components/pos/TicketReceipt"
+import { ClientPicker, type ClientChoisi } from "@/components/pos/ClientPicker"
 import { sumMoney } from "@/lib/money"
 import {
   KpiCard,
@@ -226,6 +227,7 @@ export default function PosPage() {
   const [enAttente, setEnAttente] = useState<PanierEnAttente[]>([])
   const [remiseType, setRemiseType] = useState<"pct" | "montant">("pct")
   const [remiseValeur, setRemiseValeur] = useState("")
+  const [client, setClient] = useState<ClientChoisi | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
   const [fondOuverture, setFondOuverture] = useState("")
@@ -564,6 +566,7 @@ export default function PosPage() {
         body: JSON.stringify({
           societe_id: societeId,
           session_id: session.id,
+          client_id: client?.id || null,
           lignes: lignesNettes.map(({ produit_id, quantite, prix_unitaire_ht, remise_pct, taux_tva }) => ({
             produit_id,
             quantite,
@@ -610,6 +613,7 @@ export default function PosPage() {
       setEncaisserOpen(false)
       setPanier([])
       setRemiseValeur("")
+      setClient(null)
       load()
     } catch (e: any) {
       showToast(e?.message || "Erreur", "error")
@@ -1249,6 +1253,10 @@ export default function PosPage() {
             <DialogTitle>Encaissement — {fmt(totaux.total_ttc)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Client (optionnel)</Label>
+              <ClientPicker societeId={societeId} value={client} onChange={setClient} />
+            </div>
             {paiements.map((p, i) => (
               <div key={i} className="flex gap-2 items-end">
                 <div className="flex-1">
