@@ -38,6 +38,7 @@ export async function GET(request: Request) {
   const societe_id = searchParams.get('societe_id')
   const format = (searchParams.get('format') || 'xlsx').toLowerCase()
   const exerciceParam = searchParams.get('exercice')
+  const includeAll = searchParams.get('all') === '1'
   let dDebut = searchParams.get('date_debut')
   let dFin = searchParams.get('date_fin')
 
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
     ? supabase.from('plan_comptable').select(SELECT).eq('actif', true).or(`societe_id.eq.${societe_id},societe_id.is.null`).order('compte')
     : supabase.from('plan_comptable').select(SELECT).eq('actif', true).is('societe_id', null).order('compte'))
   if (error) return new Response(error.message, { status: 500 })
-  const comptes = (data || []) as CompteRow[]
+  let comptes = (data || []) as CompteRow[]
 
   let societeNom = ''
   if (societe_id) {
@@ -95,14 +96,16 @@ export async function GET(request: Request) {
       if (!cur.nom && e.nom_compte) cur.nom = e.nom_compte
       agg.set(k, cur)
     }
+    // Arrondi monétaire 2 décimales (évite les artefacts float type 1211847.8800000001).
+    const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
     // Attache les montants aux comptes du plan.
     const inChart = new Set<string>()
     for (const c of comptes) {
       inChart.add(c.compte)
       const a = agg.get(c.compte)
-      c.debit = a?.debit || 0
-      c.credit = a?.credit || 0
-      c.solde = (a?.debit || 0) - (a?.credit || 0)
+      c.debit = round2(a?.debit || 0)
+      c.credit = round2(a?.credit || 0)
+      c.solde = round2((a?.debit || 0) - (a?.credit || 0))
     }
     // Comptes MOUVEMENTÉS absents du plan (sous-comptes tenant) → ajoutés pour
     // ne perdre aucun montant.
@@ -113,8 +116,14 @@ export async function GET(request: Request) {
         type_compte: null, sens_normal: null, compte_parent: null, niveau: null,
         est_analytique: null, categorie_ifrs: null, sous_categorie_ifrs: null,
         poste_etat_financier_ifrs: null, est_contra_ifrs: null, type_mra_ifrs: null, notes: null,
-        debit: a.debit, credit: a.credit, solde: a.debit - a.credit,
+        debit: round2(a.debit), credit: round2(a.credit), solde: round2(a.debit - a.credit),
       })
+    }
+    // Par défaut, on ne garde que les comptes MOUVEMENTÉS (débit ou crédit ≠ 0) :
+    // sans ça l'export affiche 200+ comptes à 0 (comptes de regroupement, comptes
+    // non utilisés) et « paraît vide ». `?all=1` force le plan complet.
+    if (!includeAll) {
+      comptes = comptes.filter((c) => (c.debit || 0) !== 0 || (c.credit || 0) !== 0)
     }
     comptes.sort((x, y) => x.compte.localeCompare(y.compte))
   }
@@ -125,7 +134,14 @@ export async function GET(request: Request) {
 
   // ── CSV ──
   if (format === 'csv') {
-    return new Response(buildPcmCsv(comptes, withAmounts), {
+    let body = buildPcmCsv(comptes, withAmounts)
+    if (withAmounts) {
+      const totDeb = comptes.reduce((s, c) => s + (c.debit || 0), 0)
+      const totCred = comptes.reduce((s, c) => s + (c.credit || 0), 0)
+      const pad = ';'.repeat(13) // 14 colonnes de base (Compte..Notes) → 13 séparateurs avant TOTAL
+      body += `\r\nTOTAL${pad};${totDeb.toFixed(2)};${totCred.toFixed(2)};${(totDeb - totCred).toFixed(2)}`
+    }
+    return new Response(body, {
       status: 200,
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
@@ -150,6 +166,14 @@ export async function GET(request: Request) {
       )
     }
     rows.push(line)
+  }
+  // Ligne TOTAL (contrôle d'équilibre Σdébit = Σcrédit).
+  if (withAmounts) {
+    const totDeb = comptes.reduce((s, c) => s + (c.debit || 0), 0)
+    const totCred = comptes.reduce((s, c) => s + (c.credit || 0), 0)
+    const total = [cell('TOTAL'), ...Array(COLUMNS.length - 1).fill(cell(''))]
+    total.push(cell(Math.round(totDeb * 100) / 100, FMT_MUR), cell(Math.round(totCred * 100) / 100, FMT_MUR), cell(Math.round((totDeb - totCred) * 100) / 100, FMT_MUR))
+    rows.push(total)
   }
   const colWidths = withAmounts
     ? [12, 42, 7, 14, 7, 20, 26, 30, 10, 8, 14, 7, 10, 30, 16, 16, 16]
@@ -186,9 +210,10 @@ export async function GET(request: Request) {
         [cell('Société'), cell(societeNom || '— (référentiel global)')],
         [cell('Exercice'), cell(withAmounts ? `${exercice} (${dDebut} → ${dFin})` : '— (référentiel seul, sans montants)')],
         [cell('Exporté le'), cell(new Date(), FMT_DATE)],
-        [cell('Nombre de comptes'), cell(comptes.length)],
+        [cell(withAmounts && !includeAll ? 'Comptes mouvementés' : 'Nombre de comptes'), cell(comptes.length)],
         [],
         [cell('Montants'), cell(withAmounts ? 'Débit / Crédit / Solde de l\'exercice, en MUR' : 'Aucun (sélectionnez un exercice pour valoriser)')],
+        [cell('Périmètre'), cell(withAmounts ? (includeAll ? 'Tous les comptes du plan (y compris à 0)' : 'Comptes mouvementés uniquement (ajouter ?all=1 pour le plan complet)') : 'Référentiel complet')],
         [cell('Référentiel'), cell('Plan façon PCG (classes 1-7) adapté Maurice')],
         [cell('Normes'), cell('Full IFRS / IFRS for SMEs (Financial Reporting Act)')],
         [cell('Devise'), cell('MUR (Roupies Mauriciennes)')],
