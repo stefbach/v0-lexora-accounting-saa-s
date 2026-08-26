@@ -205,6 +205,8 @@ export async function POST(request: Request) {
       debit_mur: Math.round((Number(l.debit_mur) || 0) * 100) / 100,
       credit_mur: Math.round((Number(l.credit_mur) || 0) * 100) / 100,
       ref_folio: `${refFolio}-${idx + 1}`,
+      // Saisie analytique à la source (optionnelle, mig 500).
+      section_analytique_id: l.section_analytique_id ? String(l.section_analytique_id) : null,
     }))
 
     // Valider que chaque ligne a un compte et debit OU credit (pas les deux)
