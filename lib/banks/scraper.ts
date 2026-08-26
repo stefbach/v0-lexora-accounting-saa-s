@@ -236,10 +236,33 @@ export async function scrapeBankAccount(input: BankScrapeInput): Promise<BankScr
           .select('periode')
           .eq('compte_bancaire_id', input.compte_bancaire_id)
           .not('document_id', 'is', null)
-        knownPeriods = [...new Set((existing || [])
+        knownPeriods = (existing || [])
           .map((r: { periode: string | null }) => r.periode)
-          .filter((p): p is string => !!p))]
+          .filter((p): p is string => !!p)
       } catch { /* best-effort : au pire on re-télécharge (dédup au stockage) */ }
+
+      // Périodes déjà TÉLÉCHARGÉES (relevés MCB officiels présents dans le
+      // stockage), même si l'OCR n'a pas encore créé le relevé. Sans ça, deux
+      // runs de backfill rapprochés re-téléchargeaient les mêmes mois (l'OCR
+      // asynchrone n'ayant pas encore alimenté knownPeriods) → aucun progrès. On
+      // extrait la période du nom de fichier (…_YYYY-MM_Statement.pdf).
+      try {
+        const { data: stmtDocs } = await admin
+          .from('documents')
+          .select('nom_fichier, storage_path')
+          .eq('type_document', 'releve_bancaire')
+          .like('storage_path', `bank-statements/${compte.societe_id}/%`)
+        const numero = compte.numero_compte || ''
+        for (const d of (stmtDocs || []) as { nom_fichier: string | null; storage_path: string | null }[]) {
+          const name = `${d.nom_fichier || ''} ${d.storage_path || ''}`
+          if (numero && !name.includes(numero)) continue
+          if (/Releve_Lexora/i.test(name)) continue // nos PDF générés, pas les officiels MCB
+          const m = name.match(/(\d{4})[-_](\d{2})(?:[-_]\d{2})?[-_]?Statement/i) || name.match(/(\d{4})[-_](\d{2})/)
+          if (m) knownPeriods.push(`${m[1]}-${m[2]}`)
+        }
+      } catch { /* best-effort */ }
+
+      knownPeriods = [...new Set(knownPeriods)]
 
       session = await launchBrowser({ defaultTimeout: 30000 })
       const scraped = await loginAndScrapeMcb(
