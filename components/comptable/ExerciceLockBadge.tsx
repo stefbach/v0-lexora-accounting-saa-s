@@ -11,9 +11,11 @@ import {
 import { t, getLocale } from "@/lib/i18n"
 
 export interface ExerciceLockBadgeProps {
-  statut: "ouvert" | "cloture"
+  statut: "ouvert" | "verrouille" | "cloture"
   /** ISO date string (YYYY-MM-DD or full ISO) — date à laquelle l'exercice a été clôturé */
   dateCloture?: string | null
+  /** ISO date string — date de verrouillage (gel réversible) */
+  dateVerrouillage?: string | null
   /** ISO date string — date de génération du snapshot du bilan figé */
   snapshotDate?: string | null
   className?: string
@@ -63,6 +65,7 @@ function fmtDateTime(iso?: string | null): string {
 export function ExerciceLockBadge({
   statut,
   dateCloture,
+  dateVerrouillage,
   snapshotDate,
   className,
 }: ExerciceLockBadgeProps) {
@@ -70,6 +73,22 @@ export function ExerciceLockBadge({
   const isLocked = statut === "cloture"
   const dateClotureFmt = fmtDate(dateCloture)
   const snapshotFmt = fmtDateTime(snapshotDate)
+
+  // Verrouillé (gel réversible) — distinct de la clôture définitive.
+  if (statut === "verrouille") {
+    const dv = fmtDate(dateVerrouillage)
+    return (
+      <Badge
+        role="status"
+        aria-label={`Exercice verrouillé${dv ? ` le ${dv}` : ""}`}
+        className={`border-orange-300 bg-orange-50 text-orange-800 hover:bg-orange-100 ${className ?? ""}`}
+        variant="outline"
+      >
+        <Lock className="h-3 w-3" aria-hidden="true" />
+        <span>Verrouillé{dv ? ` le ${dv}` : ""}</span>
+      </Badge>
+    )
+  }
 
   const ariaLabel = isLocked
     ? `${t('sccl.exercice_closed_aria', locale)}${dateClotureFmt ? t('sccl.exercice_closed_on', locale).replace('{date}', dateClotureFmt) : ""}${

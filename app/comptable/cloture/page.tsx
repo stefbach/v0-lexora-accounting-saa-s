@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, CheckCircle2, AlertTriangle, Calendar, TrendingUp, RefreshCw, Camera, Lock } from "lucide-react"
+import { Loader2, CheckCircle2, AlertTriangle, Calendar, TrendingUp, RefreshCw, Camera, Lock, Unlock } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { t, getLocale } from "@/lib/i18n"
 import { ExerciceLockBadge } from "@/components/comptable/ExerciceLockBadge"
@@ -29,7 +29,8 @@ interface ExerciceFiscal {
   annee: string
   date_debut?: string
   date_fin?: string
-  statut: "ouvert" | "cloture"
+  statut: "ouvert" | "verrouille" | "cloture"
+  date_verrouillage?: string | null
   date_cloture?: string | null
   snapshot_date?: string | null
 }
@@ -59,16 +60,71 @@ export default function CloturePage() {
     fetch("/api/comptable/societes").then(r => r.json()).then(d => setSocietes(d.societes || []))
   }, [])
 
-  // Charger les exercices fiscaux de la société sélectionnée
-  useEffect(() => {
+  // action en cours sur un exercice (id → action) pour désactiver les boutons
+  const [exAction, setExAction] = useState<string | null>(null)
+
+  const loadExercices = async () => {
     if (!societeId) { setExercices([]); return }
     setExercicesLoading(true)
-    fetch(`/api/comptable/exercices?societe_id=${societeId}`)
-      .then(r => r.ok ? r.json() : { exercices: [] })
-      .then(d => setExercices(Array.isArray(d.exercices) ? d.exercices : []))
-      .catch(() => setExercices([]))
-      .finally(() => setExercicesLoading(false))
-  }, [societeId])
+    try {
+      const r = await fetch(`/api/comptable/exercices?societe_id=${societeId}`)
+      const d = r.ok ? await r.json() : { exercices: [] }
+      setExercices(Array.isArray(d.exercices) ? d.exercices : [])
+    } catch {
+      setExercices([])
+    } finally {
+      setExercicesLoading(false)
+    }
+  }
+
+  // Charger les exercices fiscaux de la société sélectionnée
+  useEffect(() => { loadExercices() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [societeId])
+
+  const initExercices = async () => {
+    if (!societeId) return
+    setExAction("init")
+    try {
+      const res = await fetch("/api/comptable/exercices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "init", societe_id: societeId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error("Initialisation échouée", { description: data?.error }); return }
+      toast.success(`${data.created ?? 0} exercice(s) créé(s)`, { description: data.created === 0 ? "Aucun nouvel exercice à créer." : undefined })
+      await loadExercices()
+    } catch (e: any) {
+      toast.error("Erreur réseau", { description: e?.message })
+    } finally {
+      setExAction(null)
+    }
+  }
+
+  const LABELS: Record<string, string> = {
+    verrouiller: "Verrouillage…", deverrouiller: "Déverrouillage…",
+    cloturer: "Clôture…", rouvrir: "Réouverture…",
+  }
+  const patchExercice = async (ex: ExerciceFiscal, action: "verrouiller" | "deverrouiller" | "cloturer" | "rouvrir") => {
+    if (!ex.id) return
+    if (action === "cloturer" && !confirm(`Clôturer définitivement l'exercice ${ex.annee} ?\nGénère les écritures de résultat + report-à-nouveau et fige un snapshot. Réouvrable pour réajuster.`)) return
+    if (action === "rouvrir" && !confirm(`Rouvrir l'exercice clôturé ${ex.annee} pour réajuster ?`)) return
+    setExAction(ex.id + action)
+    try {
+      const res = await fetch("/api/comptable/exercices", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: ex.id, action }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(LABELS[action].replace("…", " échouée"), { description: data?.error }); return }
+      toast.success(`Exercice ${ex.annee} → ${data.exercice?.statut ?? "ok"}`)
+      await loadExercices()
+    } catch (e: any) {
+      toast.error("Erreur réseau", { description: e?.message })
+    } finally {
+      setExAction(null)
+    }
+  }
 
   const regenerateSnapshot = async (annee: string) => {
     if (!societeId) return
@@ -157,9 +213,22 @@ export default function CloturePage() {
         {societeId && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Lock className="w-4 h-4" /> {t('scp.cloture_fiscal_years', locale)}
-              </CardTitle>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Lock className="w-4 h-4" /> {t('scp.cloture_fiscal_years', locale)}
+                </CardTitle>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={initExercices}
+                  disabled={exAction === "init"}
+                  className="gap-1.5"
+                  title="Crée les exercices manquants d'après les écritures existantes"
+                >
+                  {exAction === "init" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Calendar className="w-3.5 h-3.5" />}
+                  Initialiser les exercices
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {exercicesLoading ? (
@@ -168,7 +237,7 @@ export default function CloturePage() {
                 </div>
               ) : exercices.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-3">
-                  {t('scp.cloture_no_fiscal_years', locale)}
+                  {t('scp.cloture_no_fiscal_years', locale)} — cliquez sur « Initialiser les exercices » pour les créer à partir des écritures existantes.
                 </p>
               ) : (
                 <ul className="divide-y" role="list" aria-label={t('scp.cloture_fiscal_years', locale)}>
@@ -181,29 +250,71 @@ export default function CloturePage() {
                         <span className="font-mono text-sm font-semibold" style={{ color: NAVY }}>
                           {ex.annee}
                         </span>
+                        {(ex.date_debut || ex.date_fin) && (
+                          <span className="text-xs text-muted-foreground">
+                            {ex.date_debut} → {ex.date_fin}
+                          </span>
+                        )}
                         <ExerciceLockBadge
                           statut={ex.statut}
                           dateCloture={ex.date_cloture ?? undefined}
+                          dateVerrouillage={ex.date_verrouillage ?? undefined}
                           snapshotDate={ex.snapshot_date ?? undefined}
                         />
                       </div>
-                      {isAdmin && ex.statut === "cloture" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => regenerateSnapshot(ex.annee)}
-                          disabled={regenLoading === ex.annee}
-                          aria-label={`${t('scp.cloture_regen_aria', locale)} ${ex.annee}`}
-                          className="gap-1"
-                        >
-                          {regenLoading === ex.annee ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Camera className="w-3.5 h-3.5" />
-                          )}
-                          Régénérer snapshot
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Niveau 1 — gel réversible */}
+                        {ex.statut === "ouvert" && (
+                          <Button size="sm" variant="outline" className="gap-1.5"
+                            onClick={() => patchExercice(ex, "verrouiller")}
+                            disabled={!!exAction}>
+                            {exAction === ex.id + "verrouiller" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                            Verrouiller
+                          </Button>
+                        )}
+                        {ex.statut === "verrouille" && (
+                          <Button size="sm" variant="outline" className="gap-1.5"
+                            onClick={() => patchExercice(ex, "deverrouiller")}
+                            disabled={!!exAction}>
+                            {exAction === ex.id + "deverrouiller" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                            Déverrouiller
+                          </Button>
+                        )}
+                        {/* Niveau 2 — clôture définitive */}
+                        {(ex.statut === "ouvert" || ex.statut === "verrouille") && (
+                          <Button size="sm" className="gap-1.5" style={{ backgroundColor: NAVY }}
+                            onClick={() => patchExercice(ex, "cloturer")}
+                            disabled={!!exAction}>
+                            {exAction === ex.id + "cloturer" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                            Clôturer
+                          </Button>
+                        )}
+                        {ex.statut === "cloture" && isAdmin && (
+                          <Button size="sm" variant="outline" className="gap-1.5"
+                            onClick={() => patchExercice(ex, "rouvrir")}
+                            disabled={!!exAction}>
+                            {exAction === ex.id + "rouvrir" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Unlock className="w-3.5 h-3.5" />}
+                            Rouvrir
+                          </Button>
+                        )}
+                        {isAdmin && ex.statut === "cloture" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => regenerateSnapshot(ex.annee)}
+                            disabled={regenLoading === ex.annee}
+                            aria-label={`${t('scp.cloture_regen_aria', locale)} ${ex.annee}`}
+                            className="gap-1"
+                          >
+                            {regenLoading === ex.annee ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Camera className="w-3.5 h-3.5" />
+                            )}
+                            Régénérer snapshot
+                          </Button>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>
