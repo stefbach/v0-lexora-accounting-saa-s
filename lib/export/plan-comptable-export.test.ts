@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   PCM_EXPORT_COLUMNS,
+  PCM_AMOUNT_COLUMNS,
   pcmDisplay,
   pcmCsvField,
+  pcmAmount,
   buildPcmCsv,
   pcmCountByClasse,
   type PcmExportRow,
@@ -52,6 +54,34 @@ describe('buildPcmCsv', () => {
     const csv = buildPcmCsv([row({ compte: '706', libelle: 'Services; conseils' })])
     const dataLine = csv.slice(1).split('\r\n')[1]
     expect(dataLine).toContain('"Services; conseils"')
+  })
+})
+
+describe('pcmAmount', () => {
+  it('formate un montant à 2 décimales, vide si 0/absent', () => {
+    expect(pcmAmount(1234.5)).toBe('1234.50')
+    expect(pcmAmount(0)).toBe('')
+    expect(pcmAmount(undefined)).toBe('')
+    expect(pcmAmount(-42)).toBe('-42.00')
+  })
+})
+
+describe('buildPcmCsv avec montants (exercice valorisé)', () => {
+  it('ajoute les colonnes Débit/Crédit/Solde quand withAmounts', () => {
+    const csv = buildPcmCsv(
+      [row({ compte: '4210', libelle: 'Salaires nets', classe: 4, debit: 4968438.4, credit: 8212842.35, solde: -3244403.95 })],
+      true,
+    )
+    const lines = csv.slice(1).split('\r\n')
+    const header = lines[0].split(';')
+    expect(header.slice(-3)).toEqual(['Débit', 'Crédit', 'Solde'])
+    expect(header.length).toBe(PCM_EXPORT_COLUMNS.length + PCM_AMOUNT_COLUMNS.length)
+    const data = lines[1].split(';')
+    expect(data.slice(-3)).toEqual(['4968438.40', '8212842.35', '-3244403.95'])
+  })
+  it('sans withAmounts : pas de colonnes montants', () => {
+    const csv = buildPcmCsv([row({ compte: '701' })])
+    expect(csv.slice(1).split('\r\n')[0].split(';').length).toBe(PCM_EXPORT_COLUMNS.length)
   })
 })
 

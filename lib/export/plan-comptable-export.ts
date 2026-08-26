@@ -19,7 +19,18 @@ export interface PcmExportRow {
   est_contra_ifrs: boolean | null
   type_mra_ifrs: string | null
   notes: string | null
+  /** Montants de l'exercice (présents seulement quand un exercice est demandé). */
+  debit?: number
+  credit?: number
+  solde?: number
 }
+
+/** Colonnes de montants (ajoutées quand l'export porte sur un exercice). */
+export const PCM_AMOUNT_COLUMNS: Array<{ key: 'debit' | 'credit' | 'solde'; label: string }> = [
+  { key: 'debit', label: 'Débit' },
+  { key: 'credit', label: 'Crédit' },
+  { key: 'solde', label: 'Solde' },
+]
 
 export const PCM_EXPORT_COLUMNS: Array<{ key: keyof PcmExportRow; label: string }> = [
   { key: 'compte', label: 'Compte' },
@@ -61,14 +72,24 @@ export function pcmCsvField(v: unknown): string {
   return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
+/** Montant CSV : nombre à 2 décimales (point), vide si absent/0. */
+export function pcmAmount(v: number | undefined): string {
+  if (v === undefined || v === null || Number.isNaN(v) || v === 0) return ''
+  return v.toFixed(2)
+}
+
 /**
  * Construit le CSV complet (en-tête + lignes), séparateur « ; », fins de ligne
  * CRLF, préfixé d'un BOM UTF-8 pour qu'Excel (locale FR) lise les accents.
+ * `withAmounts` ajoute les colonnes Débit/Crédit/Solde de l'exercice.
  */
-export function buildPcmCsv(rows: PcmExportRow[]): string {
-  const lines = [PCM_EXPORT_COLUMNS.map((c) => pcmCsvField(c.label)).join(';')]
+export function buildPcmCsv(rows: PcmExportRow[], withAmounts = false): string {
+  const cols = withAmounts ? [...PCM_EXPORT_COLUMNS, ...PCM_AMOUNT_COLUMNS] : PCM_EXPORT_COLUMNS
+  const lines = [cols.map((c) => pcmCsvField(c.label)).join(';')]
   for (const r of rows) {
-    lines.push(PCM_EXPORT_COLUMNS.map((col) => pcmCsvField(r[col.key])).join(';'))
+    const base = PCM_EXPORT_COLUMNS.map((col) => pcmCsvField(r[col.key]))
+    if (withAmounts) base.push(...PCM_AMOUNT_COLUMNS.map((col) => pcmAmount(r[col.key])))
+    lines.push(base.join(';'))
   }
   return '﻿' + lines.join('\r\n')
 }
