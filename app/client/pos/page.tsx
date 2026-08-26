@@ -86,6 +86,7 @@ import {
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { calculerLigne, calculerTotaux, resteAPayer, type LignePanier } from "@/lib/pos/panier"
+import { appliquerRemiseGlobale, montantRemiseGlobale, type RemiseGlobale } from "@/lib/pos/remise-globale"
 import { buildTicketModel, computeChange, type TicketModel } from "@/lib/pos/ticket"
 import { TicketReceipt } from "@/components/pos/TicketReceipt"
 import { sumMoney } from "@/lib/money"
@@ -223,6 +224,8 @@ export default function PosPage() {
   const [search, setSearch] = useState("")
   const [panier, setPanier] = useState<PanierItem[]>([])
   const [enAttente, setEnAttente] = useState<PanierEnAttente[]>([])
+  const [remiseType, setRemiseType] = useState<"pct" | "montant">("pct")
+  const [remiseValeur, setRemiseValeur] = useState("")
   const searchRef = useRef<HTMLInputElement>(null)
 
   const [fondOuverture, setFondOuverture] = useState("")
@@ -332,7 +335,16 @@ export default function PosPage() {
   const stockDe = (p: ProduitRow) =>
     (p.stock_niveaux || []).reduce((s, n) => s + (Number(n.quantite) || 0), 0)
 
-  const totaux = useMemo(() => calculerTotaux(panier), [panier])
+  // Remise globale ticket : répartie proportionnellement sur les lignes, pour
+  // que la RPC (qui calcule tout depuis les lignes) encaisse le bon net.
+  const remiseGlobale = useMemo<RemiseGlobale>(() => {
+    const v = Number(remiseValeur)
+    if (!Number.isFinite(v) || v <= 0) return null
+    return { type: remiseType, valeur: v }
+  }, [remiseType, remiseValeur])
+  const lignesNettes = useMemo(() => appliquerRemiseGlobale(panier, remiseGlobale), [panier, remiseGlobale])
+  const remiseMontant = useMemo(() => montantRemiseGlobale(panier, remiseGlobale), [panier, remiseGlobale])
+  const totaux = useMemo(() => calculerTotaux(lignesNettes), [lignesNettes])
 
   const ticketsValides = useMemo(
     () => tickets.filter((t) => t.statut === "validee"),
@@ -511,6 +523,7 @@ export default function PosPage() {
     const label = (prompt("Nom du panier en attente (client, table, n°…) ?") || "").trim() || `Panier ${enAttente.length + 1}`
     persistHolds([{ id: `${Date.now()}`, label, at: Date.now(), items: panier }, ...enAttente])
     setPanier([])
+    setRemiseValeur("")
     setSearch("")
     showToast("Panier mis en attente")
   }
@@ -518,6 +531,7 @@ export default function PosPage() {
   const reprendreAttente = (h: PanierEnAttente) => {
     if (panier.length > 0 && !confirm("Le panier en cours sera remplacé. Continuer ?")) return
     setPanier(h.items)
+    setRemiseValeur("")
     persistHolds(enAttente.filter((x) => x.id !== h.id))
     showToast(`« ${h.label} » repris`)
   }
@@ -550,7 +564,7 @@ export default function PosPage() {
         body: JSON.stringify({
           societe_id: societeId,
           session_id: session.id,
-          lignes: panier.map(({ produit_id, quantite, prix_unitaire_ht, remise_pct, taux_tva }) => ({
+          lignes: lignesNettes.map(({ produit_id, quantite, prix_unitaire_ht, remise_pct, taux_tva }) => ({
             produit_id,
             quantite,
             prix_unitaire_ht,
@@ -574,7 +588,7 @@ export default function PosPage() {
         total_ht: totaux.total_ht,
         total_tva: totaux.total_tva,
         total_ttc: totaux.total_ttc,
-        lignes: panier.map((it) => ({
+        lignes: lignesNettes.map((it) => ({
           designation: it.designation,
           sku: it.sku,
           quantite: it.quantite,
@@ -595,6 +609,7 @@ export default function PosPage() {
       showToast(`Ticket ${data.numero_ticket} validé — ${fmt(Number(data.montant_ttc) || 0)}`)
       setEncaisserOpen(false)
       setPanier([])
+      setRemiseValeur("")
       load()
     } catch (e: any) {
       showToast(e?.message || "Erreur", "error")
@@ -940,7 +955,40 @@ export default function PosPage() {
                           )
                         })}
 
-                        <div className="border-t pt-3 space-y-1 text-sm">
+                        {/* Remise globale ticket */}
+                        <div className="flex items-center justify-between gap-2 border-t pt-3 text-xs">
+                          <span className="text-muted-foreground">Remise globale</span>
+                          <div className="flex items-center gap-1">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={remiseValeur}
+                              onChange={(e) => setRemiseValeur(e.target.value)}
+                              className="h-7 w-20 text-xs"
+                              placeholder="0"
+                              aria-label="Remise globale sur le ticket"
+                            />
+                            <div className="flex overflow-hidden rounded-md border">
+                              <button
+                                type="button"
+                                onClick={() => setRemiseType("pct")}
+                                className={`px-2 py-1 ${remiseType === "pct" ? "bg-[#0B0F2E] text-white" : "text-muted-foreground"}`}
+                              >
+                                %
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setRemiseType("montant")}
+                                className={`px-2 py-1 ${remiseType === "montant" ? "bg-[#0B0F2E] text-white" : "text-muted-foreground"}`}
+                              >
+                                MUR
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pt-1 space-y-1 text-sm">
                           <div className="flex justify-between text-muted-foreground">
                             <span>Total HT</span>
                             <span className="tabular-nums">{fmt(totaux.total_ht)}</span>
@@ -949,6 +997,12 @@ export default function PosPage() {
                             <span>TVA</span>
                             <span className="tabular-nums">{fmt(totaux.total_tva)}</span>
                           </div>
+                          {remiseMontant > 0 && (
+                            <div className="flex justify-between text-emerald-700">
+                              <span>Remise ticket</span>
+                              <span className="tabular-nums">− {fmt(remiseMontant)}</span>
+                            </div>
+                          )}
                           <div className="flex justify-between text-base font-bold text-[#0B0F2E]">
                             <span>Total TTC</span>
                             <span className="tabular-nums">{fmt(totaux.total_ttc)}</span>
