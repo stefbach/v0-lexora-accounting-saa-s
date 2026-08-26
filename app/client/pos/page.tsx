@@ -655,7 +655,10 @@ export default function PosPage() {
       })
       setLastTicket(ticket)
       setTicketOpen(true)
-      showToast(`Ticket ${data.numero_ticket} validé — ${fmt(Number(data.montant_ttc) || 0)}`)
+      showToast(
+        `Ticket ${data.numero_ticket} validé — ${fmt(Number(data.montant_ttc) || 0)}` +
+          (Number(data.points_gagnes) > 0 ? ` · +${data.points_gagnes} pts fidélité` : ""),
+      )
       setEncaisserOpen(false)
       setPanier([])
       setRemiseValeur("")
