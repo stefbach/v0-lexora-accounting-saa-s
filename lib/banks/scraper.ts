@@ -93,9 +93,11 @@ export type StatementsDiagnostic = {
   navLabels?: string[]        // libellés cliquables visibles (si navigation KO)
   url?: string
   note?: string
-  sampleRaw?: string          // échantillon JSON de la réponse relevés (si 0 parsé)
+  sampleRaw?: string          // échantillon JSON de la réponse relevés (TOUJOURS capté : révèle l'ID/URL de download par relevé)
   apiUrls?: string[]          // URLs de l'API relevés captées (pour cibler la liste)
   pdfInfo?: string            // nature des PDF téléchargés (voie, taille, XFA/dynamique)
+  listedDates?: string        // dates de relevés listées (date_generated) + « # » si un href a été capté
+  downloadDbg?: string        // par cible : méthode (href/click) + taille octets — détecte le « même fichier partout »
 }
 
 export type BankScrapeResult = {

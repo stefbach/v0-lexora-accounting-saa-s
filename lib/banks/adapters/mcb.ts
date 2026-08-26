@@ -657,7 +657,7 @@ export async function loginAndScrapeMcb(
       }
       // Résumé lisible de la phase PDF, persisté dans bank_scrape_runs.raw_excerpt.
       const pdfSummary = statementsDiag
-        ? `Relevés PDF: nav=${statementsDiag.navigated} compte=${statementsDiag.accountSelected} listés=${statementsDiag.parsed} téléchargés=${statementsDiag.downloaded}${statementsDiag.pdfInfo ? ` [${statementsDiag.pdfInfo}]` : ''}${statementsDiag.note ? ` — ${statementsDiag.note}` : ''}`
+        ? `Relevés PDF: nav=${statementsDiag.navigated} compte=${statementsDiag.accountSelected} listés=${statementsDiag.parsed} téléchargés=${statementsDiag.downloaded}${statementsDiag.pdfInfo ? ` [${statementsDiag.pdfInfo}]` : ''}${statementsDiag.downloadDbg ? ` dl={${statementsDiag.downloadDbg}}` : ''}${statementsDiag.listedDates ? ` dates=${statementsDiag.listedDates}` : ''}${statementsDiag.sampleRaw ? ` sample=${statementsDiag.sampleRaw}` : ''}${statementsDiag.note ? ` — ${statementsDiag.note}` : ''}`
         : ''
 
       // Solde toujours retourné ; transactions désormais mappées. Si l'extraction
@@ -994,6 +994,41 @@ async function downloadMcbStatements(
   // ingérés (backfill progressif) et priorise le plus récent, borné à maxN.
   const parsedAll = parseStatements([...apiStatements, ...rawRows])
   diag.parsed = parsedAll.length
+
+  // Diagnostic TOUJOURS capté (pas seulement quand 0 parsé) : le vrai bug
+  // observé n'est pas « 0 listé » mais « le MÊME fichier (le plus récent)
+  // téléchargé pour tous les mois » → il faut voir l'ID/URL de download PAR
+  // relevé dans la réponse API pour construire un téléchargement ciblé.
+  //  - listedDates : dates listées + « # » si un href a été capté pour la ligne.
+  //  - sampleRaw   : 1er objet « relevé » brut de l'API (révèle id/url de download).
+  diag.listedDates = parsedAll
+    .map((s) => `${s.date_generated}${s.download_href ? '#' : ''}`)
+    .slice(0, 18)
+    .join(',')
+  if (!diag.sampleRaw) {
+    const stResp = captured
+      .filter((r) => isStatementList(r.url))
+      .sort((a, b) => JSON.stringify(b.json).length - JSON.stringify(a.json).length)[0]
+    if (stResp) {
+      try {
+        // Premier élément de tableau non-vide de la réponse (l'objet relevé lui-même).
+        let firstItem: unknown = null
+        const scan = (n: unknown, d = 0): void => {
+          if (firstItem || d > 8 || n == null) return
+          if (Array.isArray(n)) {
+            const obj = n.find((e) => e && typeof e === 'object' && !Array.isArray(e))
+            if (obj) { firstItem = obj; return }
+            for (const e of n) scan(e, d + 1)
+          } else if (typeof n === 'object') {
+            for (const v of Object.values(n as Record<string, unknown>)) scan(v, d + 1)
+          }
+        }
+        scan(stResp.json)
+        diag.sampleRaw = `${stResp.url.replace(/^https?:\/\/[^/]+/, '')} → ${JSON.stringify(firstItem ?? stResp.json).slice(0, 700)}`
+      } catch { /* nonjson */ }
+    }
+  }
+
   const statements = selectStatementsForBackfill(parsedAll, knownPeriods, maxN)
   diag.toDownload = statements.length
   if (statements.length === 0) {
@@ -1037,18 +1072,26 @@ async function downloadMcbStatements(
       .then(async (resp) => (resp.ok() ? Buffer.from(await resp.body()) : null))
       .catch(() => null)
 
+  // Clic CIBLÉ sur la ligne du relevé demandé. Avant : on cliquait le simple
+  // TEXTE de la date (« 30 Jun 2026 »), ce qui ne déclenche aucun téléchargement
+  // dans la grille Backbase → on retombait sur le href générique = toujours le
+  // dernier relevé. Ici on isole la LIGNE contenant la date, puis on clique SON
+  // PROPRE contrôle de téléchargement (icône/bouton/lien), sinon la ligne entière.
   const getViaClick = async (dateGenerated: string): Promise<Buffer | null> => {
     try {
-      // Cible la ligne du BON relevé par sa date affichée (« 30 Jun 2026 »).
-      // Avant : on ne matchait que l'année → toujours la 1re ligne (la plus
-      // récente) → on téléchargeait juillet pour tous les mois.
       const pat = mcbDisplayDatePattern(dateGenerated)
-      const rowLoc = pat
-        ? page.getByText(new RegExp(pat, 'i')).first()
-        : page.getByText(new RegExp(dateGenerated.replace(/-/g, '.').slice(0, 4))).first()
+      if (!pat) return null
+      const dateRx = new RegExp(pat, 'i')
+      const row = page.locator('tr, [role="row"], li, [role="listitem"]')
+        .filter({ hasText: dateRx }).first()
+      const dlCtrl = row.locator(
+        'a[href], button, [role="button"], [aria-label*="download" i], [aria-label*="télécharg" i], [title*="download" i], [title*="télécharg" i]',
+      ).last()
+      const hasCtrl = await dlCtrl.count().then((n) => n > 0).catch(() => false)
+      const target = hasCtrl ? dlCtrl : row
       const [download] = await Promise.all([
         page.waitForEvent('download', { timeout: 15000 }),
-        rowLoc.click({ timeout: 5000 }).catch(() => {}),
+        target.click({ timeout: 5000 }).catch(() => {}),
       ])
       const stream = await download.createReadStream().catch(() => null)
       if (!stream) return null
@@ -1060,58 +1103,102 @@ async function downloadMcbStatements(
     }
   }
 
+  // Empreinte bon marché d'un PDF (longueur + hash échantillonné) — sert à
+  // détecter le « même fichier renvoyé pour tous les mois ».
+  const fp = (b: Buffer): string => {
+    let h = 0
+    const step = Math.max(1, Math.floor(b.length / 512))
+    for (let i = 0; i < b.length; i += step) h = (h * 31 + b[i]) >>> 0
+    return `${b.length}:${h.toString(16)}`
+  }
+
+  // Récupère le PDF d'un relevé : clic CIBLÉ d'abord (spécifique à la ligne),
+  // href générique seulement en secours. Préfère un PDF non-XFA.
+  const fetchStatement = async (
+    s: { date_generated: string; download_href: string | null },
+  ): Promise<{ buf: Buffer; via: string } | null> => {
+    const click = await getViaClick(s.date_generated)
+    if (click && isValidPdf(click) && !isXfa(click)) return { buf: click, via: 'click' }
+    if (s.download_href) {
+      const href = await getViaHref(s.download_href)
+      if (href && isValidPdf(href) && !isXfa(href)) return { buf: href, via: 'href' }
+      if (href && isValidPdf(href)) return { buf: href, via: 'href-xfa' }
+    }
+    if (click && isValidPdf(click)) return { buf: click, via: 'click-xfa' }
+    return null
+  }
+
+  // ── Garde-fou anti-mislabel ──
+  // Bug confirmé : le téléchargement renvoie TOUJOURS le relevé le plus récent
+  // (fichiers octet-pour-octet identiques pour juin et juillet). Référence =
+  // empreinte du relevé le plus récent listé. Si un téléchargement ciblé pour
+  // une AUTRE période renvoie CE fichier, le lien n'est pas ciblé → on REFUSE de
+  // le stocker sous une mauvaise période (plus jamais « juillet étiqueté juin »).
+  let refFp: string | null = null
+  let refPeriod: string | null = null
+  const mostRecent = [...parsedAll].sort((a, b) => b.period.localeCompare(a.period))[0]
+  if (mostRecent && statements.some((s) => s.period !== mostRecent.period) && Date.now() < deadline) {
+    const rb = await fetchStatement(mostRecent)
+    if (rb) { refFp = fp(rb.buf); refPeriod = mostRecent.period }
+  }
+
   const out: ScrapedStatement[] = []
   const pdfNotes: string[] = []
+  const dlDbg: string[] = []
+  const takenFp = new Map<string, string>()
   for (const s of statements) {
     if (Date.now() > deadline) break // budget temps épuisé → on finit au prochain run
 
-    const cand: Buffer[] = []
-    if (s.download_href) {
-      const b = await getViaHref(s.download_href)
-      if (b && isValidPdf(b)) cand.push(b)
+    const got = await fetchStatement(s)
+    if (!got) {
+      if (diag.errors.length < 5) diag.errors.push(`${s.period}: téléchargement échoué (href=${s.download_href ? 'oui' : 'non'})`)
+      if (dlDbg.length < 8) dlDbg.push(`${s.period}:none`)
+      continue
     }
-    // On déclenche le clic si aucun PDF, OU si le seul obtenu est un XFA (coquille).
-    if (cand.length === 0 || cand.every(isXfa)) {
-      const b = await getViaClick(s.date_generated)
-      if (b && isValidPdf(b)) cand.push(b)
-    }
+    const { buf: chosen, via } = got
+    const f = fp(chosen)
+    if (dlDbg.length < 8) dlDbg.push(`${s.period}:${via}:${Math.round(chosen.length / 1024)}ko`)
 
-    // Choisit un PDF NON-XFA en priorité ; sinon le premier valide (dernier recours).
-    const chosen = cand.find((b) => !isXfa(b)) || cand[0] || null
-    if (chosen) {
-      // Caractérise le PDF (persisté dans le journal) : XFA/AcroForm/chiffré,
-      // présence de ressources texte (/Font) et d'images (/XObject), nb de pages,
-      // producteur. Permet de diagnostiquer « pourquoi l'OCR ne lit rien » sans
-      // avoir accès au fichier ni au navigateur.
-      if (pdfNotes.length < 6) {
-        const head = chosen.slice(0, Math.min(chosen.length, 800000)).toString('latin1')
-        const producer = (head.match(/\/Producer\s*\(([^)]{0,40})\)/) || [])[1]
-        const marks = [
-          isXfa(chosen) ? 'XFA' : '',
-          /\/AcroForm/.test(head) ? 'AcroForm' : '',
-          /\/Encrypt\b/.test(head) ? 'CHIFFRÉ' : '',
-          /\/Font\b/.test(head) ? 'font' : 'sans-font',
-          /\/Image\b|\/XObject/.test(head) ? 'image' : '',
-          `pages~${(head.match(/\/Type\s*\/Page\b/g) || []).length}`,
-        ].filter(Boolean).join(',')
-        pdfNotes.push(`${s.period}[${marks} ${Math.round(chosen.length / 1024)}ko${producer ? ' prod=' + producer.trim() : ''}]`)
-      }
-      out.push({
-        date_generated: s.date_generated,
-        period: s.period,
-        doc_type: s.doc_type,
-        filename: s.filename,
-        pdf_base64: chosen.toString('base64'),
-      })
-    } else if (diag.errors.length < 5) {
-      diag.errors.push(`${s.period}: téléchargement échoué (href=${s.download_href ? 'oui' : 'non'})`)
+    // Identique au relevé le plus récent (autre période) OU déjà pris pour une
+    // autre période dans ce run → lien non ciblé : on n'étiquette pas de travers.
+    const dupPeriod = (refFp && f === refFp && s.period !== refPeriod) ? refPeriod : takenFp.get(f)
+    if (dupPeriod && dupPeriod !== s.period) {
+      if (diag.errors.length < 5) diag.errors.push(`${s.period}: fichier identique à ${dupPeriod} → ignoré (téléchargement non ciblé)`)
+      continue
     }
+    takenFp.set(f, s.period)
+
+    // Caractérise le PDF (persisté) : XFA/AcroForm/chiffré, /Font, /XObject,
+    // nb pages, producteur. Diagnostique « pourquoi l'OCR ne lit rien ».
+    if (pdfNotes.length < 6) {
+      const head = chosen.slice(0, Math.min(chosen.length, 800000)).toString('latin1')
+      const producer = (head.match(/\/Producer\s*\(([^)]{0,40})\)/) || [])[1]
+      const marks = [
+        isXfa(chosen) ? 'XFA' : '',
+        /\/AcroForm/.test(head) ? 'AcroForm' : '',
+        /\/Encrypt\b/.test(head) ? 'CHIFFRÉ' : '',
+        /\/Font\b/.test(head) ? 'font' : 'sans-font',
+        /\/Image\b|\/XObject/.test(head) ? 'image' : '',
+        `pages~${(head.match(/\/Type\s*\/Page\b/g) || []).length}`,
+      ].filter(Boolean).join(',')
+      pdfNotes.push(`${s.period}[${marks} ${Math.round(chosen.length / 1024)}ko${producer ? ' prod=' + producer.trim() : ''}]`)
+    }
+    out.push({
+      date_generated: s.date_generated,
+      period: s.period,
+      doc_type: s.doc_type,
+      filename: s.filename,
+      pdf_base64: chosen.toString('base64'),
+    })
   }
 
   diag.downloaded = out.length
+  if (dlDbg.length > 0) diag.downloadDbg = dlDbg.join(' · ')
   if (pdfNotes.length > 0) diag.pdfInfo = pdfNotes.join(' · ')
   if (out.length > 0 && pdfNotes.some((n) => n.includes('XFA'))) {
     diag.note = "PDF de relevé au format XFA/dynamique (pages blanches en OCR) — le lien de téléchargement ne renvoie pas le PDF rendu."
+  } else if (out.length === 0 && diag.errors.some((e) => e.includes('non ciblé'))) {
+    diag.note = "Téléchargement NON CIBLÉ : MCB renvoie toujours le relevé le plus récent (même fichier pour tous les mois) — voir sample= pour l'ID/URL de download par relevé à utiliser."
   } else if (out.length === 0 && !diag.note) {
     diag.note = `${statements.length} relevé(s) listé(s) mais 0 téléchargé — lien/clic de téléchargement à confirmer.`
   }
