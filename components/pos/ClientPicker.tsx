@@ -11,7 +11,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { User, X, Search } from "lucide-react"
+import { User, X, Search, Star } from "lucide-react"
 
 export interface ClientChoisi {
   id: string
@@ -39,7 +39,29 @@ export function ClientPicker({
   const [results, setResults] = useState<Contact[]>([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
+  const [solde, setSolde] = useState<number | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Solde de points du client sélectionné (fidélité).
+  useEffect(() => {
+    if (!societeId || !value) {
+      setSolde(null)
+      return
+    }
+    let annule = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/client/pos/fidelite?societe_id=${societeId}&client_id=${value.id}`)
+        const data = await res.json()
+        if (!annule) setSolde(res.ok ? Number(data.solde) || 0 : null)
+      } catch {
+        if (!annule) setSolde(null)
+      }
+    })()
+    return () => {
+      annule = true
+    }
+  }, [societeId, value])
 
   useEffect(() => {
     if (!societeId || value) {
@@ -77,6 +99,11 @@ export function ClientPicker({
         <Badge variant="secondary" className="gap-1">
           <User className="h-3 w-3" /> {value.label}
         </Badge>
+        {solde !== null && (
+          <Badge className="gap-1 bg-amber-100 text-amber-800 hover:bg-amber-100">
+            <Star className="h-3 w-3" /> {solde} pts
+          </Badge>
+        )}
         <button
           type="button"
           className="text-muted-foreground hover:text-red-600"

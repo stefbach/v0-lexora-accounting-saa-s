@@ -17,6 +17,7 @@ import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/asser
 import { validateVentePayload } from '@/lib/pos/panier'
 import { evaluerSeuil } from '@/lib/inventaire/alertes'
 import { isElectronique, providerParDefaut } from '@/lib/pos/payments'
+import { pointsGagnes } from '@/lib/pos/fidelite'
 
 export const dynamic = 'force-dynamic'
 
@@ -191,7 +192,26 @@ export async function POST(request: Request) {
         .eq('moyen_paiement', moyen)
     }
 
-    return NextResponse.json({ ...rpcResult, ecritures_in_rpc: true }, { status: 201 })
+    // Fidélité : gain de points si un client est rattaché (best-effort,
+    // idempotent par UNIQUE(vente_pos_id, type)). Ne bloque jamais la vente.
+    let pointsGagnesTicket = 0
+    if (clientId) {
+      const pts = pointsGagnes(Number(rpcResult?.montant_ttc) || 0)
+      if (pts > 0) {
+        const { error: fidErr } = await supabase.from('pos_fidelite_mouvements').insert({
+          societe_id,
+          client_id: clientId,
+          vente_pos_id: venteId,
+          points: pts,
+          type: 'gain',
+          motif: `Vente POS ${rpcResult?.numero_ticket || venteId}`,
+          created_by: user.id,
+        })
+        if (!fidErr) pointsGagnesTicket = pts
+      }
+    }
+
+    return NextResponse.json({ ...rpcResult, ecritures_in_rpc: true, points_gagnes: pointsGagnesTicket }, { status: 201 })
   } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
