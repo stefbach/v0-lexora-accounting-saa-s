@@ -215,9 +215,10 @@ class MauritiusTaxEngine implements TaxEngine {
   jurisdiction = 'MU' as const
 
   getVatRates() {
+    // Maurice n'a PAS de taux réduit 8% : VAT Act → 15 % standard, 0 %
+    // (zero-rated, 1re annexe) et exonéré (exempt, 2e annexe) uniquement.
     return [
       { code: 'STD', label: 'Standard 15%', rate: 0.15 },
-      { code: 'RED', label: 'Reduced 8%', rate: 0.08 },
       { code: 'ZERO', label: 'Zero-rated', rate: 0 },
       { code: 'EXEMPT', label: 'Exempt', rate: 0 },
     ]
@@ -271,17 +272,21 @@ class MauritiusPayrollEngine implements PayrollEngine {
   }
 
   getSocialContributionRates(_asOf: Date): SocialContributionRates {
+    // Taux « pleins » MRA (base > 50 000 MUR) — cf. PARAMS_MRA_DEFAUT dans
+    // lib/rh/paie.ts, seule source de vérité du moteur de paie.
     return {
-      cnss: { employee: 0.03, employer: 0.06 },   // CSG
-      pension: { employee: 0.015, employer: 0.025 },  // NSF
+      cnss: { employee: 0.03, employer: 0.06 },     // CSG (taux plein)
+      pension: { employee: 0.01, employer: 0.025 }, // NSF (1 % / 2,5 %)
     }
   }
 
   getIncomeTaxBrackets(_fiscalYear: number): IncomeTaxBracket[] {
+    // Barème PAYE Budget 2025-2026 (cf. PARAMS_MRA_DEFAUT, lib/rh/paie.ts) :
+    // 0 % jusqu'à 500 000, 10 % de 500 000 à 1 000 000, 20 % au-delà.
     return [
-      { from: 0, to: 390000, rate: 0 },
-      { from: 390000, to: 700000, rate: 0.10 },
-      { from: 700000, to: null, rate: 0.15 },
+      { from: 0, to: 500000, rate: 0 },
+      { from: 500000, to: 1000000, rate: 0.10 },
+      { from: 1000000, to: null, rate: 0.20 },
     ]
   }
 
@@ -327,8 +332,8 @@ export class MauritiusJurisdiction implements Jurisdiction {
     fiscalYearEnd: '06-30',
     vatRates: [
       { code: 'STD', label: 'Standard 15%', rate: 0.15 },
-      { code: 'RED', label: 'Reduced 8%', rate: 0.08 },
       { code: 'ZERO', label: 'Zero', rate: 0 },
+      { code: 'EXEMPT', label: 'Exempt', rate: 0 },
     ],
     corporateIncomeTaxRate: 0.15,
     withholdingTaxes: [],
