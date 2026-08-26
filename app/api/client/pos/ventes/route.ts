@@ -3,10 +3,10 @@
  *
  * GET  : tickets (filtre session), avec lignes et paiements
  * POST : validation ATOMIQUE d'un ticket via la RPC valider_vente_pos
- *        (migration 486 — lignes + paiements + déduction de stock par
- *        appliquer_mouvement_stock dans une seule transaction), puis
- *        écritures comptables (journal POS : encaissement / TVA collectée,
- *        et COGS via le socle inventaire) et alertes de seuil.
+ *        (migration 486 + 504 — lignes + paiements + déduction de stock ET
+ *        écritures comptables (encaissement journal POS + COGS journal OD)
+ *        dans UNE seule transaction). Le Node ne gère plus que les alertes
+ *        de seuil (non-comptable).
  */
 
 import { NextResponse } from 'next/server'
@@ -15,8 +15,6 @@ import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
 import { validateVentePayload } from '@/lib/pos/panier'
-import { createEcrituresForVentePos } from '@/lib/pos/ecritures'
-import { createEcrituresForMouvementStock } from '@/lib/inventaire/ecritures'
 import { evaluerSeuil } from '@/lib/inventaire/alertes'
 
 export const dynamic = 'force-dynamic'
@@ -146,15 +144,14 @@ export async function POST(request: Request) {
 
     const venteId = String(rpcResult?.vente_id || '')
 
-    // Données persistées (lignes recalculées serveur + paiements ventilés).
-    const [{ data: lignesDb }, { data: paiementsDb }, { data: venteDb }] = await Promise.all([
+    // NB : depuis la migration 504, l'écriture d'encaissement (journal POS) ET
+    // le COGS (journal OD) sont postés DANS la RPC valider_vente_pos, dans la
+    // même transaction que le ticket/stock → plus aucune vente sans écriture.
+    // Le Node ne fait plus que la synchro (non-comptable) des alertes de seuil.
+    const [{ data: lignesDb }, { data: venteDb }] = await Promise.all([
       supabase
         .from('lignes_vente_pos')
-        .select('produit_id, quantite, montant_ht, mouvement_stock_id, produits(sku, designation, compte_vente, compte_stock, compte_variation_stock, gere_en_stock, seuil_alerte, stock_mini, stock_maxi)')
-        .eq('vente_pos_id', venteId),
-      supabase
-        .from('paiements_pos')
-        .select('compte_comptable, montant')
+        .select('produit_id, mouvement_stock_id, produits(seuil_alerte, stock_mini, stock_maxi)')
         .eq('vente_pos_id', venteId),
       supabase
         .from('ventes_pos')
@@ -163,49 +160,10 @@ export async function POST(request: Request) {
         .single(),
     ])
 
-    // Écriture d'encaissement (journal POS) — R1, idempotente par POS-<id>.
-    const ecrituresVente = await createEcrituresForVentePos(
-      supabase,
-      {
-        id: venteId,
-        societe_id,
-        numero_ticket: String(rpcResult?.numero_ticket || ''),
-        date_vente: dateVente,
-        montant_tva: Number(rpcResult?.montant_tva) || 0,
-      },
-      (lignesDb || []).map((l: any) => ({
-        montant_ht: Number(l.montant_ht) || 0,
-        compte_vente: l.produits?.compte_vente || null,
-      })),
-      (paiementsDb || []).map((p: any) => ({
-        compte_comptable: p.compte_comptable,
-        montant: Number(p.montant) || 0,
-      })),
-    )
-
-    // COGS + alertes — un mouvement `sortie_vente` par ligne stockée (socle inventaire).
-    let cogsEntries = 0
     const mouvements: any[] = Array.isArray(rpcResult?.mouvements) ? rpcResult.mouvements : []
     for (const mvt of mouvements) {
       const ligne: any = (lignesDb || []).find((l: any) => l.mouvement_stock_id === mvt.mouvement_id)
-      const produit = ligne?.produits as
-        | { sku: string; designation: string; compte_vente: string | null; compte_stock: string | null; compte_variation_stock: string | null; gere_en_stock: boolean; seuil_alerte: number | null; stock_mini: number | null; stock_maxi: number | null }
-        | undefined
-      const cogs = await createEcrituresForMouvementStock(
-        supabase,
-        {
-          id: String(mvt.mouvement_id),
-          societe_id,
-          type_mouvement: 'sortie_vente',
-          valeur_mouvement: Number(mvt.valeur_mouvement) || 0,
-          date_mouvement: dateVente.slice(0, 10),
-          quantite: Number(mvt.quantite) || 0,
-        },
-        produit
-          ? { designation: produit.designation, sku: produit.sku, compte_stock: produit.compte_stock, compte_variation_stock: produit.compte_variation_stock }
-          : { designation: '?', sku: '?' },
-      )
-      cogsEntries += cogs.nb_entries
+      const produit = ligne?.produits as { seuil_alerte: number | null; stock_mini: number | null; stock_maxi: number | null } | undefined
       if (produit && venteDb?.depot_id) {
         await syncAlerte(
           supabase,
@@ -217,16 +175,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json(
-      {
-        ...rpcResult,
-        ecritures: {
-          vente: { ok: ecrituresVente.ok, nb_entries: ecrituresVente.nb_entries, error: ecrituresVente.error },
-          cogs_nb_entries: cogsEntries,
-        },
-      },
-      { status: 201 },
-    )
+    return NextResponse.json({ ...rpcResult, ecritures_in_rpc: true }, { status: 201 })
   } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
