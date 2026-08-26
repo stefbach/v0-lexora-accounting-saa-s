@@ -77,6 +77,8 @@ import {
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { calculerLigne, calculerTotaux, resteAPayer, type LignePanier } from "@/lib/pos/panier"
+import { buildTicketModel, computeChange, type TicketModel } from "@/lib/pos/ticket"
+import { TicketReceipt } from "@/components/pos/TicketReceipt"
 import { sumMoney } from "@/lib/money"
 import {
   KpiCard,
@@ -191,7 +193,7 @@ function initiales(designation: string): string {
 }
 
 export default function PosPage() {
-  const { societeId } = useSocieteActive()
+  const { societeId, societe } = useSocieteActive()
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
@@ -208,6 +210,9 @@ export default function PosPage() {
   const [fondOuverture, setFondOuverture] = useState("")
   const [encaisserOpen, setEncaisserOpen] = useState(false)
   const [paiements, setPaiements] = useState<PaiementSaisie[]>([])
+  const [recuEspeces, setRecuEspeces] = useState("")
+  const [lastTicket, setLastTicket] = useState<TicketModel | null>(null)
+  const [ticketOpen, setTicketOpen] = useState(false)
   const [clotureOpen, setClotureOpen] = useState(false)
   const [fondCompte, setFondCompte] = useState("")
   const [recap, setRecap] = useState<RecapFermeture | null>(null)
@@ -450,8 +455,15 @@ export default function PosPage() {
   const ouvrirEncaissement = () => {
     if (panier.length === 0) return
     setPaiements([{ moyen_paiement: "especes", montant: String(totaux.total_ttc), reference: "" }])
+    setRecuEspeces("")
     setEncaisserOpen(true)
   }
+
+  // Part espèces due + monnaie à rendre (affichés dans l'encaissement).
+  const partEspeces = paiements
+    .filter((p) => p.moyen_paiement === "especes")
+    .reduce((s, p) => s + (Number(p.montant) || 0), 0)
+  const rendu = recuEspeces ? computeChange(Number(recuEspeces) || 0, partEspeces) : 0
 
   const ajouterPaiement = () => {
     const reste = resteAPayer(
@@ -489,6 +501,32 @@ export default function PosPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Erreur")
+      // Construit le ticket imprimable depuis le panier + paiements courants.
+      const ticket = buildTicketModel({
+        societe: societe?.nom || "Ticket de caisse",
+        numero_ticket: data.numero_ticket || "",
+        date: new Date().toISOString().slice(0, 10),
+        total_ht: totaux.total_ht,
+        total_tva: totaux.total_tva,
+        total_ttc: totaux.total_ttc,
+        lignes: panier.map((it) => ({
+          designation: it.designation,
+          sku: it.sku,
+          quantite: it.quantite,
+          prix_unitaire_ht: it.prix_unitaire_ht,
+          remise_pct: it.remise_pct,
+          taux_tva: it.taux_tva,
+          montant_ttc: calculerLigne(it).montant_ttc,
+        })),
+        paiements: paiements.map((p) => ({
+          moyen: p.moyen_paiement,
+          montant: Number(p.montant) || 0,
+          reference: p.reference || null,
+        })),
+        recu_especes: recuEspeces ? Number(recuEspeces) || undefined : undefined,
+      })
+      setLastTicket(ticket)
+      setTicketOpen(true)
       showToast(`Ticket ${data.numero_ticket} validé — ${fmt(Number(data.montant_ttc) || 0)}`)
       setEncaisserOpen(false)
       setPanier([])
@@ -1041,6 +1079,19 @@ export default function PosPage() {
                 {fmt(totalSaisi)} / {fmt(totaux.total_ttc)}
               </span>
             </div>
+            {partEspeces > 0 && (
+              <div className="border-t pt-2 space-y-1">
+                <Label className="text-xs text-muted-foreground">Espèces reçues (pour le rendu)</Label>
+                <Input
+                  type="number" inputMode="decimal" placeholder={fmt(partEspeces)}
+                  value={recuEspeces} onChange={(e) => setRecuEspeces(e.target.value)}
+                />
+                <div className="text-sm flex justify-between">
+                  <span className="text-muted-foreground">Rendu</span>
+                  <span className="font-semibold tabular-nums">{fmt(rendu)}</span>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEncaisserOpen(false)}>
@@ -1055,6 +1106,8 @@ export default function PosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <TicketReceipt ticket={lastTicket} open={ticketOpen} onOpenChange={setTicketOpen} />
 
       {/* ── Dialog clôture ─────────────────────────────────────────── */}
       <Dialog open={clotureOpen} onOpenChange={setClotureOpen}>
