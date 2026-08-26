@@ -13,6 +13,7 @@
  */
 
 import { isBalanced, round2 } from '@/lib/money'
+import { ensureSectionForJob, tagLines } from '@/lib/analytique/link'
 import {
   COMPTE_PERSONNEL_JOBS,
   COMPTE_SALAIRES_BRUTS,
@@ -48,6 +49,8 @@ export interface EcritureJobLine {
   debit_mur: number
   credit_mur: number
   exercice: string
+  /** Dimension analytique unifiée (mig 500) — renseignée à l'insertion. */
+  section_analytique_id?: string | null
 }
 
 export function refFolioConsommationJob(mouvementId: string): string {
@@ -184,7 +187,9 @@ export async function createEcrituresForConsommationJob(
   try {
     const dossierId = await resolveDossier(supabase, c.societe_id, c.dossier_id ?? null)
     const lignes = buildEcrituresConsommationJob({ ...c, dossier_id: dossierId })
-    return insertIdempotent(supabase, c.societe_id, refFolioConsommationJob(c.mouvement_id), lignes)
+    const sectionId = await ensureSectionForJob(supabase, c.societe_id, c.job_id)
+    const tagged = tagLines(lignes, { section_analytique_id: sectionId })
+    return insertIdempotent(supabase, c.societe_id, refFolioConsommationJob(c.mouvement_id), tagged)
   } catch (e: any) {
     return { ok: false, nb_entries: 0, error: e?.message || 'Erreur inconnue' }
   }
@@ -198,7 +203,9 @@ export async function createEcrituresForReclassementJob(
   try {
     const dossierId = await resolveDossier(supabase, r.societe_id, r.dossier_id ?? null)
     const lignes = buildEcrituresReclassementJob({ ...r, dossier_id: dossierId })
-    return insertIdempotent(supabase, r.societe_id, refFolioReclassementJob(r.job_id), lignes)
+    const sectionId = await ensureSectionForJob(supabase, r.societe_id, r.job_id)
+    const tagged = tagLines(lignes, { section_analytique_id: sectionId })
+    return insertIdempotent(supabase, r.societe_id, refFolioReclassementJob(r.job_id), tagged)
   } catch (e: any) {
     return { ok: false, nb_entries: 0, error: e?.message || 'Erreur inconnue' }
   }

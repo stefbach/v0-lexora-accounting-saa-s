@@ -12,6 +12,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
 import { buildLignesConsommation, numeroOF, validateOrdrePayload } from '@/lib/manufacturing/ordres'
+import { ensureSectionForOf } from '@/lib/analytique/link'
 
 export const dynamic = 'force-dynamic'
 
@@ -150,6 +151,9 @@ export async function POST(request: Request) {
       insert = data
     }
     if (!insert) return NextResponse.json({ error: 'Numérotation OF en conflit — réessayer' }, { status: 409 })
+
+    // Crée la section analytique unifiée de l'OF (dimension mig 500).
+    await ensureSectionForOf(supabase, societe_id, insert.id).catch(() => null)
 
     const lignes_theoriques = buildLignesConsommation(
       lignesBom,

@@ -22,6 +22,7 @@
 
 import { isBalanced, round2, sumMoney } from '@/lib/money'
 import { nomCompteStock } from '@/lib/inventaire/ecritures'
+import { ensureSectionForOf, tagLines } from '@/lib/analytique/link'
 import {
   COMPTE_EN_COURS_PRODUCTION,
   COMPTE_PERTES_STOCKS,
@@ -64,6 +65,9 @@ export interface EcritureOFLine {
   debit_mur: number
   credit_mur: number
   exercice: string
+  /** Dimension analytique unifiée (mig 500) — renseignée à l'insertion. */
+  ordre_fabrication_id?: string | null
+  section_analytique_id?: string | null
 }
 
 export interface OrdrePourEcritures {
@@ -235,7 +239,11 @@ async function insertPiece(
       .limit(1)
     if (existing && existing.length > 0) return { ok: true, nb_entries: 0 }
 
-    const { error } = await supabase.from('ecritures_comptables_v2').insert(lignes)
+    // Tag analytique unifié : OF + section (dimension mig 500).
+    const sectionId = await ensureSectionForOf(supabase, of.societe_id, of.id)
+    const tagged = tagLines(lignes, { ordre_fabrication_id: of.id, section_analytique_id: sectionId })
+
+    const { error } = await supabase.from('ecritures_comptables_v2').insert(tagged)
     if (error) return { ok: false, nb_entries: 0, error: error.message }
     return { ok: true, nb_entries: lignes.length }
   } catch (e: any) {

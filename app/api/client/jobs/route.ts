@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
 import { validateJobPayload } from '@/lib/jobcosting/jobs'
+import { ensureSectionForJob } from '@/lib/analytique/link'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,6 +82,8 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
+    // Crée la section analytique unifiée du chantier (dimension mig 500).
+    await ensureSectionForJob(supabase, societe_id, data.id).catch(() => null)
     return NextResponse.json({ item: data }, { status: 201 })
   } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
