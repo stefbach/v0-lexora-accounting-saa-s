@@ -119,15 +119,49 @@ const computeLandmark = (parsed: any): { date: string | null; desc: string | nul
  *
  * Renvoie `null` si aucune méthode ne donne de texte exploitable → l'appelant
  * retombe sur la vision Claude (PDF base64).
+ *
+ * Le paramètre `diag` (optionnel) est rempli au fil des étapes pour rendre
+ * l'échec observable (pourquoi tel relevé ressort vide) sans nouvelle exécution.
  */
-export async function extractBankPdfText(base64: string): Promise<string | null> {
+export interface BankPdfExtractDiag {
+  method?: 'mistral' | 'unpdf' | 'none'
+  mistral?: { available: boolean; ok?: boolean; chars?: number; pages?: number; ms?: number; err?: string }
+  unpdf?: { chars?: number; err?: string; sample?: string }
+  bytes?: number
+}
+
+// Un relevé multi-pages (ex. compte principal, 6 pages) peut dépasser le timeout
+// Mistral par défaut (60 s) → l'extraction texte échouait et on tombait sur la
+// vision Claude (lente + pages parfois blanches → extraction vide). On accorde
+// donc un budget OCR plus large pour les relevés (le worker de file a 300 s).
+const BANK_OCR_TIMEOUT_MS = Number.parseInt(process.env.BANK_OCR_TIMEOUT_MS || '', 10) || 150_000
+
+export async function extractBankPdfText(
+  base64: string,
+  diag?: BankPdfExtractDiag,
+): Promise<string | null> {
+  if (diag) diag.bytes = Math.floor((base64.length * 3) / 4)
+
   // --- Moteur principal : Mistral OCR (le plus puissant — markdown structuré,
   // conserve les colonnes des tableaux bancaires, gère les scans).
   const { mistralOcrAvailable, ocrToMarkdown } = await import('./mistral-ocr')
-  if (mistralOcrAvailable()) {
-    const ocr = await ocrToMarkdown({ data: base64, mimeType: 'application/pdf' })
+  const mistralAvail = mistralOcrAvailable()
+  if (diag) diag.mistral = { available: mistralAvail }
+  if (mistralAvail) {
+    const ocr = await ocrToMarkdown({ data: base64, mimeType: 'application/pdf', timeoutMs: BANK_OCR_TIMEOUT_MS })
+    if (diag) {
+      diag.mistral = {
+        available: true,
+        ok: ocr.ok,
+        chars: ocr.ok ? ocr.markdown.length : 0,
+        pages: ocr.ok ? ocr.pagesProcessed : undefined,
+        ms: ocr.ok ? ocr.duration_ms : undefined,
+        err: ocr.ok ? undefined : ocr.error,
+      }
+    }
     if (ocr.ok && ocr.markdown.trim().length > 200) {
       console.warn(`[bank-extract] Mistral OCR success: ${ocr.markdown.length} chars, ${ocr.pagesProcessed} pages, ${ocr.duration_ms}ms`)
+      if (diag) diag.method = 'mistral'
       return ocr.markdown
     }
     console.warn(`[bank-extract] Mistral OCR insufficient, falling back to unpdf: ${ocr.ok ? 'too little text' : ocr.error}`)
@@ -145,15 +179,19 @@ export async function extractBankPdfText(base64: string): Promise<string | null>
       : Array.isArray(raw)
         ? raw.join('\n')
         : ''
+    if (diag) diag.unpdf = { chars: text.length, sample: text.trim().slice(0, 400) }
     if (text && text.trim().length > 200) {
       console.warn(`[bank-extract] unpdf success: ${text.length} chars from PDF`)
+      if (diag) diag.method = 'unpdf'
       return text
     }
     console.warn('[bank-extract] unpdf returned too little text, falling back to PDF base64 (vision)')
   } catch (e: any) {
+    if (diag) diag.unpdf = { err: e?.message || String(e) }
     console.warn('[bank-extract] unpdf failed, falling back to PDF base64 (vision):', e?.message)
   }
 
+  if (diag) diag.method = 'none'
   return null
 }
 

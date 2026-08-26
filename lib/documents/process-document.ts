@@ -223,14 +223,18 @@ export async function processDocument(params: ProcessDocumentParams): Promise<Pr
     // (dynamiques/XFA → pages blanches en rasterisation → extraction vide,
     // format « inconnu »). Mistral OCR lit le texte/les tableaux de façon fiable.
     let statementOcrText: string | null = null
+    const extractDebug: Record<string, unknown> = {}
     if (isPdf && forcedType === 'releve_bancaire') {
       try {
         const { extractBankPdfText } = await import('@/lib/ai/bank-statement-extraction')
-        statementOcrText = await extractBankPdfText(base64)
+        statementOcrText = await extractBankPdfText(base64, extractDebug)
         if (statementOcrText) {
           console.warn(`[process-document] relevé OCRisé en texte (${statementOcrText.length} car.) — envoi en mode texte au modèle`)
+        } else {
+          console.warn(`[process-document] extractBankPdfText vide (repli vision). diag=${JSON.stringify(extractDebug)}`)
         }
       } catch (e: any) {
+        extractDebug.fatal = e?.message || String(e)
         console.warn('[process-document] extractBankPdfText a échoué, repli vision:', e?.message)
       }
     }
@@ -563,6 +567,10 @@ ${excelText}`
         excel_sheet_count: excelSheetCount || undefined,
         excel_sheet_names: excelSheetNames.length > 0 ? excelSheetNames : undefined,
         excel_chosen_sheet: excelChosenSheet || undefined,
+        // Diagnostic d'extraction texte des relevés (pourquoi tel PDF ressort
+        // vide : timeout Mistral, unpdf sans texte, XFA…). Lisible en SQL via
+        // n8n_result.metadata.extract_debug.
+        extract_debug: (isPdf && forcedType === 'releve_bancaire') ? extractDebug : undefined,
       },
     }
     if (isExcel && (typeDoc === 'autre' || confianceExtraction === 0)) {
