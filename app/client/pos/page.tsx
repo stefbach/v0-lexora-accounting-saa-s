@@ -113,6 +113,7 @@ interface ProduitRow {
   id: string
   sku: string
   designation: string
+  categorie?: string | null
   gere_en_stock: boolean
   prix_vente_ht: number
   taux_tva: number
@@ -228,6 +229,9 @@ export default function PosPage() {
   const [remiseType, setRemiseType] = useState<"pct" | "montant">("pct")
   const [remiseValeur, setRemiseValeur] = useState("")
   const [client, setClient] = useState<ClientChoisi | null>(null)
+  const [categorieFiltre, setCategorieFiltre] = useState<string | null>(null)
+  const [articleOpen, setArticleOpen] = useState(false)
+  const [artForm, setArtForm] = useState({ sku: "", designation: "", prix: "", tva: "15", categorie: "", gereStock: false })
   const searchRef = useRef<HTMLInputElement>(null)
 
   const [fondOuverture, setFondOuverture] = useState("")
@@ -324,15 +328,22 @@ export default function PosPage() {
     [holdKey],
   )
 
+  // Catégories distinctes présentes dans le catalogue (pour les rayons).
+  const categories = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of produits) if (p.categorie && p.categorie.trim()) set.add(p.categorie.trim())
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "fr"))
+  }, [produits])
+
   const produitsFiltres = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const list = q
-      ? produits.filter(
-          (p) => p.sku.toLowerCase().includes(q) || p.designation.toLowerCase().includes(q),
-        )
-      : produits
+    const list = produits.filter((p) => {
+      if (categorieFiltre && (p.categorie || "").trim() !== categorieFiltre) return false
+      if (q) return p.sku.toLowerCase().includes(q) || p.designation.toLowerCase().includes(q)
+      return true
+    })
     return list.slice(0, 60)
-  }, [produits, search])
+  }, [produits, search, categorieFiltre])
 
   const stockDe = (p: ProduitRow) =>
     (p.stock_niveaux || []).reduce((s, n) => s + (Number(n.quantite) || 0), 0)
@@ -517,6 +528,41 @@ export default function PosPage() {
     setPaiements([{ moyen_paiement: "especes", montant: String(totaux.total_ttc), reference: "" }])
     setRecuEspeces("")
     setEncaisserOpen(true)
+  }
+
+  // ── Création rapide d'un article vendable (retail / plat restaurant) ──────
+  const creerArticle = async () => {
+    if (!societeId) return
+    if (!artForm.sku.trim() || !artForm.designation.trim()) {
+      showToast("SKU et désignation requis", "error")
+      return
+    }
+    setSubmitting(true)
+    try {
+      const res = await fetch("/api/client/inventaire/produits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          societe_id: societeId,
+          sku: artForm.sku,
+          designation: artForm.designation,
+          prix_vente_ht: Number(artForm.prix) || 0,
+          taux_tva: Number(artForm.tva) || 0,
+          categorie: artForm.categorie || null,
+          gere_en_stock: artForm.gereStock,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Erreur")
+      showToast(`Article ${data.item?.sku || artForm.sku} créé`)
+      setArticleOpen(false)
+      setArtForm({ sku: "", designation: "", prix: "", tva: "15", categorie: "", gereStock: false })
+      await load()
+    } catch (e: any) {
+      showToast(e?.message || "Erreur", "error")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   // ── Mise en attente : met le panier de côté et le vide ───────────────────
@@ -821,6 +867,34 @@ export default function PosPage() {
                       <CornerDownLeft className="h-3 w-3" /> ajouter
                     </span>
                   </div>
+
+                  {/* Rayons (catégories) + création rapide d'article */}
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="flex flex-1 flex-wrap gap-1.5 overflow-x-auto">
+                      <button
+                        onClick={() => setCategorieFiltre(null)}
+                        className={`rounded-full border px-3 py-1 text-xs transition ${
+                          categorieFiltre === null ? "border-[#0B0F2E] bg-[#0B0F2E] text-white" : "hover:bg-muted"
+                        }`}
+                      >
+                        Tous
+                      </button>
+                      {categories.map((c) => (
+                        <button
+                          key={c}
+                          onClick={() => setCategorieFiltre(c)}
+                          className={`rounded-full border px-3 py-1 text-xs transition ${
+                            categorieFiltre === c ? "border-[#0B0F2E] bg-[#0B0F2E] text-white" : "hover:bg-muted"
+                          }`}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                    <Button variant="outline" size="sm" className="shrink-0" onClick={() => setArticleOpen(true)}>
+                      <Plus className="h-4 w-4 mr-1" /> Article
+                    </Button>
+                  </div>
                   {produitsFiltres.length === 0 ? (
                     <OpsEmpty
                       icon={Package}
@@ -828,7 +902,7 @@ export default function PosPage() {
                       description={
                         search
                           ? "Aucun produit ne correspond à votre recherche."
-                          : "Créez vos articles dans Stock & inventaire pour les vendre en caisse."
+                          : "Créez un article directement avec le bouton « Article » ci-dessus, ou depuis Stock & inventaire."
                       }
                     />
                   ) : (
@@ -1341,6 +1415,90 @@ export default function PosPage() {
       </Dialog>
 
       <TicketReceipt ticket={lastTicket} open={ticketOpen} onOpenChange={setTicketOpen} />
+
+      {/* ── Dialog création rapide d'article ───────────────────────── */}
+      <Dialog open={articleOpen} onOpenChange={setArticleOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Nouvel article</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>SKU / code *</Label>
+                <Input
+                  value={artForm.sku}
+                  onChange={(e) => setArtForm((f) => ({ ...f, sku: e.target.value }))}
+                  placeholder="CAFE-01"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <Label>Catégorie</Label>
+                <Input
+                  list="pos-categories"
+                  value={artForm.categorie}
+                  onChange={(e) => setArtForm((f) => ({ ...f, categorie: e.target.value }))}
+                  placeholder="Boissons"
+                />
+                <datalist id="pos-categories">
+                  {categories.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+              </div>
+            </div>
+            <div>
+              <Label>Désignation *</Label>
+              <Input
+                value={artForm.designation}
+                onChange={(e) => setArtForm((f) => ({ ...f, designation: e.target.value }))}
+                placeholder="Café expresso"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Prix de vente HT (MUR)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={artForm.prix}
+                  onChange={(e) => setArtForm((f) => ({ ...f, prix: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <Label>TVA %</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={artForm.tva}
+                  onChange={(e) => setArtForm((f) => ({ ...f, tva: e.target.value }))}
+                />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={artForm.gereStock}
+                onChange={(e) => setArtForm((f) => ({ ...f, gereStock: e.target.checked }))}
+              />
+              Géré en stock (décocher pour un service / plat non stocké)
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setArticleOpen(false)}>
+              Annuler
+            </Button>
+            <Button onClick={creerArticle} disabled={submitting || !artForm.sku.trim() || !artForm.designation.trim()}>
+              {submitting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Créer l&apos;article
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Dialog clôture ─────────────────────────────────────────── */}
       <Dialog open={clotureOpen} onOpenChange={setClotureOpen}>
