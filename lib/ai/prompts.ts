@@ -241,7 +241,15 @@ Pour identifier laquelle :
 - Fiscalisation MRA : si la facture contient un IRN (Invoice Reference Number) + QR code,
   c'est une facture déjà fiscalisée MRA — extraire l'IRN dans irn_fiscalisation
 
-═══ PLAN COMPTABLE — sous-comptes (4 digits + tiers) ═══
+{{PLAN_COMPTABLE_REEL}}
+
+═══ PLAN COMPTABLE — nomenclature CONCEPTUELLE (aide à identifier la NATURE) ═══
+
+⚠ Les codes ci-dessous sont une nomenclature de référence pour reconnaître la
+NATURE d'une charge. Ils ne sont PAS forcément les codes réels de la société.
+Quand un « PLAN COMPTABLE RÉEL » est fourni plus haut, tu DOIS mapper la nature
+identifiée ici vers le code RÉEL le plus proche de cette société (ex. nature
+« SaaS » → 651 si 6510 n'existe pas ; « marchandises » → 601 ; « loyer » → 6131).
 
 CHARGES (classe 6) — toujours en DÉBIT. Liste étendue pour limiter le recours au compte générique 6280 :
 
@@ -935,7 +943,9 @@ BRN mapping:
 --- FACTURE FOURNISSEUR ---
 Format: {"routing":{"societe":"<nom>","type_document":"facture_fournisseur","confiance_type":0-100},"extraction":{"emetteur":{"nom":"","email":"","telephone":"","adresse":"","brn":"","vat_number":""},"destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"EUR|USD|GBP|MUR|AUD","montant_ht":0,"montant_tva":0,"montant_ttc":0,"taux_tva":15,"tva_exonere":false,"tva_applicable":true,"fournisseur_vat_number":"","analyse_tva":"","lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"6xx","libelle":"","debit":0,"credit":0}]}}
 EMETTEUR : extrais TOUTES les coordonnées visibles sur le document (nom, email, téléphone, adresse postale complète, BRN, VAT). Ces données alimentent automatiquement le carnet de contacts. Si une info n'est pas visible, mets "" (chaîne vide).
-Comptes de charges:
+{{PLAN_COMPTABLE_REEL}}
+
+Comptes de charges (nomenclature INDICATIVE pour reconnaître la nature — si un « PLAN COMPTABLE RÉEL » est fourni ci-dessus, tu DOIS choisir le code réel le plus proche de cette liste, jamais un code absent du plan réel) :
 - 622: Honoraires et fees (avocats, comptables, consultants, 2E2J)
 - 612: Loyer et charges locatives (MWPI, MW PROP)
 - 626: Telecom (internet, telephonie, CEB electricite, EMTEL, MTML, ORANGE)
@@ -1122,6 +1132,52 @@ export function injectSocietes(
     .replace(/\{\{SOCIETES_LIST\}\}/g, societesList)
     .replace(/\{\{BRN_MAPPING\}\}/g, brnMapping || 'Aucun BRN disponible')
     .replace(/\{\{NAME_VARIATIONS\}\}/g, nameVariations || '')
+}
+
+export interface ComptePourPrompt {
+  compte: string
+  libelle: string
+  categorie_ifrs?: string | null
+}
+
+/**
+ * Formate le plan comptable RÉEL d'une société en section de prompt : c'est la
+ * source de vérité des codes de comptes que le modèle a le droit d'émettre.
+ * Corrige la dérive entre la nomenclature conceptuelle (codée en dur) et le
+ * plan réellement déployé (ex. 6510 vs 651, 6011 vs 601, 6120 vs 6131).
+ */
+export function buildPlanComptableSection(comptes: ComptePourPrompt[]): string {
+  if (!comptes || comptes.length === 0) return ''
+  const lignes = comptes
+    .slice()
+    .sort((a, b) => a.compte.localeCompare(b.compte))
+    .map((c) => `- ${c.compte} ${c.libelle}`)
+    .join('\n')
+  return `═══ PLAN COMPTABLE RÉEL DE CETTE SOCIÉTÉ — SOURCE DE VÉRITÉ DES CODES ═══
+
+Tu DOIS choisir chaque \`compte\` (débit de charge, TVA déductible, TDS,
+fournisseur) UNIQUEMENT parmi les codes ci-dessous : ce sont les SEULS comptes
+qui existent réellement dans le plan de cette société. N'invente JAMAIS un code
+absent de cette liste (ne produis pas 6510 si seul 651 existe, ni 6011 si seul
+601 existe, etc.). Identifie d'abord la NATURE de la dépense grâce à la
+nomenclature conceptuelle ci-dessous, puis mappe-la vers le code RÉEL le plus
+proche de cette liste. Si aucun code réel ne correspond exactement à la nature,
+choisis le plus proche par nature, baisse \`compte_confidence\` (≤ 60) et
+renseigne \`compte_justification\`.
+
+Comptes disponibles (code — libellé) :
+${lignes}`
+}
+
+/**
+ * Remplace le placeholder {{PLAN_COMPTABLE_REEL}} par le plan réel de la
+ * société. Sans comptes (ou pour un prompt sans placeholder) : no-op propre —
+ * le placeholder est simplement retiré et la nomenclature conceptuelle reste
+ * le repli.
+ */
+export function injectPlanComptable(prompt: string, comptes: ComptePourPrompt[]): string {
+  const section = buildPlanComptableSection(comptes)
+  return prompt.replace(/\{\{PLAN_COMPTABLE_REEL\}\}/g, section)
 }
 
 // ---------------------------------------------------------------------------

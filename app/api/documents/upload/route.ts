@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { getSystemPrompt, injectTauxChange, injectSocietes, CLAUDE_CONFIG, SYSTEM_PROMPT_GENERIC_EXTRACTION } from '@/lib/ai/prompts'
+import { getSystemPrompt, injectTauxChange, injectSocietes, injectPlanComptable, CLAUDE_CONFIG, SYSTEM_PROMPT_GENERIC_EXTRACTION } from '@/lib/ai/prompts'
+import { fetchComptesPourPrompt } from '@/lib/accounting/plan-comptable-prompt'
 import { extractBankStatement, extractBankPdfText } from '@/lib/ai/bank-statement-extraction'
 import { findTiersInAnnuaire, incrementTiersUsage, createTiersFromOcr } from '@/lib/tiers-annuaire'
 import { createHash } from 'crypto'
@@ -715,11 +716,19 @@ Respond with ONLY the type word. Nothing else.`,
         }
       }
     } else {
+      // Plan comptable RÉEL de la société → l'IA ne peut catégoriser une charge
+      // que sur un compte existant (corrige la dérive 6510/651, 6011/601…).
+      let genericSystem = injectSocietes(injectTauxChange(SYSTEM_PROMPT_GENERIC_EXTRACTION, tauxChange), societeDetailsForPrompt)
+      {
+        const sid = societeId || societeDetailsForPrompt[0]?.id
+        const comptes = sid ? await fetchComptesPourPrompt(supabase, sid) : []
+        genericSystem = injectPlanComptable(genericSystem, comptes)
+      }
       const genericStream = anthropic.messages.stream({
         model: CLAUDE_CONFIG.model,
         max_tokens: CLAUDE_CONFIG.max_tokens,
         temperature: CLAUDE_CONFIG.temperature,
-        system: injectSocietes(injectTauxChange(SYSTEM_PROMPT_GENERIC_EXTRACTION, tauxChange), societeDetailsForPrompt),
+        system: genericSystem,
         messages: [{ role: 'user', content: messageContent }],
       })
       aiResponse = await genericStream.finalMessage()

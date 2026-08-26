@@ -2,7 +2,8 @@ import { createClient } from '@supabase/supabase-js'
 import { apiError } from '@/lib/api-error'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { getSystemPrompt, injectTauxChange, injectSocietes, CLAUDE_CONFIG, SYSTEM_PROMPT_GENERIC_EXTRACTION } from '@/lib/ai/prompts'
+import { getSystemPrompt, injectTauxChange, injectSocietes, injectPlanComptable, CLAUDE_CONFIG, SYSTEM_PROMPT_GENERIC_EXTRACTION } from '@/lib/ai/prompts'
+import { fetchComptesPourPrompt } from '@/lib/accounting/plan-comptable-prompt'
 import type { PromptId } from '@/lib/ai/prompts'
 import { isBankName, validateAndCleanExtraction, computeConfidence, repairBankJSON } from '@/lib/utils/bank-utils'
 import { extractBankStatement } from '@/lib/ai/bank-statement-extraction'
@@ -160,6 +161,15 @@ export async function POST(
         systemPrompt = injectSocietes(getSystemPrompt(promptId, tauxChange), societeDetailsForPrompt)
       } else {
         systemPrompt = injectSocietes(injectTauxChange(SYSTEM_PROMPT_GENERIC_EXTRACTION, tauxChange), societeDetailsForPrompt)
+      }
+
+      // Injecte le plan comptable RÉEL de la société → l'IA ne peut plus émettre
+      // un compte de charge inexistant (dérive 6510/651, 6011/601…). No-op si le
+      // prompt ne contient pas le placeholder ; sinon toujours résolu.
+      {
+        const sid = societeDetailsForPrompt[0]?.id
+        const comptes = sid ? await fetchComptesPourPrompt(supabase, sid) : []
+        systemPrompt = injectPlanComptable(systemPrompt, comptes)
       }
 
       if (hint) {
