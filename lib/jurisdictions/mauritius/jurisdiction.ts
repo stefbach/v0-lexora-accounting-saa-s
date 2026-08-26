@@ -49,7 +49,7 @@ const MAURITIUS_ACCOUNT_SEEDS: MauritiusAccountSeed[] = [
   { ancien_code_pcg: '5121', libelle: 'Banque — compte courant MUR', categorie_ifrs: 'actif_courant', sous_categorie: 'tresorerie_equivalents', sens_normal: 'D' },
   { ancien_code_pcg: '5122', libelle: 'Banque — compte courant EUR', categorie_ifrs: 'actif_courant', sous_categorie: 'tresorerie_equivalents', sens_normal: 'D' },
   { ancien_code_pcg: '5123', libelle: 'Banque — compte courant USD', categorie_ifrs: 'actif_courant', sous_categorie: 'tresorerie_equivalents', sens_normal: 'D' },
-  { ancien_code_pcg: '580', libelle: 'Virements internes en transit', categorie_ifrs: 'actif_courant', sous_categorie: 'tresorerie_equivalents', sens_normal: 'D' },
+  { ancien_code_pcg: '5800', libelle: 'Virements internes (transit)', categorie_ifrs: 'actif_courant', sous_categorie: 'tresorerie_equivalents', sens_normal: 'D' },
   { ancien_code_pcg: '411', libelle: 'Clients — comptes commerciaux', categorie_ifrs: 'actif_courant', sous_categorie: 'clients_et_autres_creances', sens_normal: 'D' },
   { ancien_code_pcg: '4250', libelle: 'Avances et acomptes au personnel', categorie_ifrs: 'actif_courant', sous_categorie: 'clients_et_autres_creances', sens_normal: 'D' },
   { ancien_code_pcg: '4456', libelle: 'TVA déductible sur achats', categorie_ifrs: 'actif_courant', sous_categorie: 'autres_actifs_courants', sens_normal: 'D', type_mra: 'TVA' },
@@ -179,25 +179,32 @@ class MauritiusChartOfAccounts implements ChartOfAccountsProvider {
   isValidAccountNumber(num: string): boolean { return /^[1-7]\d{2,5}$/.test(num) }
 
   getDefaultAccountFor(op: AccountingOperation): string | undefined {
+    // Codes VALIDÉS contre le plan comptable réel (table plan_comptable, comptes
+    // globaux actifs). Les anciennes valeurs 4443/4452/4421/4310/4441/6200/7660/
+    // 6660 n'existaient PAS dans le plan et sont corrigées ici :
+    //   VAT_COLLECTED 4443→4457, VAT_DEDUCTIBLE 4452→4456 (4452 = TVA intracom.),
+    //   PAYROLL_TAX 4421→4330 (PAYE), SOCIAL_CONTRIBUTIONS 4310→4321 (CSG patronal),
+    //   CORPORATE_TAX 4441→4421 (acomptes IS/APS), PERSONNEL_EXPENSES 6200→6411,
+    //   FX_GAIN 7660→766, FX_LOSS 6660→666.
     const map: Record<AccountingOperation, string> = {
-      'CLIENT_RECEIVABLE': '411',
-      'SUPPLIER_PAYABLE': '401',
-      'BANK_MAIN': '512',
-      'BANK_TRANSIT': '5800',
-      'CASH': '531',
-      'VAT_COLLECTED': '4443',
-      'VAT_DEDUCTIBLE': '4452',
-      'PAYROLL_NET': '4210',
-      'PAYROLL_TAX': '4421',
-      'SOCIAL_CONTRIBUTIONS': '4310',
-      'CORPORATE_TAX': '4441',
-      'SALES_REVENUE': '701',
-      'SERVICE_REVENUE': '706',
-      'PURCHASES': '601',
-      'PERSONNEL_EXPENSES': '6200',
-      'FX_GAIN': '7660',
-      'FX_LOSS': '6660',
-      'INTERCOMPANY_TRANSFER': '5800',
+      'CLIENT_RECEIVABLE': '411',      // Clients
+      'SUPPLIER_PAYABLE': '401',       // Fournisseurs
+      'BANK_MAIN': '512',              // Banque (compte principal)
+      'BANK_TRANSIT': '5800',          // Virements internes (transit)
+      'CASH': '531',                   // Caisse principale
+      'VAT_COLLECTED': '4457',         // TVA collectée
+      'VAT_DEDUCTIBLE': '4456',        // TVA déductible
+      'PAYROLL_NET': '4210',           // Salaires nets à payer
+      'PAYROLL_TAX': '4330',           // PAYE à reverser à la MRA
+      'SOCIAL_CONTRIBUTIONS': '4321',  // CSG patronal à verser (MRA)
+      'CORPORATE_TAX': '4421',         // État, acomptes IS (APS)
+      'SALES_REVENUE': '701',          // Ventes de marchandises
+      'SERVICE_REVENUE': '706',        // Prestations de services
+      'PURCHASES': '601',              // Achats de marchandises
+      'PERSONNEL_EXPENSES': '6411',    // Salaires et appointements bruts
+      'FX_GAIN': '766',                // Gains de change
+      'FX_LOSS': '666',                // Pertes de change
+      'INTERCOMPANY_TRANSFER': '5800', // Virements internes (transit)
     }
     return map[op]
   }
