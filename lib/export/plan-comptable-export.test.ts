@@ -14,7 +14,8 @@ const row = (o: Partial<PcmExportRow>): PcmExportRow => ({
   compte: '', libelle: null, classe: null, type_compte: null, sens_normal: null,
   compte_parent: null, niveau: null, est_analytique: null, categorie_ifrs: null,
   sous_categorie_ifrs: null, poste_etat_financier_ifrs: null, est_contra_ifrs: null,
-  type_mra_ifrs: null, notes: null, ...o,
+  type_mra_ifrs: null, postable: true, related_party: null, vat_treatment: null,
+  notes: null, ...o,
 })
 
 describe('pcmDisplay', () => {

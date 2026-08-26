@@ -18,6 +18,9 @@ export interface PcmExportRow {
   poste_etat_financier_ifrs: string | null
   est_contra_ifrs: boolean | null
   type_mra_ifrs: string | null
+  postable: boolean | null
+  related_party: boolean | null
+  vat_treatment: string | null
   notes: string | null
   /** Montants de l'exercice (présents seulement quand un exercice est demandé). */
   debit?: number
@@ -42,7 +45,10 @@ export const PCM_EXPORT_COLUMNS: Array<{ key: keyof PcmExportRow; label: string 
   { key: 'sous_categorie_ifrs', label: 'Sous-catégorie IFRS' },
   { key: 'poste_etat_financier_ifrs', label: 'Poste état financier IFRS' },
   { key: 'type_mra_ifrs', label: 'Code MRA' },
+  { key: 'vat_treatment', label: 'Traitement TVA' },
   { key: 'est_contra_ifrs', label: 'Contra' },
+  { key: 'related_party', label: 'Partie liée' },
+  { key: 'postable', label: 'Mouvementable' },
   { key: 'compte_parent', label: 'Compte parent' },
   { key: 'niveau', label: 'Niveau' },
   { key: 'est_analytique', label: 'Analytique' },
