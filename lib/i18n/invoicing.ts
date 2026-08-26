@@ -519,9 +519,9 @@ export const invoicingChunk = {
     'acc.gl.search_placeholder': 'Rechercher un compte (numéro ou libellé)…',
 
     // ── acc.pcm — Plan comptable ───────────────────────────
-    'acc.pcm.title': 'Plan Comptable Mauricien',
-    'acc.pcm.subtitle_prefix': 'Référentiel des',
-    'acc.pcm.subtitle_suffix': 'comptes officiels — 7 classes',
+    'acc.pcm.title': 'Plan comptable standard mauricien (IFRS/MRA)',
+    'acc.pcm.subtitle_prefix': 'Référentiel de',
+    'acc.pcm.subtitle_suffix': 'comptes — 7 classes, mappés IFRS/MRA',
     'acc.pcm.no_company': 'Société non disponible.',
     'acc.pcm.search_placeholder': 'Rechercher (n° compte, libellé)…',
     'acc.pcm.expand_all': 'Tout déplier',
@@ -1470,9 +1470,9 @@ export const invoicingChunk = {
     'acc.gl.search_placeholder': 'Search an account (number or label)…',
 
     // ── acc.pcm ─────────────────────────────────────────
-    'acc.pcm.title': 'Mauritian Chart of Accounts',
+    'acc.pcm.title': 'Mauritius Standard Chart of Accounts (IFRS/MRA)',
     'acc.pcm.subtitle_prefix': 'Reference of',
-    'acc.pcm.subtitle_suffix': 'official accounts — 7 classes',
+    'acc.pcm.subtitle_suffix': 'accounts — 7 classes, IFRS/MRA mapped',
     'acc.pcm.no_company': 'Company not available.',
     'acc.pcm.search_placeholder': 'Search (account no., label)…',
     'acc.pcm.expand_all': 'Expand all',

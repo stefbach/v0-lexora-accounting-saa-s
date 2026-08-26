@@ -206,7 +206,7 @@ export async function GET(request: Request) {
     name: 'Info',
     ws: aoaSheet(
       [
-        [cell('Plan Comptable Mauricien (PCM)')],
+        [cell('Mauritius Standard Chart of Accounts — IFRS/MRA mapped')],
         [cell('Société'), cell(societeNom || '— (référentiel global)')],
         [cell('Exercice'), cell(withAmounts ? `${exercice} (${dDebut} → ${dFin})` : '— (référentiel seul, sans montants)')],
         [cell('Exporté le'), cell(new Date(), FMT_DATE)],
@@ -224,7 +224,7 @@ export async function GET(request: Request) {
 
   const buf = buildWorkbook(sheets, {
     title: `Plan comptable ${societeNom}`.trim(),
-    subject: 'Plan Comptable Mauricien (PCM)',
+    subject: 'Mauritius Standard Chart of Accounts — IFRS/MRA mapped',
   })
   return xlsxResponse(buf, `${base}.xlsx`)
 }
