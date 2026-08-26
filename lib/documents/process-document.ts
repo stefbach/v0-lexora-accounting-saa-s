@@ -255,7 +255,11 @@ export async function processDocument(params: ProcessDocumentParams): Promise<Pr
     // → on retombait sur { routing: autre, extraction: {} } (aucun relevé créé).
     // On élargit donc le budget de sortie pour les relevés forcés.
     const ocrMaxTokens = forcedType === 'releve_bancaire' ? 32000 : 8192
-    const response = await anthropic.messages.create({
+    // Streaming OBLIGATOIRE au-delà d'un certain max_tokens : le SDK Anthropic
+    // refuse un appel non-streamé « qui pourrait durer > 10 min » (cas des 32000
+    // tokens des relevés denses → erreur « Streaming is required… »). On streame
+    // donc et on récupère le message final (même objet que .create()).
+    const response = await anthropic.messages.stream({
       model: ocrModel,
       max_tokens: ocrMaxTokens,
       temperature: 0,
@@ -464,7 +468,7 @@ CONTENU :
 ${excelText}`
             : `Analyse ce document: ${await fileData.text()}`
       }],
-    })
+    }).finalMessage()
 
     const text = response.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')
