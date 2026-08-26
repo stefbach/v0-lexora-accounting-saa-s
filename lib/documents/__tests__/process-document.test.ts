@@ -82,7 +82,13 @@ const h = vi.hoisted(() => {
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => h.client }))
 vi.mock('@anthropic-ai/sdk', () => {
   class MockAnthropic {
-    messages = { create: (...args: any[]) => h.anthropicCreate(...args) }
+    // Le code de prod utilise soit .create() soit .stream().finalMessage()
+    // (streaming obligatoire pour les gros max_tokens des relevés denses). Les
+    // deux délèguent au même mock pour préserver les assertions d'appel.
+    messages = {
+      create: (...args: any[]) => h.anthropicCreate(...args),
+      stream: (...args: any[]) => ({ finalMessage: () => h.anthropicCreate(...args) }),
+    }
   }
   return { default: MockAnthropic }
 })
