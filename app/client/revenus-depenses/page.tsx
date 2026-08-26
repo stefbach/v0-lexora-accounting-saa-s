@@ -214,9 +214,6 @@ export default function ClientRevenusDepensesPage() {
                         >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-[10px] font-mono">
-                                {c.numero_compte}
-                              </Badge>
                               <span className="text-xs text-muted-foreground">
                                 {c.nb_ecritures} {t('acc.rd.entries_abbr', locale)}
                               </span>
@@ -256,9 +253,6 @@ export default function ClientRevenusDepensesPage() {
                         >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-[10px] font-mono">
-                                {c.numero_compte}
-                              </Badge>
                               <span className="text-xs text-muted-foreground">
                                 {c.nb_ecritures} {t('acc.rd.entries_abbr', locale)}
                               </span>

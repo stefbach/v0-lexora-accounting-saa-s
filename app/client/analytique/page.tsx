@@ -354,12 +354,12 @@ function SectionDetailDialog({
               <p className="text-xs font-medium text-slate-500 mb-1">Ventilation par compte</p>
               <div className="rounded-lg border overflow-x-auto">
                 <table className="w-full text-xs">
-                  <thead className="bg-slate-50"><tr><th className="text-left p-2">Compte</th><th className="text-left p-2">Libellé</th><th className="text-right p-2">Net</th></tr></thead>
+                  <thead className="bg-slate-50"><tr><th className="text-left p-2">Compte</th><th className="text-right p-2">Net</th></tr></thead>
                   <tbody>
-                    {data.ventilation.length === 0 && <tr><td colSpan={3} className="p-4 text-center text-slate-400">Aucune écriture rattachée</td></tr>}
+                    {data.ventilation.length === 0 && <tr><td colSpan={2} className="p-4 text-center text-slate-400">Aucune écriture rattachée</td></tr>}
                     {data.ventilation.map((v) => (
                       <tr key={v.numero_compte} className="border-t">
-                        <td className="p-2 font-mono">{v.numero_compte}</td><td className="p-2">{v.nom_compte}</td>
+                        <td className="p-2">{v.nom_compte || v.numero_compte}</td>
                         <td className={`p-2 text-right tabular-nums ${v.net < 0 ? "text-red-600" : ""}`}>{fmt(v.net)}</td>
                       </tr>
                     ))}
