@@ -115,7 +115,8 @@ export async function GET(request: Request) {
         compte: k, libelle: a.nom || null, classe: /^\d/.test(k) ? Number(k[0]) : null,
         type_compte: null, sens_normal: null, compte_parent: null, niveau: null,
         est_analytique: null, categorie_ifrs: null, sous_categorie_ifrs: null,
-        poste_etat_financier_ifrs: null, est_contra_ifrs: null, type_mra_ifrs: null, notes: null,
+        poste_etat_financier_ifrs: null, est_contra_ifrs: null, type_mra_ifrs: null,
+        postable: true, related_party: null, vat_treatment: null, notes: null,
         debit: round2(a.debit), credit: round2(a.credit), solde: round2(a.debit - a.credit),
       })
     }
@@ -175,9 +176,8 @@ export async function GET(request: Request) {
     total.push(cell(Math.round(totDeb * 100) / 100, FMT_MUR), cell(Math.round(totCred * 100) / 100, FMT_MUR), cell(Math.round((totDeb - totCred) * 100) / 100, FMT_MUR))
     rows.push(total)
   }
-  const colWidths = withAmounts
-    ? [12, 42, 7, 14, 7, 20, 26, 30, 10, 8, 14, 7, 10, 30, 16, 16, 16]
-    : [12, 42, 7, 14, 7, 20, 26, 30, 10, 8, 14, 7, 10, 30]
+  const baseW = [12, 42, 7, 14, 7, 20, 26, 30, 10, 14, 8, 11, 13, 14, 7, 10, 30]
+  const colWidths = withAmounts ? [...baseW, 16, 16, 16] : baseW
   sheets.push({ name: 'Plan comptable', ws: aoaSheet(rows, { colWidths, freezeTopRows: 1 }) })
 
   // Feuille « Par classe » : nombre de comptes (+ solde si valorisé).
@@ -230,4 +230,4 @@ export async function GET(request: Request) {
 }
 
 const SELECT =
-  'compte, libelle, classe, type_compte, sens_normal, compte_parent, niveau, est_analytique, categorie_ifrs, sous_categorie_ifrs, poste_etat_financier_ifrs, est_contra_ifrs, type_mra_ifrs, notes, societe_id'
+  'compte, libelle, classe, type_compte, sens_normal, compte_parent, niveau, est_analytique, categorie_ifrs, sous_categorie_ifrs, poste_etat_financier_ifrs, est_contra_ifrs, type_mra_ifrs, postable, related_party, vat_treatment, notes, societe_id'
