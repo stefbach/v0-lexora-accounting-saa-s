@@ -152,26 +152,66 @@ export default function BankCredentialsPage() {
     } catch (e: any) { setError(e?.message || t('cui.error_generic', locale)) }
   }
 
+  // Scrape ASYNCHRONE : la route lance le scrape en arrière-plan et répond
+  // aussitôt (202). Un scrape dure 60–140 s — trop long pour un fetch mobile qui
+  // se coupait en « Load failed » alors que le scrape réussissait côté serveur.
+  // On sonde donc la fin via `last_scrape_at` (qui avance quand recordRun écrit).
   const scrapeNow = async (compteId: string) => {
     setScrapingNow(compteId); setError(null); setSuccess(null)
+    setScrapeDiag(p => ({ ...p, [compteId]: undefined }))
+    const baseline = comptes.find(c => c.id === compteId)?.scraping?.last_scrape_at || null
     try {
       const r = await fetch(`/api/client/direction/bank-credentials/scrape?compte_id=${compteId}`, {
         method: 'POST',
       })
-      const j = await r.json()
+      const j = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(j.error || t('cui.error_generic', locale))
-      // Mémorise screenshot + diagnostic (sélecteurs détectés) + diagnostic
-      // relevés PDF (où la récupération s'arrête) pour l'affichage.
-      setScrapeDiag(p => ({ ...p, [compteId]: { screenshot_b64: j.screenshot_b64, diagnostic: j.diagnostic, statements_diagnostic: j.statements_diagnostic, status: j.status, error: j.error } }))
-      if (j.status === 'manual_needed') {
-        setError(`${t('scp.cred_robot_not_active', locale)} ${j.error || t('scp.cred_pw_not_installed', locale)}`)
-      } else if (j.status === 'success') {
-        const inj = j.ingestion?.ingested ? ` — ${j.ingestion.nb_transactions || 0} tx injectées dans le rapprochement` : ''
-        const pdf = j.statements_diagnostic ? `, ${j.statements_diagnostic.downloaded || 0} relevé(s) PDF` : ''
-        setSuccess(`${t('scp.cred_scrape_ok', locale)} ${j.balance_mur || '?'} ${j.balance_devise || 'MUR'}, ${j.nb_transactions || 0} tx${pdf}${inj}`)
-      } else {
-        setError(`${t('scp.cred_scrape_label', locale)} ${j.status} : ${j.error || t('scp.cred_unknown', locale)}`)
+
+      // Réponse synchrone héritée (compat) : ancien comportement direct.
+      if (j.status) {
+        if (j.status === 'success') {
+          setSuccess(`${t('scp.cred_scrape_ok', locale)} ${j.balance_mur ?? '?'} ${j.balance_devise || 'MUR'}, ${j.nb_transactions || 0} tx`)
+        } else if (j.status === 'manual_needed') {
+          setError(`${t('scp.cred_robot_not_active', locale)} ${j.error || ''}`)
+        } else {
+          setError(`${t('scp.cred_scrape_label', locale)} ${j.status} : ${j.error || ''}`)
+        }
+        await load()
+        return
       }
+
+      // Mode asynchrone : le scrape tourne en arrière-plan → on sonde la fin.
+      setSuccess('Scrape lancé — récupération en cours (peut prendre 1 à 2 min)…')
+      const startedMs = Date.now()
+      const TIMEOUT_MS = 240000
+      const POLL_MS = 6000
+      // eslint-disable-next-line no-constant-condition
+      while (Date.now() - startedMs < TIMEOUT_MS) {
+        await new Promise(res => setTimeout(res, POLL_MS))
+        let fresh: Compte | undefined
+        let list: Compte[] | undefined
+        try {
+          const gr = await fetch(`/api/client/direction/bank-credentials?societe_id=${societeId}`, { cache: 'no-store' })
+          const gj = await gr.json().catch(() => ({}))
+          if (gr.ok) { list = gj.comptes as Compte[]; fresh = (list || []).find(c => c.id === compteId) }
+        } catch { /* réseau mobile instable : on retente au prochain tour */ }
+        const nowAt = fresh?.scraping?.last_scrape_at || null
+        if (fresh && nowAt && nowAt !== baseline) {
+          if (list) setComptes(list)
+          const st = fresh.scraping?.last_scrape_status
+          if (st === 'success') {
+            setSuccess(`${t('scp.cred_scrape_ok', locale)} ${fresh.scraping?.last_balance_mur ?? '?'} ${fresh.devise || 'MUR'}`)
+          } else if (st === 'manual_needed') {
+            setError(`${t('scp.cred_robot_not_active', locale)} ${fresh.scraping?.last_scrape_error || ''}`)
+          } else {
+            setError(`${t('scp.cred_scrape_label', locale)} ${st || '?'} : ${fresh.scraping?.last_scrape_error || ''}`)
+          }
+          setScrapingNow(null)
+          return
+        }
+      }
+      // Timeout côté client : le scrape continue en arrière-plan.
+      setSuccess('Le scrape continue en arrière-plan. Rafraîchis la page dans 1 minute pour voir le résultat.')
       await load()
     } catch (e: any) { setError(e?.message || t('cui.error_generic', locale)) } finally { setScrapingNow(null) }
   }
