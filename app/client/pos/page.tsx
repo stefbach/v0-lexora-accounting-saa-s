@@ -63,8 +63,14 @@ import {
   PieChart as PieIcon,
   CornerDownLeft,
   Utensils,
+  PauseCircle,
+  Play,
+  Clock,
+  BarChart3,
+  ArrowRight,
 } from "lucide-react"
 import Link from "next/link"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   BarChart,
   Bar,
@@ -155,6 +161,14 @@ interface PanierItem extends LignePanier {
   designation: string
 }
 
+/** Panier mis en attente (retail) — persisté localement par session de caisse. */
+interface PanierEnAttente {
+  id: string
+  label: string
+  at: number
+  items: PanierItem[]
+}
+
 interface PaiementSaisie {
   moyen_paiement: MoyenPaiement
   montant: string
@@ -208,6 +222,7 @@ export default function PosPage() {
   const [caParSession, setCaParSession] = useState<Record<string, number>>({})
   const [search, setSearch] = useState("")
   const [panier, setPanier] = useState<PanierItem[]>([])
+  const [enAttente, setEnAttente] = useState<PanierEnAttente[]>([])
   const searchRef = useRef<HTMLInputElement>(null)
 
   const [fondOuverture, setFondOuverture] = useState("")
@@ -275,6 +290,34 @@ export default function PosPage() {
   useEffect(() => {
     load()
   }, [load])
+
+  // ── Paniers en attente (retail) : persistés par session de caisse ────────
+  const holdKey = session ? `pos_holds_${session.id}` : null
+  useEffect(() => {
+    if (!holdKey) {
+      setEnAttente([])
+      return
+    }
+    try {
+      const raw = localStorage.getItem(holdKey)
+      setEnAttente(raw ? (JSON.parse(raw) as PanierEnAttente[]) : [])
+    } catch {
+      setEnAttente([])
+    }
+  }, [holdKey])
+
+  const persistHolds = useCallback(
+    (next: PanierEnAttente[]) => {
+      setEnAttente(next)
+      if (!holdKey) return
+      try {
+        localStorage.setItem(holdKey, JSON.stringify(next))
+      } catch {
+        /* quota / mode privé : on garde l'état en mémoire */
+      }
+    },
+    [holdKey],
+  )
 
   const produitsFiltres = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -461,6 +504,25 @@ export default function PosPage() {
     setRecuEspeces("")
     setEncaisserOpen(true)
   }
+
+  // ── Mise en attente : met le panier de côté et le vide ───────────────────
+  const mettreEnAttente = () => {
+    if (panier.length === 0) return
+    const label = (prompt("Nom du panier en attente (client, table, n°…) ?") || "").trim() || `Panier ${enAttente.length + 1}`
+    persistHolds([{ id: `${Date.now()}`, label, at: Date.now(), items: panier }, ...enAttente])
+    setPanier([])
+    setSearch("")
+    showToast("Panier mis en attente")
+  }
+
+  const reprendreAttente = (h: PanierEnAttente) => {
+    if (panier.length > 0 && !confirm("Le panier en cours sera remplacé. Continuer ?")) return
+    setPanier(h.items)
+    persistHolds(enAttente.filter((x) => x.id !== h.id))
+    showToast(`« ${h.label} » repris`)
+  }
+
+  const supprimerAttente = (id: string) => persistHolds(enAttente.filter((x) => x.id !== id))
 
   // Part espèces due + monnaie à rendre (affichés dans l'encaissement).
   const partEspeces = paiements
@@ -675,6 +737,256 @@ export default function PosPage() {
             </span>
           </div>
 
+          <Tabs defaultValue="vendre" className="space-y-6">
+            <TabsList className="h-auto flex-wrap">
+              <TabsTrigger value="vendre">
+                <ShoppingCart className="h-4 w-4 mr-1.5" /> Vendre
+              </TabsTrigger>
+              <TabsTrigger value="salle">
+                <Utensils className="h-4 w-4 mr-1.5" /> Salle
+              </TabsTrigger>
+              <TabsTrigger value="rapports">
+                <BarChart3 className="h-4 w-4 mr-1.5" /> Rapports
+              </TabsTrigger>
+            </TabsList>
+
+            {/* ═══ Onglet VENDRE ═══════════════════════════════════════ */}
+            <TabsContent value="vendre" className="space-y-4">
+              {/* Paniers en attente */}
+              {enAttente.length > 0 && (
+                <div className="rounded-lg border bg-amber-50/40 p-3">
+                  <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <PauseCircle className="h-3.5 w-3.5" /> En attente ({enAttente.length})
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {enAttente.map((h) => (
+                      <div key={h.id} className="flex items-center gap-1 rounded-md border bg-white px-2 py-1 text-xs">
+                        <button
+                          className="flex items-center gap-1 font-medium text-[#0B0F2E] hover:text-[#A88925]"
+                          onClick={() => reprendreAttente(h)}
+                          aria-label={`Reprendre ${h.label}`}
+                        >
+                          <Play className="h-3 w-3" /> {h.label}
+                        </button>
+                        <span className="text-muted-foreground">· {h.items.length} art.</span>
+                        <button
+                          className="text-muted-foreground hover:text-red-600"
+                          onClick={() => supprimerAttente(h.id)}
+                          aria-label={`Supprimer ${h.label}`}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Caisse (produits + panier) */}
+              <div className="grid gap-4 lg:grid-cols-[1fr_400px]">
+                {/* Produits */}
+                <SectionCard title="Caisse" subtitle="Cliquez ou scannez pour ajouter au panier" contentClassName="pt-3">
+                  <div className="relative mb-3">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      ref={searchRef}
+                      placeholder="Rechercher un produit (SKU, désignation)…"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      onKeyDown={onSearchKeyDown}
+                      className="pl-8 pr-24"
+                      aria-label="Rechercher un produit"
+                      autoFocus
+                    />
+                    <span className="pointer-events-none absolute right-2 top-1.5 hidden items-center gap-1 rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground sm:flex">
+                      <CornerDownLeft className="h-3 w-3" /> ajouter
+                    </span>
+                  </div>
+                  {produitsFiltres.length === 0 ? (
+                    <OpsEmpty
+                      icon={Package}
+                      title={search ? "Aucun résultat" : "Aucun produit vendable"}
+                      description={
+                        search
+                          ? "Aucun produit ne correspond à votre recherche."
+                          : "Créez vos articles dans Stock & inventaire pour les vendre en caisse."
+                      }
+                    />
+                  ) : (
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                      {produitsFiltres.map((p) => {
+                        const stock = stockDe(p)
+                        const rupture = p.gere_en_stock && stock <= 0
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={() => !rupture && ajouterAuPanier(p)}
+                            disabled={rupture}
+                            aria-label={`Ajouter ${p.designation}${rupture ? " (rupture)" : ""}`}
+                            className={`group flex gap-2.5 rounded-lg border p-3 text-left transition hover:border-[#D4AF37] hover:shadow-sm ${
+                              rupture ? "opacity-50 cursor-not-allowed" : "hover:bg-[#D4AF37]/5"
+                            }`}
+                          >
+                            <div
+                              className="w-9 h-9 shrink-0 rounded-md flex items-center justify-center text-xs font-semibold text-[#0B0F2E]"
+                              style={{ backgroundColor: "rgba(11,15,46,0.06)" }}
+                              aria-hidden="true"
+                            >
+                              {initiales(p.designation)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-mono text-[10px] text-muted-foreground">{p.sku}</div>
+                              <div className="text-sm font-medium leading-tight truncate">{p.designation}</div>
+                              <div className="mt-1 flex items-center justify-between gap-1 text-xs">
+                                <span className="font-semibold text-[#0B0F2E]">{fmt(p.prix_vente_ht)} HT</span>
+                                {p.gere_en_stock ? (
+                                  <Badge
+                                    variant="secondary"
+                                    className={
+                                      rupture
+                                        ? "bg-[#9F1239]/10 text-[#9F1239] hover:bg-[#9F1239]/10"
+                                        : stock <= 5
+                                          ? "bg-amber-100 text-amber-800 hover:bg-amber-100"
+                                          : "bg-emerald-50 text-emerald-700 hover:bg-emerald-50"
+                                    }
+                                  >
+                                    {rupture ? "Rupture" : `Stock ${formatNumber(stock)}`}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="secondary">Service</Badge>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </SectionCard>
+
+                {/* Panier */}
+                <Card className="h-fit lg:sticky lg:top-4 py-0">
+                  <CardContent className="p-4">
+                    <h3 className="text-sm font-semibold text-[#0B0F2E] mb-3 flex items-center gap-2">
+                      <ShoppingCart className="h-4 w-4" /> Panier ({panier.length})
+                    </h3>
+                    {panier.length === 0 ? (
+                      <div className="py-8 text-center">
+                        <ShoppingCart className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
+                        <p className="text-sm text-muted-foreground">Cliquez sur un produit pour l&apos;ajouter.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {panier.map((l) => {
+                          const m = calculerLigne(l)
+                          return (
+                            <div key={l.produit_id} className="rounded-lg border p-2.5 bg-gray-50/50">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-medium truncate">{l.designation}</div>
+                                  <div className="text-[11px] text-muted-foreground font-mono">{l.sku}</div>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  aria-label={`Retirer ${l.designation}`}
+                                  onClick={() => setPanier((prev) => prev.filter((x) => x.produit_id !== l.produit_id))}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 w-7 p-0"
+                                    aria-label="Diminuer la quantité"
+                                    onClick={() => changerQuantite(l.produit_id, -1)}
+                                  >
+                                    <Minus className="h-3 w-3" />
+                                  </Button>
+                                  <span className="w-8 text-center text-sm tabular-nums">{l.quantite}</span>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 w-7 p-0"
+                                    aria-label="Augmenter la quantité"
+                                    onClick={() => changerQuantite(l.produit_id, 1)}
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                                <div className="flex items-center gap-1 text-xs">
+                                  <span className="text-muted-foreground">Remise %</span>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.01"
+                                    aria-label={`Remise sur ${l.designation}`}
+                                    className="h-7 w-16 text-xs"
+                                    value={l.remise_pct || ""}
+                                    onChange={(e) =>
+                                      majLigne(l.produit_id, {
+                                        remise_pct: Math.min(100, Math.max(0, Number(e.target.value) || 0)),
+                                      })
+                                    }
+                                  />
+                                </div>
+                                <span className="ml-auto text-sm font-semibold tabular-nums">{fmt(m.montant_ttc)}</span>
+                              </div>
+                            </div>
+                          )
+                        })}
+
+                        <div className="border-t pt-3 space-y-1 text-sm">
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>Total HT</span>
+                            <span className="tabular-nums">{fmt(totaux.total_ht)}</span>
+                          </div>
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>TVA</span>
+                            <span className="tabular-nums">{fmt(totaux.total_tva)}</span>
+                          </div>
+                          <div className="flex justify-between text-base font-bold text-[#0B0F2E]">
+                            <span>Total TTC</span>
+                            <span className="tabular-nums">{fmt(totaux.total_ttc)}</span>
+                          </div>
+                        </div>
+                        <Button className="w-full" size="lg" onClick={ouvrirEncaissement}>
+                          <Banknote className="h-4 w-4 mr-2" /> Encaisser {fmt(totaux.total_ttc)}
+                        </Button>
+                        <Button className="w-full" variant="outline" size="sm" onClick={mettreEnAttente}>
+                          <PauseCircle className="h-4 w-4 mr-2" /> Mettre en attente
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            {/* ═══ Onglet SALLE ════════════════════════════════════════ */}
+            <TabsContent value="salle">
+              <SectionCard title="Mode restauration — Salle" subtitle="Plan de salle et additions ouvertes" contentClassName="pt-4">
+                <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-muted-foreground max-w-xl">
+                    Gérez vos tables et vos additions ouvertes (running tabs) : ouvrez une table, ajoutez les articles au fil
+                    du service, puis encaissez — l&apos;addition devient un ticket POS avec stock et écritures automatiques,
+                    exactement comme en caisse.
+                  </p>
+                  <Button asChild size="lg" className="shrink-0">
+                    <Link href="/client/pos/salle">
+                      <Utensils className="h-4 w-4 mr-2" /> Ouvrir la salle <ArrowRight className="h-4 w-4 ml-2" />
+                    </Link>
+                  </Button>
+                </div>
+              </SectionCard>
+            </TabsContent>
+
+            {/* ═══ Onglet RAPPORTS ═════════════════════════════════════ */}
+            <TabsContent value="rapports" className="space-y-6">
           {/* ── KPIs du shift ────────────────────────────────────────── */}
           <KpiGrid cols={4}>
             <KpiCard
@@ -797,193 +1109,6 @@ export default function PosPage() {
             </SectionCard>
           )}
 
-          {/* ── Caisse (produits + panier) ───────────────────────────── */}
-          <div className="grid gap-4 lg:grid-cols-[1fr_400px]">
-            {/* Produits */}
-            <SectionCard
-              title="Caisse"
-              subtitle="Cliquez ou scannez pour ajouter au panier"
-              contentClassName="pt-3"
-            >
-              <div className="relative mb-3">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  ref={searchRef}
-                  placeholder="Rechercher un produit (SKU, désignation)…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  onKeyDown={onSearchKeyDown}
-                  className="pl-8 pr-24"
-                  aria-label="Rechercher un produit"
-                  autoFocus
-                />
-                <span className="pointer-events-none absolute right-2 top-1.5 hidden items-center gap-1 rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground sm:flex">
-                  <CornerDownLeft className="h-3 w-3" /> ajouter
-                </span>
-              </div>
-              {produitsFiltres.length === 0 ? (
-                <OpsEmpty
-                  icon={Package}
-                  title={search ? "Aucun résultat" : "Aucun produit vendable"}
-                  description={
-                    search
-                      ? "Aucun produit ne correspond à votre recherche."
-                      : "Créez vos articles dans Stock & inventaire pour les vendre en caisse."
-                  }
-                />
-              ) : (
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                  {produitsFiltres.map((p) => {
-                    const stock = stockDe(p)
-                    const rupture = p.gere_en_stock && stock <= 0
-                    return (
-                      <button
-                        key={p.id}
-                        onClick={() => !rupture && ajouterAuPanier(p)}
-                        disabled={rupture}
-                        aria-label={`Ajouter ${p.designation}${rupture ? " (rupture)" : ""}`}
-                        className={`group flex gap-2.5 rounded-lg border p-3 text-left transition hover:border-[#D4AF37] hover:shadow-sm ${
-                          rupture ? "opacity-50 cursor-not-allowed" : "hover:bg-[#D4AF37]/5"
-                        }`}
-                      >
-                        <div
-                          className="w-9 h-9 shrink-0 rounded-md flex items-center justify-center text-xs font-semibold text-[#0B0F2E]"
-                          style={{ backgroundColor: "rgba(11,15,46,0.06)" }}
-                          aria-hidden="true"
-                        >
-                          {initiales(p.designation)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-mono text-[10px] text-muted-foreground">{p.sku}</div>
-                          <div className="text-sm font-medium leading-tight truncate">{p.designation}</div>
-                          <div className="mt-1 flex items-center justify-between gap-1 text-xs">
-                            <span className="font-semibold text-[#0B0F2E]">{fmt(p.prix_vente_ht)} HT</span>
-                            {p.gere_en_stock ? (
-                              <Badge
-                                variant="secondary"
-                                className={
-                                  rupture
-                                    ? "bg-[#9F1239]/10 text-[#9F1239] hover:bg-[#9F1239]/10"
-                                    : stock <= 5
-                                      ? "bg-amber-100 text-amber-800 hover:bg-amber-100"
-                                      : "bg-emerald-50 text-emerald-700 hover:bg-emerald-50"
-                                }
-                              >
-                                {rupture ? "Rupture" : `Stock ${formatNumber(stock)}`}
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary">Service</Badge>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </SectionCard>
-
-            {/* Panier */}
-            <Card className="h-fit lg:sticky lg:top-4 py-0">
-              <CardContent className="p-4">
-                <h3 className="text-sm font-semibold text-[#0B0F2E] mb-3 flex items-center gap-2">
-                  <ShoppingCart className="h-4 w-4" /> Panier ({panier.length})
-                </h3>
-                {panier.length === 0 ? (
-                  <div className="py-8 text-center">
-                    <ShoppingCart className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
-                    <p className="text-sm text-muted-foreground">
-                      Cliquez sur un produit pour l&apos;ajouter.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {panier.map((l) => {
-                      const m = calculerLigne(l)
-                      return (
-                        <div key={l.produit_id} className="rounded-lg border p-2.5 bg-gray-50/50">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="text-sm font-medium truncate">{l.designation}</div>
-                              <div className="text-[11px] text-muted-foreground font-mono">{l.sku}</div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              aria-label={`Retirer ${l.designation}`}
-                              onClick={() => setPanier((prev) => prev.filter((x) => x.produit_id !== l.produit_id))}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <div className="mt-2 flex items-center gap-2 flex-wrap">
-                            <div className="flex items-center gap-1">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 w-7 p-0"
-                                aria-label="Diminuer la quantité"
-                                onClick={() => changerQuantite(l.produit_id, -1)}
-                              >
-                                <Minus className="h-3 w-3" />
-                              </Button>
-                              <span className="w-8 text-center text-sm tabular-nums">{l.quantite}</span>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 w-7 p-0"
-                                aria-label="Augmenter la quantité"
-                                onClick={() => changerQuantite(l.produit_id, 1)}
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                            </div>
-                            <div className="flex items-center gap-1 text-xs">
-                              <span className="text-muted-foreground">Remise %</span>
-                              <Input
-                                type="number"
-                                min="0"
-                                max="100"
-                                step="0.01"
-                                aria-label={`Remise sur ${l.designation}`}
-                                className="h-7 w-16 text-xs"
-                                value={l.remise_pct || ""}
-                                onChange={(e) =>
-                                  majLigne(l.produit_id, {
-                                    remise_pct: Math.min(100, Math.max(0, Number(e.target.value) || 0)),
-                                  })
-                                }
-                              />
-                            </div>
-                            <span className="ml-auto text-sm font-semibold tabular-nums">{fmt(m.montant_ttc)}</span>
-                          </div>
-                        </div>
-                      )
-                    })}
-
-                    <div className="border-t pt-3 space-y-1 text-sm">
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Total HT</span>
-                        <span className="tabular-nums">{fmt(totaux.total_ht)}</span>
-                      </div>
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>TVA</span>
-                        <span className="tabular-nums">{fmt(totaux.total_tva)}</span>
-                      </div>
-                      <div className="flex justify-between text-base font-bold text-[#0B0F2E]">
-                        <span>Total TTC</span>
-                        <span className="tabular-nums">{fmt(totaux.total_ttc)}</span>
-                      </div>
-                    </div>
-                    <Button className="w-full" size="lg" onClick={ouvrirEncaissement}>
-                      <Banknote className="h-4 w-4 mr-2" /> Encaisser {fmt(totaux.total_ttc)}
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
           {/* ── Tickets du shift ─────────────────────────────────────── */}
           <SectionCard
             title={
@@ -1056,8 +1181,10 @@ export default function PosPage() {
             <OperationsInsights module="pos" societeId={societeId} payload={insightsPayload} />
           </SectionCard>
 
-          {/* ── Historique des sessions ──────────────────────────────── */}
-          <HistoriqueSessions historique={historique} caParSession={caParSession} />
+              {/* ── Historique des sessions ──────────────────────────── */}
+              <HistoriqueSessions historique={historique} caParSession={caParSession} />
+            </TabsContent>
+          </Tabs>
         </div>
       )}
 
