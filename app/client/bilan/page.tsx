@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useProfile } from "@/hooks/use-profile"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { useExerciceActive } from "@/components/client/ExerciceActiveProvider"
 import { t, getLocale, type Locale } from '@/lib/i18n'
 import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import { Loader2, Building2, Download, Calendar, Upload, FileText, CheckCircle, AlertCircle, Camera, RefreshCw as RefreshIcon } from "lucide-react"
@@ -303,6 +304,7 @@ export default function BilanPage() {
   const locale = getLocale()
   const { profile, loading } = useProfile()
   const { societeId, societe } = useSocieteActive()
+  const globalExercice = useExerciceActive()?.exercice ?? null
   const [data, setData] = useState<any>(null)
   const [prevData, setPrevData] = useState<any>(null)
   const [fetching, setFetching] = useState(true)
@@ -322,6 +324,13 @@ export default function BilanPage() {
   const [importMessage, setImportMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+
+  // Le sélecteur d'exercice GLOBAL (bandeau) pilote le bilan : quand il change,
+  // on aligne l'exercice de la page (l'utilisateur peut toujours changer localement).
+  useEffect(() => {
+    if (globalExercice && globalExercice !== exercice) setExercice(globalExercice)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globalExercice])
 
   // Load prior year OCR data from localStorage
   useEffect(() => {
