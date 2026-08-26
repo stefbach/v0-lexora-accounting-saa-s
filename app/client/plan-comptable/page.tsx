@@ -38,6 +38,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { useExerciceActive } from "@/components/client/ExerciceActiveProvider"
 import { t, getLocale, type Locale } from '@/lib/i18n'
 
 interface ComptePCM {
@@ -96,6 +97,8 @@ const colorMap: Record<string, { bg: string; border: string; text: string; bgLig
 export default function PlanComptablePage() {
   const locale = getLocale()
   const { societeId } = useSocieteActive()
+  const activeExercice = useExerciceActive()?.exercice ?? null
+  const exParam = activeExercice ? `&exercice=${encodeURIComponent(activeExercice)}` : ""
   const [comptes, setComptes] = useState<ComptePCM[]>([])
   const [usage, setUsage] = useState<Map<string, CompteUsage>>(new Map())
   const [loading, setLoading] = useState(false)
@@ -221,7 +224,7 @@ export default function PlanComptablePage() {
                 size="sm"
                 disabled={!societeId || comptes.length === 0}
                 onClick={() => {
-                  if (societeId) window.location.href = `/api/client/plan-comptable/export?societe_id=${societeId}&format=xlsx`
+                  if (societeId) window.location.href = `/api/client/plan-comptable/export?societe_id=${societeId}&format=xlsx${exParam}`
                 }}
               >
                 <FileSpreadsheet className="h-4 w-4 mr-1.5" />
@@ -232,7 +235,7 @@ export default function PlanComptablePage() {
                 size="sm"
                 disabled={!societeId || comptes.length === 0}
                 onClick={() => {
-                  if (societeId) window.location.href = `/api/client/plan-comptable/export?societe_id=${societeId}&format=csv`
+                  if (societeId) window.location.href = `/api/client/plan-comptable/export?societe_id=${societeId}&format=csv${exParam}`
                 }}
               >
                 <Download className="h-4 w-4 mr-1.5" />
