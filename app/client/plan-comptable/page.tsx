@@ -22,6 +22,8 @@ import {
   Loader2,
   RefreshCw,
   BookOpen,
+  Download,
+  FileSpreadsheet,
   Search,
   ChevronDown,
   ChevronRight,
@@ -213,10 +215,34 @@ export default function PlanComptablePage() {
                 </p>
               </div>
             </div>
-            <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
-              <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-              {t('common.refresh', locale)}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!societeId || comptes.length === 0}
+                onClick={() => {
+                  if (societeId) window.location.href = `/api/client/plan-comptable/export?societe_id=${societeId}&format=xlsx`
+                }}
+              >
+                <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+                Excel
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!societeId || comptes.length === 0}
+                onClick={() => {
+                  if (societeId) window.location.href = `/api/client/plan-comptable/export?societe_id=${societeId}&format=csv`
+                }}
+              >
+                <Download className="h-4 w-4 mr-1.5" />
+                CSV
+              </Button>
+              <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
+                <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
+                {t('common.refresh', locale)}
+              </Button>
+            </div>
           </div>
         </div>
 
