@@ -16,6 +16,7 @@ import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
 import { validateVentePayload } from '@/lib/pos/panier'
 import { evaluerSeuil } from '@/lib/inventaire/alertes'
+import { isElectronique, providerParDefaut } from '@/lib/pos/payments'
 
 export const dynamic = 'force-dynamic'
 
@@ -173,6 +174,19 @@ export async function POST(request: Request) {
           Number(mvt.quantite_apres) || 0,
         )
       }
+    }
+
+    // Métadonnée provider (non-comptable) sur les paiements électroniques —
+    // fondation du rapprochement 5118 / d'un futur adaptateur live (mig 505).
+    const moyensElectroniques = Array.from(
+      new Set((vente.paiements || []).map((p: any) => p.moyen_paiement).filter((m: any) => isElectronique(m))),
+    )
+    for (const moyen of moyensElectroniques) {
+      await supabase
+        .from('paiements_pos')
+        .update({ provider: providerParDefaut(moyen as any) })
+        .eq('vente_pos_id', venteId)
+        .eq('moyen_paiement', moyen)
     }
 
     return NextResponse.json({ ...rpcResult, ecritures_in_rpc: true }, { status: 201 })
