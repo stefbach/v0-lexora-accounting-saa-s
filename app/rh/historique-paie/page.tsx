@@ -402,7 +402,6 @@ export default function HistoriquePaiePage() {
                           <table className="w-full text-xs">
                             <thead className="bg-gray-50">
                               <tr>
-                                <th className="px-2 py-1.5 text-left">{t('rhdiv.histp.col_compte', locale)}</th>
                                 <th className="px-2 py-1.5 text-left">{t('rhdiv.histp.col_libelle', locale)}</th>
                                 <th className="px-2 py-1.5 text-right">{t('rhdiv.histp.col_debit', locale)}</th>
                                 <th className="px-2 py-1.5 text-right">{t('rhdiv.histp.col_credit', locale)}</th>
@@ -411,7 +410,6 @@ export default function HistoriquePaiePage() {
                             <tbody className="divide-y">
                               {ecritures.map((e: any, i: number) => (
                                 <tr key={i}>
-                                  <td className="px-2 py-1.5 font-mono">{e.compte}</td>
                                   <td className="px-2 py-1.5">{e.libelle}</td>
                                   <td className="px-2 py-1.5 text-right font-mono">{e.debit > 0 ? fmt(e.debit) : ""}</td>
                                   <td className="px-2 py-1.5 text-right font-mono">{e.credit > 0 ? fmt(e.credit) : ""}</td>

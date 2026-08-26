@@ -240,7 +240,6 @@ export default function BalancePage() {
                   <Table>
                     <TableHeader>
                       <TableRow className="text-xs">
-                        <TableHead>{t('cabclt.bal.col_account', locale)}</TableHead>
                         <TableHead>{t('cabclt.bal.col_label', locale)}</TableHead>
                         <TableHead>{t('cabclt.bal.col_side', locale)}</TableHead>
                         <TableHead className="text-right">{t('cabclt.bal.col_total_debit', locale)}</TableHead>
@@ -252,7 +251,6 @@ export default function BalancePage() {
                     <TableBody>
                       {comptes.map(c => (
                         <TableRow key={c.numero_compte}>
-                          <TableCell className="text-xs font-mono font-semibold">{c.numero_compte}</TableCell>
                           <TableCell className="text-xs">{c.libelle}</TableCell>
                           <TableCell>
                             <Badge variant="outline" className="text-[10px] px-1">
@@ -325,7 +323,6 @@ export default function BalancePage() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-gray-50 text-xs">
-                  <TableHead>{t('cabclt.bal.col_account', locale)}</TableHead>
                   <TableHead>{t('cabclt.bal.col_label', locale)}</TableHead>
                   <TableHead>{t('cabclt.bal.col_class', locale)}</TableHead>
                   <TableHead>{t('cabclt.bal.col_side', locale)}</TableHead>
@@ -338,7 +335,6 @@ export default function BalancePage() {
               <TableBody>
                 {(data?.comptes || []).map((c, idx) => (
                   <TableRow key={c.numero_compte} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
-                    <TableCell className="text-xs font-mono font-semibold" style={{ color: NAVY }}>{c.numero_compte}</TableCell>
                     <TableCell className="text-xs">{c.libelle}</TableCell>
                     <TableCell className="text-xs text-gray-500">{c.libelle_classe}</TableCell>
                     <TableCell>

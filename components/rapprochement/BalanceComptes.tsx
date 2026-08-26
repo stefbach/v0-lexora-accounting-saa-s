@@ -155,7 +155,6 @@ export function BalanceComptes({ societeId, mois }: { societeId: string | null; 
             <TableHeader>
               <TableRow>
                 <TableHead className="w-8"></TableHead>
-                <TableHead className="w-24">{t('scp.bal_col_account', locale)}</TableHead>
                 <TableHead>{t('scp.bal_col_label', locale)}</TableHead>
                 <TableHead className="text-right">{t('scp.bal_col_debit', locale)}</TableHead>
                 <TableHead className="text-right">{t('scp.bal_col_credit', locale)}</TableHead>
@@ -172,11 +171,6 @@ export function BalanceComptes({ societeId, mois }: { societeId: string | null; 
                   >
                     <TableCell>
                       {expanded.has(c.compte) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={`font-mono text-xs ${classeColor(c.compte)} border-0`}>
-                        {c.compte}
-                      </Badge>
                     </TableCell>
                     <TableCell className="text-sm">{c.libelle || <span className="text-slate-400 italic">—</span>}</TableCell>
                     <TableCell className="text-right text-sm text-red-600">
