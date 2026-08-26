@@ -183,7 +183,11 @@ export default function BankCredentialsPage() {
       // Mode asynchrone : le scrape tourne en arrière-plan → on sonde la fin.
       setSuccess('Scrape lancé — récupération en cours (peut prendre 1 à 2 min)…')
       const startedMs = Date.now()
-      const TIMEOUT_MS = 240000
+      // Un scrape manuel avec backfill de plusieurs relevés peut atteindre ~270 s
+      // (budget relevés 180 s + transactions). On sonde jusqu'à ~295 s (la route a
+      // maxDuration 300 s) pour capter la fin avant de basculer sur le message
+      // « continue en arrière-plan ».
+      const TIMEOUT_MS = 295000
       const POLL_MS = 6000
       // eslint-disable-next-line no-constant-condition
       while (Date.now() - startedMs < TIMEOUT_MS) {
