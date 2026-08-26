@@ -40,6 +40,7 @@ import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { useExerciceActive } from "@/components/client/ExerciceActiveProvider"
 import { t, getLocale, type Locale } from '@/lib/i18n'
+import { afficherCompte } from '@/lib/accounting/compte-display'
 
 interface ComptePCM {
   id: string
@@ -310,7 +311,7 @@ export default function PlanComptablePage() {
                         </div>
                         <div className="min-w-0">
                           <h3 className={`font-bold ${cls.text}`}>
-                            {t('acc.pcm.class', locale)} {cl.num} — {cl.label}
+                            {cl.label}
                           </h3>
                           <p className="text-xs text-muted-foreground">{cl.desc}</p>
                         </div>
@@ -415,9 +416,6 @@ function PCMRow({
               ) : (
                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
               ))}
-            <Badge variant="outline" className={`text-[11px] font-mono ${cls.bgLight} ${cls.text}`}>
-              {c.compte}
-            </Badge>
             {c.sens_normal && (
               <Badge variant="outline" className="text-[10px]">
                 {t('acc.pcm.direction', locale)} {c.sens_normal === "D" ? t('acc.pcm.debit', locale) : t('acc.pcm.credit', locale)}
@@ -443,13 +441,8 @@ function PCMRow({
                 {t('acc.pcm.analytical', locale)}
               </Badge>
             )}
-            {c.compte_parent && (
-              <span className="text-[10px] text-muted-foreground font-mono">
-                ↳ {t('acc.pcm.parent', locale)} {c.compte_parent}
-              </span>
-            )}
           </div>
-          <p className="text-sm mt-1 break-words font-medium">{c.libelle || "—"}</p>
+          <p className="text-sm mt-1 break-words font-medium">{afficherCompte(c)}</p>
           {c.notes && <p className="text-[11px] italic text-muted-foreground">{c.notes}</p>}
         </div>
         <div className="text-right flex-shrink-0 text-xs font-mono space-y-0.5">
@@ -481,7 +474,7 @@ function PCMRow({
         <div className="bg-slate-50 border-t border-b">
           <div className="px-4 py-2 text-[11px] text-muted-foreground border-b">
             {usage!.nb_ecritures} {t('acc.pcm.entries_on_account', locale)}{" "}
-            <span className="font-mono">{c.compte}</span>
+            <span className="font-medium">{afficherCompte(c)}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
