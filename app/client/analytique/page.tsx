@@ -25,9 +25,10 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
 import {
-  Loader2, RefreshCw, Plus, Layers, TrendingUp, TrendingDown, Wallet, Building2, X,
+  Loader2, RefreshCw, Plus, Layers, TrendingUp, TrendingDown, Wallet, Building2, X, Scale,
 } from "lucide-react"
 import { SECTION_TYPE_LABELS, type SectionType } from "@/lib/analytique/sections"
+import { VentilationDialog } from "@/components/analytique/VentilationDialog"
 
 const NAVY = "#0B0F2E"
 const TEAL = "#0F766E"
@@ -68,6 +69,7 @@ export default function AnalytiquePage() {
   const [tab, setTab] = useState("tous")
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  const [ventilOpen, setVentilOpen] = useState(false)
   const [detailId, setDetailId] = useState<string | null>(null)
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
@@ -114,6 +116,9 @@ export default function AnalytiquePage() {
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={load} disabled={loading} aria-label="Rafraîchir">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setVentilOpen(true)}>
+            <Scale className="h-4 w-4 mr-1" /> Ventiler
           </Button>
           <Button size="sm" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4 mr-1" /> Section
@@ -192,6 +197,10 @@ export default function AnalytiquePage() {
       <CreateSectionDialog
         societeId={societeId} open={createOpen} onOpenChange={setCreateOpen}
         onCreated={() => { showToast("Section créée"); load() }}
+      />
+      <VentilationDialog
+        societeId={societeId} sections={sections} open={ventilOpen} onOpenChange={setVentilOpen}
+        onDone={() => { showToast("Ventilation enregistrée"); load() }}
       />
       <SectionDetailDialog
         societeId={societeId} sectionId={detailId} onClose={() => setDetailId(null)}

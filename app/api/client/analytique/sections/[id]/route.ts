@@ -44,23 +44,53 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       .limit(2000)
 
     const rows = ecritures || []
-    const pnl = computeSectionPnl(rows)
 
-    // Ventilation par compte (charges/produits).
+    // Ventilation par compte (direct + réparti), charges/produits.
     const byCompte = new Map<string, { numero_compte: string; nom_compte: string; net: number }>()
+    const addCompte = (compte: string, nom: string, net: number) => {
+      if (!net) return
+      const cur = byCompte.get(compte) || { numero_compte: compte, nom_compte: nom, net: 0 }
+      cur.net += net
+      byCompte.set(compte, cur)
+    }
     for (const e of rows) {
       const cls = String(e.numero_compte || '').charAt(0)
       if (cls !== '6' && cls !== '7') continue
       const d = Number(e.debit_mur) || 0
       const c = Number(e.credit_mur) || 0
-      const net = cls === '7' ? c - d : d - c
-      const k = e.numero_compte
-      const cur = byCompte.get(k) || { numero_compte: k, nom_compte: e.nom_compte || '', net: 0 }
-      cur.net += net
-      byCompte.set(k, cur)
+      addCompte(e.numero_compte, e.nom_compte || '', cls === '7' ? c - d : d - c)
     }
+
+    // Écritures réparties sur cette section via ventilations_analytiques.
+    const { data: vents } = await supabase
+      .from('ventilations_analytiques')
+      .select('montant, ecritures_comptables_v2(numero_compte, nom_compte)')
+      .eq('societe_id', societe_id)
+      .eq('section_analytique_id', id)
+      .limit(5000)
+    let ventProduits = 0
+    let ventCharges = 0
+    for (const v of vents || []) {
+      const ec = (v as any).ecritures_comptables_v2
+      const cls = String(ec?.numero_compte || '').charAt(0)
+      const m = Number(v.montant) || 0
+      if (cls === '7') { ventProduits += m; addCompte(ec.numero_compte, ec.nom_compte || '', m) }
+      else if (cls === '6') { ventCharges += m; addCompte(ec.numero_compte, ec.nom_compte || '', m) }
+    }
+
+    const r2 = (x: number) => Math.round((x + Number.EPSILON) * 100) / 100
+    const direct = computeSectionPnl(rows)
+    const produits = r2(direct.produits + ventProduits)
+    const charges = r2(direct.charges + ventCharges)
+    const marge = r2(produits - charges)
+    const pnl = {
+      produits, charges, marge,
+      marge_pct: produits !== 0 ? r2((marge / produits) * 100) : null,
+      nb_ecritures: direct.nb_ecritures + (vents?.length || 0),
+    }
+
     const ventilation = Array.from(byCompte.values())
-      .map((v) => ({ ...v, net: Math.round((v.net + Number.EPSILON) * 100) / 100 }))
+      .map((v) => ({ ...v, net: r2(v.net) }))
       .sort((a, b) => a.numero_compte.localeCompare(b.numero_compte))
 
     return NextResponse.json({ section, pnl, ventilation, ecritures: rows })
