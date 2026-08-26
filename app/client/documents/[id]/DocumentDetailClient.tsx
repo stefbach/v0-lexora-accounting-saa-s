@@ -418,7 +418,6 @@ export default function DocumentDetailClient({ docId, initialDocument, initialEr
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t('core.docdetail.col_account', locale)}</TableHead>
                   <TableHead>{t('core.docdetail.col_label', locale)}</TableHead>
                   <TableHead className="text-right">{t('core.docdetail.col_debit', locale)}</TableHead>
                   <TableHead className="text-right">{t('core.docdetail.col_credit', locale)}</TableHead>
@@ -427,7 +426,6 @@ export default function DocumentDetailClient({ docId, initialDocument, initialEr
               <TableBody>
                 {ecritures.map((e: any, i: number) => (
                   <TableRow key={i}>
-                    <TableCell className="font-mono text-sm">{e.compte}</TableCell>
                     <TableCell className="text-sm">{e.libelle}</TableCell>
                     <TableCell className="text-right text-sm">{e.debit > 0 ? Number(e.debit).toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR') : "—"}</TableCell>
                     <TableCell className="text-right text-sm">{e.credit > 0 ? Number(e.credit).toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR') : "—"}</TableCell>

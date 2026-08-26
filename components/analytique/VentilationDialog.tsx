@@ -147,7 +147,7 @@ export function VentilationDialog({
                     {items.map((it) => (
                       <tr key={it.id} className="border-t hover:bg-slate-50">
                         <td className="p-2 whitespace-nowrap">{it.date_ecriture}</td>
-                        <td className="p-2 font-mono text-xs">{it.numero_compte}<span className={`ml-1 text-[10px] ${it.nature === "produit" ? "text-emerald-600" : "text-red-600"}`}>{it.nature}</span></td>
+                        <td className="p-2 text-xs">{it.nom_compte || it.numero_compte}<span className={`ml-1 text-[10px] ${it.nature === "produit" ? "text-emerald-600" : "text-red-600"}`}>{it.nature}</span></td>
                         <td className="p-2 max-w-[280px] truncate">{it.description}</td>
                         <td className="p-2 text-right tabular-nums">{fmt(it.net)}</td>
                         <td className="p-2 text-right tabular-nums font-medium">{fmt(it.reste)}</td>

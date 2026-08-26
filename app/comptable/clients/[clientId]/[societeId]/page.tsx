@@ -1,6 +1,7 @@
 "use client"
 
 import { useParams } from "next/navigation"
+import { useComptesLibelles } from "@/lib/accounting/use-comptes-libelles"
 import Link from "next/link"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -162,6 +163,7 @@ export default function SocieteContextPage() {
   const locale = getLocale()
   const clientId = params.clientId as string
   const societeId = params.societeId as string
+  const { libelle: libelleCompte } = useComptesLibelles(societeId)
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -711,7 +713,7 @@ export default function SocieteContextPage() {
                 <TableHead className="text-right">{t('cabclt.soc.col_ht', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_vat', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_ttc', locale)}</TableHead>
                 <TableHead>{t('cabclt.soc.col_due', locale)}</TableHead><TableHead>{t('cabclt.soc.col_status', locale)}</TableHead><TableHead>{t('cabclt.soc.col_account', locale)}</TableHead><TableHead></TableHead>
               </TableRow></TableHeader>
-              <TableBody>{fournisseurs.map((f,i)=>(<TableRow key={i}><TableCell className="font-medium">{f.fournisseur}</TableCell><TableCell>{f.numero}</TableCell><TableCell>{f.date}</TableCell><TableCell className="text-right">{fmt(f.ht)}</TableCell><TableCell className="text-right">{fmt(f.tva)}</TableCell><TableCell className="text-right font-semibold">{fmt(f.ttc)}</TableCell><TableCell>{f.echeance}</TableCell><TableCell>{stBadge(f.statut, locale)}</TableCell><TableCell><Badge variant="outline">{f.compte}</Badge></TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
+              <TableBody>{fournisseurs.map((f,i)=>(<TableRow key={i}><TableCell className="font-medium">{f.fournisseur}</TableCell><TableCell>{f.numero}</TableCell><TableCell>{f.date}</TableCell><TableCell className="text-right">{fmt(f.ht)}</TableCell><TableCell className="text-right">{fmt(f.tva)}</TableCell><TableCell className="text-right font-semibold">{fmt(f.ttc)}</TableCell><TableCell>{f.echeance}</TableCell><TableCell>{stBadge(f.statut, locale)}</TableCell><TableCell><Badge variant="outline">{libelleCompte(f.compte)}</Badge></TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
               </Table></CardContent></Card>
           )}
         </TabsContent>
@@ -816,7 +818,7 @@ export default function SocieteContextPage() {
                       <TableCell>{e.date_ecriture || '—'}</TableCell>
                       <TableCell><Badge variant="outline">{e.journal || '—'}</Badge></TableCell>
                       <TableCell className="text-xs text-muted-foreground">{e.numero_piece || '—'}</TableCell>
-                      <TableCell><Badge variant="outline" className="font-mono">{e.compte || '—'}</Badge></TableCell>
+                      <TableCell><span className="text-xs text-muted-foreground">{e.compte ? libelleCompte(e.compte) : '—'}</span></TableCell>
                       <TableCell className="font-medium">{e.libelle || '—'}</TableCell>
                       <TableCell className="text-right text-red-600">{e.debit > 0 ? fmt(e.debit) : ''}</TableCell>
                       <TableCell className="text-right text-green-600">{e.credit > 0 ? fmt(e.credit) : ''}</TableCell>

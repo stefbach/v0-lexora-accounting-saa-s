@@ -89,8 +89,7 @@ export function GrilleView({ societeId }: { societeId: string | null }) {
             {(data?.comptes || []).map((c) => (
               <tr key={c.numero_compte} className="border-t hover:bg-slate-50">
                 <td className="p-2 sticky left-0 bg-white">
-                  <span className="font-mono">{c.numero_compte}</span>{" "}
-                  <span className="text-slate-500">{c.nom_compte}</span>
+                  <span>{c.nom_compte || c.numero_compte}</span>
                   <span className={`ml-1 text-[10px] ${c.nature === "produit" ? "text-emerald-600" : "text-red-600"}`}>{c.nature}</span>
                 </td>
                 {sections.map((s) => (

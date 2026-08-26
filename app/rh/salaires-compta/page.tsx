@@ -199,7 +199,6 @@ export default function SalairesComptaPage() {
                 ].map(c => (
                   <div key={c.compte} className="flex items-center justify-between p-2 border rounded">
                     <div className="flex items-center gap-3">
-                      <Badge variant="outline" className="font-mono text-xs">{c.compte}</Badge>
                       <span className="text-sm">{c.label}</span>
                     </div>
                     <span className={`font-mono font-medium ${c.color}`}>{c.debit > 0 ? `${fmt(c.debit)} MUR` : "—"}</span>
@@ -215,7 +214,6 @@ export default function SalairesComptaPage() {
                   ].map(c => (
                     <div key={c.compte} className="flex items-center justify-between p-2 border rounded">
                       <div className="flex items-center gap-3">
-                        <Badge variant="outline" className="font-mono text-xs">{c.compte}</Badge>
                         <span className="text-sm">{c.label}</span>
                       </div>
                       <span className={`font-mono font-medium ${c.color}`}>{c.credit > 0 ? `${fmt(c.credit)} MUR` : "—"}</span>

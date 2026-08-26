@@ -158,7 +158,6 @@ export default function SalairesPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t('cab.salaires.col_account', locale)}</TableHead>
                       <TableHead>{t('cab.salaires.col_label', locale)}</TableHead>
                       <TableHead className="text-right">{t('cab.salaires.col_total_debit', locale)}</TableHead>
                       <TableHead className="text-right">{t('cab.salaires.col_total_credit', locale)}</TableHead>
@@ -168,8 +167,7 @@ export default function SalairesPage() {
                   <TableBody>
                     {ecritures.map(e => (
                       <TableRow key={e.numero_compte}>
-                        <TableCell className="font-mono text-sm font-bold">{e.numero_compte}</TableCell>
-                        <TableCell className="text-sm">{e.libelle}</TableCell>
+                        <TableCell className="text-sm font-medium">{e.libelle || e.numero_compte}</TableCell>
                         <TableCell className="text-right">{fmt(e.total_debit || 0)}</TableCell>
                         <TableCell className="text-right">{fmt(e.total_credit || 0)}</TableCell>
                         <TableCell className="text-right font-semibold">{fmt(e.solde || 0)}</TableCell>

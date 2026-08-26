@@ -386,7 +386,7 @@ export default function SantePCMPage() {
                 {detail.orphelines.slice(0, 8).map(o => (
                   <li key={o.id} className="rounded bg-white/60 px-2 py-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-xs text-zinc-700">{o.numero_compte}</span>
+                      <span className="text-xs text-zinc-700">{o.libelle || o.numero_compte}</span>
                       <span className="font-mono tabular-nums text-xs text-zinc-500">
                         {fmt(o.debit_mur)} / {fmt(o.credit_mur)}
                       </span>
