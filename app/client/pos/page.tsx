@@ -62,7 +62,9 @@ import {
   Wallet,
   PieChart as PieIcon,
   CornerDownLeft,
+  Utensils,
 } from "lucide-react"
+import Link from "next/link"
 import {
   BarChart,
   Bar,
@@ -591,11 +593,18 @@ export default function PosPage() {
       subtitle="Caisse tactile et pilotage du shift : panier, TVA, encaissement multi-moyens, déduction de stock temps réel, écritures automatiques et analytics de session."
       disableParticles
       actions={
-        session ? (
-          <Button variant="outline" size="sm" onClick={() => setClotureOpen(true)}>
-            <LockKeyhole className="h-4 w-4 mr-1" /> Clôturer la caisse
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href="/client/pos/salle">
+              <Utensils className="h-4 w-4 mr-1" /> Salle
+            </Link>
           </Button>
-        ) : undefined
+          {session ? (
+            <Button variant="outline" size="sm" onClick={() => setClotureOpen(true)}>
+              <LockKeyhole className="h-4 w-4 mr-1" /> Clôturer la caisse
+            </Button>
+          ) : null}
+        </div>
       }
     >
       {toast && (
