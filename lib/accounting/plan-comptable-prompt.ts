@@ -24,13 +24,18 @@ export async function fetchComptesPourPrompt(
   societeId: string,
 ): Promise<ComptePourPrompt[]> {
   try {
-    const { data, error } = await supabase
+    // Le plan est GLOBAL (societe_id NULL) + surcharges éventuelles par société.
+    // Même filtre que /api/*/plan-comptable : comptes globaux OU de la société.
+    let query = supabase
       .from('plan_comptable')
       .select('compte, libelle, categorie_ifrs, classe, postable')
-      .eq('societe_id', societeId)
       .eq('actif', true)
       .eq('postable', true)
       .limit(500)
+    query = societeId
+      ? query.or(`societe_id.eq.${societeId},societe_id.is.null`)
+      : query.is('societe_id', null)
+    const { data, error } = await query
     if (error || !data) return []
     return (data as any[])
       .filter((c) => c.classe === '6' || COMPTES_ACHAT_HORS_CLASSE_6.includes(String(c.compte)))
