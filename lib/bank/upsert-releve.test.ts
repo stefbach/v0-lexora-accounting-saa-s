@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { classifyReleveOverlap } from './upsert-releve'
 
 /**
  * Regression test — mig 435 fix.
@@ -48,6 +49,39 @@ function findReplaceReleveRpcMigrations(): string[] {
     })
     .sort()
 }
+
+describe('classifyReleveOverlap — anti-doublon relevés (décision au mois près)', () => {
+  const semestre = { date_debut: '2026-01-05', date_fin: '2026-06-30' } // relevé Jan→Juin
+
+  it('absorbe un relevé mensuel dont le mois est couvert MALGRÉ un début 01 vs 05', () => {
+    // Cas réel : mensuel janvier 01→31 vs semestriel démarrant le 05. Au jour
+    // près l\'ancien code ne l\'absorbait pas → doublon janvier.
+    expect(classifyReleveOverlap(semestre, { date_debut: '2026-01-01', date_fin: '2026-01-31' })).toBe('absorb')
+  })
+
+  it('absorbe les mois intérieurs (février, avril)', () => {
+    expect(classifyReleveOverlap(semestre, { date_debut: '2026-02-01', date_fin: '2026-02-28' })).toBe('absorb')
+    expect(classifyReleveOverlap(semestre, { date_debut: '2026-04-01', date_fin: '2026-04-30' })).toBe('absorb')
+  })
+
+  it('n\'absorbe PAS un relevé qui déborde avant la plage (déc. + jan.)', () => {
+    // Décembre 2025 n\'est pas couvert par un relevé Jan→Juin → risque de perte.
+    expect(classifyReleveOverlap(semestre, { date_debut: '2025-12-20', date_fin: '2026-01-31' })).toBe('partiel')
+  })
+
+  it('signale un nouveau relevé contenu dans un existant plus large', () => {
+    expect(classifyReleveOverlap({ date_debut: '2026-03-01', date_fin: '2026-03-31' }, semestre)).toBe('contenu_dans_existant')
+  })
+
+  it('ignore un relevé sans recoupement (juillet)', () => {
+    expect(classifyReleveOverlap(semestre, { date_debut: '2026-07-01', date_fin: '2026-07-31' })).toBe('none')
+  })
+
+  it('absorbe un relevé scrapé partiel du mois courant couvert par le relevé officiel du mois', () => {
+    const aoutOfficiel = { date_debut: '2026-08-01', date_fin: '2026-08-31' }
+    expect(classifyReleveOverlap(aoutOfficiel, { date_debut: '2026-08-17', date_fin: '2026-08-20' })).toBe('absorb')
+  })
+})
 
 describe('replace_releve_bancaire RPC (anti-rechute 42702)', () => {
   it('au moins une migration définit la RPC', () => {
