@@ -122,6 +122,8 @@ export async function POST(request: Request) {
     }
     const vente = validated.data
     const dateVente = new Date().toISOString()
+    // Client optionnel rattaché à la vente (FK factures_contacts, ventes_pos.client_id).
+    const clientId = body?.client_id ? String(body.client_id) : null
 
     // Validation atomique : ticket + lignes + paiements + stock (RPC 486).
     const { data: rpcResult, error: rpcError } = await supabase.rpc('valider_vente_pos', {
@@ -129,7 +131,7 @@ export async function POST(request: Request) {
       p_session_id: vente.session_id,
       p_lignes: vente.lignes,
       p_paiements: vente.paiements,
-      p_client_id: null,
+      p_client_id: clientId,
       p_date_vente: dateVente,
       p_cree_par: user.id,
     })
