@@ -48,14 +48,16 @@ interface TVAPDFProps {
   totalReverseChargeBase: number
   reverseChargeTVA: number
   caHT: number
+  caExportExonereHT?: number
   taxableAchatsHT: number
   groupedSuppliers: { tiers: string; totalTVA: number; count: number }[]
   reverseChargeFacts: any[]
 }
 
 export function TVADeclarationPDF(props: TVAPDFProps) {
-  const { societe, periodeLabel, effectiveCollectee, effectiveDeductible, tvaAPayer, creditTVA, totalReverseChargeBase, reverseChargeTVA, caHT, taxableAchatsHT, groupedSuppliers, reverseChargeFacts } = props
+  const { societe, periodeLabel, effectiveCollectee, effectiveDeductible, tvaAPayer, creditTVA, totalReverseChargeBase, reverseChargeTVA, caHT, caExportExonereHT = 0, taxableAchatsHT, groupedSuppliers, reverseChargeFacts } = props
   const box7 = effectiveCollectee - effectiveDeductible
+  const caTotal = caHT + caExportExonereHT
 
   const BoxRow = ({ box, desc, val, style }: { box: string; desc: string; val: string; style?: any }) => (
     <View style={style || s.row}>
@@ -104,6 +106,8 @@ export function TVADeclarationPDF(props: TVAPDFProps) {
             <View style={s.cAmt}><Text style={s.hdrTxt}>Amount (MUR)</Text></View>
           </View>
           <BoxRow box="1" desc="Value of Taxable Supplies (excl. VAT)" val={fmt(caHT)} />
+          {caExportExonereHT > 0 && <BoxRow box="R1" desc="Value of Zero-Rated / Exempt Supplies — Exports (excl. VAT)" val={fmt(caExportExonereHT)} style={s.rowRC} />}
+          {caExportExonereHT > 0 && <BoxRow box="" desc="Total Value of Supplies (Box 1 + R1)" val={fmt(caTotal)} style={s.rowAlt} />}
           <BoxRow box="2" desc="Output Tax — TVA collectée (sur ventes)" val={fmt(effectiveCollectee)} style={s.rowAlt} />
           <BoxRow box="3" desc="Value of Taxable Purchases (excl. VAT)" val={fmt(taxableAchatsHT)} />
           <BoxRow box="4" desc="Input Tax — TVA déductible (achats locaux)" val={fmt(effectiveDeductible)} style={s.rowAlt} />
