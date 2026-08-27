@@ -216,6 +216,27 @@ export default function TVAPage() {
     return Math.round((Number(f?.montant_ht) || 0) * taux * 100) / 100
   }
 
+  // Mêmes conversions que htMur, pour la TVA et le TTC — indispensables pour
+  // les exports Excel : ne jamais reporter un montant_tva/montant_ttc en
+  // devise étrangère (EUR/USD…) tel quel dans une colonne "(MUR)", sous peine
+  // de mélanger les devises dans une même colonne du fichier exporté.
+  const tvaMur = (f: any): number => {
+    const m = Number(f?.montant_mur)
+    if (Number.isFinite(m) && m > 0) {
+      const ttc = Number(f?.montant_ttc) || (Number(f?.montant_ht) + Number(f?.montant_tva || 0)) || 0
+      const tva = Number(f?.montant_tva) || 0
+      if (ttc > 0) return Math.round((tva / ttc) * m * 100) / 100
+    }
+    const taux = Number(f?.taux_change) || 1
+    return Math.round((Number(f?.montant_tva) || 0) * taux * 100) / 100
+  }
+  const ttcMur = (f: any): number => {
+    const m = Number(f?.montant_mur)
+    if (Number.isFinite(m) && m > 0) return Math.round(m * 100) / 100
+    const taux = Number(f?.taux_change) || 1
+    return Math.round((Number(f?.montant_ttc) || 0) * taux * 100) / 100
+  }
+
   // Une facture est "taxable Maurice" si :
   //  - son client n'est pas offshore (client_offshore = false/null)
   //  - ET sa devise est MUR (pas d'export en devise étrangère)
@@ -353,9 +374,9 @@ export default function TVAPage() {
           [t('mra.tva.xls_col_date', locale)]: f.date_facture || "—",
           [t('mra.tva.xls_col_facture_no', locale)]: f.numero_facture || "—",
           [t('mra.tva.xls_col_tiers', locale)]: f.tiers || "—",
-          [t('mra.tva.xls_col_ht', locale)]: Number(f.montant_ht) || 0,
-          [t('mra.tva.xls_col_tva15', locale)]: Number(f.montant_tva) || 0,
-          [t('mra.tva.xls_col_ttc', locale)]: Number(f.montant_ttc) || 0,
+          [t('mra.tva.xls_col_ht', locale)]: htMur(f),
+          [t('mra.tva.xls_col_tva15', locale)]: tvaMur(f),
+          [t('mra.tva.xls_col_ttc', locale)]: ttcMur(f),
           [t('mra.tva.xls_col_type', locale)]: t('mra.tva.xls_type_client', locale),
         })),
         ...facturesClientExports.map((f: any) => ({
@@ -363,17 +384,17 @@ export default function TVAPage() {
           [t('mra.tva.xls_col_facture_no', locale)]: f.numero_facture || "—",
           [t('mra.tva.xls_col_tiers', locale)]: f.tiers || "—",
           [t('mra.tva.xls_col_ht', locale)]: htMur(f),
-          [t('mra.tva.xls_col_tva15', locale)]: Number(f.montant_tva) || 0,
-          [t('mra.tva.xls_col_ttc', locale)]: Number(f.montant_ttc) || 0,
+          [t('mra.tva.xls_col_tva15', locale)]: tvaMur(f),
+          [t('mra.tva.xls_col_ttc', locale)]: ttcMur(f),
           [t('mra.tva.xls_col_type', locale)]: t('mra.tva.xls_type_client_export', locale),
         })),
         ...facturesFournisseurLocal.map((f: any) => ({
           [t('mra.tva.xls_col_date', locale)]: f.date_facture || "—",
           [t('mra.tva.xls_col_facture_no', locale)]: f.numero_facture || "—",
           [t('mra.tva.xls_col_tiers', locale)]: f.tiers || "—",
-          [t('mra.tva.xls_col_ht', locale)]: Number(f.montant_ht) || 0,
-          [t('mra.tva.xls_col_tva15', locale)]: Number(f.montant_tva) || 0,
-          [t('mra.tva.xls_col_ttc', locale)]: Number(f.montant_ttc) || 0,
+          [t('mra.tva.xls_col_ht', locale)]: htMur(f),
+          [t('mra.tva.xls_col_tva15', locale)]: tvaMur(f),
+          [t('mra.tva.xls_col_ttc', locale)]: ttcMur(f),
           [t('mra.tva.xls_col_type', locale)]: t('mra.tva.xls_type_supplier_local', locale),
         })),
       ]
@@ -387,16 +408,19 @@ export default function TVAPage() {
         [t('mra.tva.xls_col_date', locale)]: f.date_facture || "—",
         [t('mra.tva.xls_col_facture_no', locale)]: f.numero_facture || "—",
         [t('mra.tva.xls_col_supplier', locale)]: f.tiers || "—",
-        [t('mra.tva.xls_col_ht', locale)]: Number(f.montant_ht) || 0,
-        [t('mra.tva.xls_col_tva_deductible', locale)]: Number(f.montant_tva) || 0,
-        [t('mra.tva.xls_col_ttc', locale)]: Number(f.montant_ttc) || 0,
+        [t('mra.tva.xls_col_ht', locale)]: htMur(f),
+        [t('mra.tva.xls_col_tva_deductible', locale)]: tvaMur(f),
+        [t('mra.tva.xls_col_ttc', locale)]: ttcMur(f),
       }))
       const ws = XLSX.utils.json_to_sheet(rows)
       XLSX.utils.book_append_sheet(wb, ws, t('mra.tva.xls_sheet_deductible', locale))
       XLSX.writeFile(wb, `tva_deductible_${period}_${dateStr}.xlsx`)
     } else {
       const rows = reverseChargeFacts.map((f: any) => {
-        const ht = Number(f.montant_ht) || 0
+        // Base HT toujours convertie en MUR : ces factures sont par définition
+        // en devise étrangère (reverse charge), donc montant_ht brut ne doit
+        // jamais être reporté tel quel dans une colonne "(MUR)".
+        const ht = htMur(f)
         return {
           [t('mra.tva.xls_col_date', locale)]: f.date_facture || "—",
           [t('mra.tva.xls_col_supplier', locale)]: f.tiers || "—",
