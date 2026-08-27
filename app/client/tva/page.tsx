@@ -225,8 +225,14 @@ export default function TVAPage() {
   // TVA from factures table — LOCAL fournisseurs only (exclude reverse charge)
   const facturesClient = factures.filter((f: any) => f.type_facture === 'client')
   const facturesClientLocal = facturesClient.filter(isLocalTaxable)
-  // Exports / ventes exonérées (devise ≠ MUR ou client_offshore)
+  // Exports / ventes exonérées (devise ≠ MUR ou client_offshore) — CA à 0% de
+  // TVA, mais qui reste du chiffre d'affaires et DOIT apparaître dans la
+  // déclaration (la MRA exige la valeur totale des livraisons, y compris
+  // celles à taux zéro / exonérées).
   const facturesClientExports = facturesClient.filter((f: any) => !isLocalTaxable(f))
+  const caLocalTaxableHT = facturesClientLocal.reduce((s: number, f: any) => s + htMur(f), 0)
+  const caExportExonereHT = facturesClientExports.reduce((s: number, f: any) => s + htMur(f), 0)
+  const caTotalHT = caLocalTaxableHT + caExportExonereHT
   const facturesFournisseur = factures.filter((f: any) => f.type_facture === 'fournisseur')
   const facturesFournisseurLocal = facturesFournisseur.filter((f: any) => {
     // Exclude foreign suppliers from TVA déductible (they go in reverse charge)
@@ -352,6 +358,15 @@ export default function TVAPage() {
           [t('mra.tva.xls_col_ttc', locale)]: Number(f.montant_ttc) || 0,
           [t('mra.tva.xls_col_type', locale)]: t('mra.tva.xls_type_client', locale),
         })),
+        ...facturesClientExports.map((f: any) => ({
+          [t('mra.tva.xls_col_date', locale)]: f.date_facture || "—",
+          [t('mra.tva.xls_col_facture_no', locale)]: f.numero_facture || "—",
+          [t('mra.tva.xls_col_tiers', locale)]: f.tiers || "—",
+          [t('mra.tva.xls_col_ht', locale)]: htMur(f),
+          [t('mra.tva.xls_col_tva15', locale)]: Number(f.montant_tva) || 0,
+          [t('mra.tva.xls_col_ttc', locale)]: Number(f.montant_ttc) || 0,
+          [t('mra.tva.xls_col_type', locale)]: t('mra.tva.xls_type_client_export', locale),
+        })),
         ...facturesFournisseurLocal.map((f: any) => ({
           [t('mra.tva.xls_col_date', locale)]: f.date_facture || "—",
           [t('mra.tva.xls_col_facture_no', locale)]: f.numero_facture || "—",
@@ -406,6 +421,7 @@ export default function TVAPage() {
   }
 
   const summaryCards = [
+    { title: t('mra.tva.card_ca_total', locale), value: caTotalHT, icon: FileText, color: NAVY, bg: "bg-slate-50" },
     { title: t('mra.tva.card_collected', locale), value: effectiveCollectee, icon: TrendingUp, color: NAVY, bg: "bg-blue-50" },
     { title: t('mra.tva.card_deductible', locale), value: effectiveDeductible, icon: TrendingDown, color: GOLD, bg: "bg-amber-50" },
     { title: t('mra.tva.card_net_payable', locale), value: tvaAPayer, icon: Calculator, color: "#DC2626", bg: "bg-red-50" },
@@ -509,10 +525,9 @@ export default function TVAPage() {
                       const socData = societe
                       const pLabel = getPeriodLabel()
                       const taxableAchatsHT = facturesFournisseurLocal.filter((fac: any) => (Number(fac.montant_tva) || 0) > 0).reduce((sum: number, fac: any) => sum + (Number(fac.montant_ht) || 0), 0)
-                      const caHT = facturesClientLocal.reduce((sum: number, fac: any) => sum + (Number(fac.montant_ht) || 0), 0)
                       const taxableSuppliers = groupedLocalInvoices.filter(g => g.totalTVA > 0)
                       const blob = await pdf(
-                        <TVADeclarationPDF societe={socData} periodeLabel={pLabel} effectiveCollectee={effectiveCollectee} effectiveDeductible={effectiveDeductible} tvaAPayer={tvaAPayer} creditTVA={creditTVA} totalReverseChargeBase={totalReverseChargeBase} reverseChargeTVA={reverseChargeTVA} caHT={caHT} taxableAchatsHT={taxableAchatsHT} groupedSuppliers={taxableSuppliers} reverseChargeFacts={reverseChargeFacts} />
+                        <TVADeclarationPDF societe={socData} periodeLabel={pLabel} effectiveCollectee={effectiveCollectee} effectiveDeductible={effectiveDeductible} tvaAPayer={tvaAPayer} creditTVA={creditTVA} totalReverseChargeBase={totalReverseChargeBase} reverseChargeTVA={reverseChargeTVA} caHT={caLocalTaxableHT} caExportExonereHT={caExportExonereHT} taxableAchatsHT={taxableAchatsHT} groupedSuppliers={taxableSuppliers} reverseChargeFacts={reverseChargeFacts} />
                       ).toBlob()
                       const url = URL.createObjectURL(blob)
                       const link = document.createElement('a')
@@ -535,7 +550,7 @@ export default function TVAPage() {
       </Card>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {summaryCards.map((card) => (
           <Card key={card.title}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -599,7 +614,20 @@ export default function TVAPage() {
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>1</td>
                 <td className="py-2">{t('mra.tva.box1', locale)}</td>
-                <td className="py-2 text-right font-medium">{formatMUR(facturesClientLocal.reduce((s: number, f: any) => s + htMur(f), 0))}</td>
+                <td className="py-2 text-right font-medium">{formatMUR(caLocalTaxableHT)}</td>
+              </tr>
+              <tr className="border-b border-gray-100 bg-slate-50/50">
+                <td className="py-2 font-medium" style={{ color: NAVY }}>R1</td>
+                <td className="py-2">
+                  {t('mra.tva.boxR1', locale)}
+                  <span className="text-xs text-muted-foreground ml-2">{t('mra.tva.boxR1_note', locale)}</span>
+                </td>
+                <td className="py-2 text-right font-medium">{formatMUR(caExportExonereHT)}</td>
+              </tr>
+              <tr className="border-b border-gray-100 font-semibold">
+                <td className="py-2" style={{ color: NAVY }}></td>
+                <td className="py-2">{t('mra.tva.boxCaTotal', locale)}</td>
+                <td className="py-2 text-right">{formatMUR(caTotalHT)}</td>
               </tr>
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>2</td>
