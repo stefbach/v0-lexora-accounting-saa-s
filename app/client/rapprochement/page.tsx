@@ -60,6 +60,7 @@ import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale, type Locale } from '@/lib/i18n'
 import { sweepPcmChunk } from '@/lib/i18n/sweep_pcm'
 import { ECART_TYPE_OPTIONS, resolveEcartCompte, type EcartTypeChoice } from '@/lib/accounting/rapprochement/ecart-ui'
+import { useComptesLibelles } from '@/lib/accounting/use-comptes-libelles'
 
 // Réfère le chunk pour éviter le tree-shaking jusqu'au câblage dans lib/i18n.ts.
 void sweepPcmChunk
@@ -124,6 +125,10 @@ interface BankTx {
   classification?: string | null
   classification_suggestion?: any
   compte_comptable?: string | null
+  // Compte d'imputation posé par la classification par règle (R01-R07) —
+  // distinct de compte_comptable (imputation manuelle / match facture).
+  classification_compte?: string | null
+  classification_rule?: string | null
   tiers_detecte?: string | null
   suggestion_source?: string | null
   note?: string | null
@@ -150,6 +155,9 @@ export default function ClientRapprochementPage() {
   const locale = getLocale()
   // ── Société active du client (1 seule) ────────────────────────────
   const { societeId } = useSocieteActive()
+  // Résolveur code → libellé (affichage neutre) pour montrer sur quel compte
+  // chaque transaction a été imputée / rapprochée.
+  const { libelle: compteLibelle } = useComptesLibelles(societeId)
 
   // ── Période (par défaut : Toutes) ─────────────────────────────────
   const [modeToutes, setModeToutes] = useState(true)
@@ -1227,6 +1235,7 @@ export default function ClientRapprochementPage() {
                           tx={tx}
                           facturesById={facturesById}
                           locale={locale}
+                          compteLibelle={compteLibelle}
                           onModifier={async () => {
                             // 1) délettre
                             try {
@@ -1270,7 +1279,7 @@ export default function ClientRapprochementPage() {
                   ) : (
                     <div className="rounded border bg-card divide-y">
                       {orphelines.map((tx) => (
-                        <TxRow key={tx.id} tx={tx} facturesById={facturesById} locale={locale} onImputer={() => setAffectTx(tx)} />
+                        <TxRow key={tx.id} tx={tx} facturesById={facturesById} locale={locale} compteLibelle={compteLibelle} onImputer={() => setAffectTx(tx)} />
                       ))}
                     </div>
                   )}
@@ -1737,14 +1746,20 @@ function TxRow({
   onImputer,
   onModifier,
   locale,
+  compteLibelle,
 }: {
   tx: BankTx
   facturesById: Map<string, Facture>
   onImputer?: () => void
   onModifier?: () => void
   locale: Locale
+  compteLibelle?: (compte: string) => string
 }) {
   const montant = tx.debit > 0 ? -tx.debit : tx.credit
+  // Compte d'imputation : imputation manuelle / match facture (compte_comptable)
+  // ou classification par règle (classification_compte). On l'affiche toujours
+  // pour que le comptable voie sur quel compte la transaction a été rapprochée.
+  const compteImpute = tx.compte_comptable || tx.classification_compte || null
   return (
     <div className="flex items-start justify-between gap-3 p-3 hover:bg-muted/20">
       <div className="flex-1 min-w-0">
@@ -1756,9 +1771,13 @@ function TxRow({
               {tx.lettre}
             </Badge>
           )}
-          {tx.compte_comptable && (
-            <Badge variant="outline" className="text-[10px] font-mono">
-              PCM {tx.compte_comptable}
+          {compteImpute && (
+            <Badge
+              variant="outline"
+              className="text-[10px] bg-blue-50 border-blue-200 text-blue-800"
+              title={t('acc.rap.imputed_on', locale)}
+            >
+              → {compteLibelle ? compteLibelle(compteImpute) : compteImpute}
             </Badge>
           )}
           {tx.facture_id && (
