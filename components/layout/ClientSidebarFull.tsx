@@ -16,7 +16,7 @@ import {
   Settings, LogOut, ChevronDown, ChevronRight, FileSpreadsheet,
   Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
   CalendarDays, FilePlus2, SlidersHorizontal, Menu, X, FilePen, UserCircle,
-  Sparkles, Package, Send, Repeat, MessageCircle, Mail, Inbox, KeyRound, ArrowRightLeft,
+  Sparkles, Package, Send, Repeat, MessageCircle, Mail, Inbox, KeyRound, ArrowRightLeft, Ship,
   TrendingUp, FolderKanban, ShieldCheck, ShoppingCart, Layers, Factory, Briefcase
 } from "lucide-react"
 
@@ -125,10 +125,12 @@ const MENU: MenuSection[] = [
       { href: "/client/banque", label: "Banque", labelKey: "acc.bank", icon: Banknote },
       { href: "/client/rapprochement", label: "Rapprochement & Lettrage", labelKey: "acc.reconciliation", icon: CreditCard },
       { href: "/client/rapprochement-mensuel", label: "Rapprochement mensuel", labelKey: "clay.monthly_reconciliation", icon: Calendar },
+      { href: "/client/rapprochement-carte", label: "Règlement carte agrégé", icon: CreditCard },
       { href: "/client/virements", label: "Virements", labelKey: "clay.transfers", icon: ArrowRightLeft },
       { href: "/client/grand-livre", label: "Grand Livre", labelKey: "comp.client_sidebar.general_ledger", icon: BookOpen },
       { href: "/client/ecritures", label: "Écritures (édition)", labelKey: "comp.client_sidebar.entries_edit", icon: BookOpen },
       { href: "/client/plan-comptable", label: "Plan Comptable", labelKey: "comp.client_sidebar.chart_accounts", icon: BookOpen },
+      { href: "/client/immobilisations", label: "Immobilisations", icon: Building2 },
       { href: "/client/salaires-compta", label: "Salaires", labelKey: "comp.client_sidebar.salaries", icon: CreditCard },
       { href: "/client/compte-courant", label: "Comptes Courants Associés", labelKey: "acc.current_accounts", icon: Users },
     ]
@@ -138,6 +140,7 @@ const MENU: MenuSection[] = [
     requiredModule: "comptabilite",
     items: [
       { href: "/client/inventaire", label: "Inventaire & Stock", icon: Package },
+      { href: "/client/inventaire/reception-import", label: "Réception import (coût de revient)", icon: Ship },
       { href: "/client/pos", label: "Point de vente", icon: ShoppingCart },
       { href: "/client/manufacturing", label: "Production", icon: Factory },
       { href: "/client/jobs", label: "Chantiers & affaires", icon: Briefcase },

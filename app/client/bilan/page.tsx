@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, createContext, useContext } from "react"
 import Link from "next/link"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useProfile } from "@/hooks/use-profile"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { useExerciceActive } from "@/components/client/ExerciceActiveProvider"
@@ -32,6 +33,100 @@ function amountCell(n: number) {
   if (n < 0) style.color = "#DC2626"
   const display = n < 0 ? `(${fmt(Math.abs(n))})` : fmt(n)
   return { display, style }
+}
+
+/* ── Drill-down (Bilan/P&L → transactions source) ──
+ * Comble le point de Yannick : « aller à la source de chaque transaction
+ * depuis le bilan ou le compte de résultats » (comme Odoo/QuickBooks). Chaque
+ * poste devient cliquable → modal listant les écritures du compte/plage. */
+interface DrillTarget { label: string; debut: string; fin: string }
+const DrillContext = createContext<((t: DrillTarget) => void) | null>(null)
+
+/** Plage de comptes depuis un préfixe : "706" → 706 … 706999999. */
+function prefixRange(prefix: string): { debut: string; fin: string } {
+  return { debut: prefix, fin: `${prefix}999999` }
+}
+/** Plage depuis un libellé "651-659" ou "classe 6". */
+function parseGroupRange(range: string): { debut: string; fin: string } | null {
+  const m = range.match(/^(\d+)\s*-\s*(\d+)$/)
+  if (m) return { debut: m[1], fin: `${m[2]}999999` }
+  const c = range.match(/classe\s*(\d)/i)
+  if (c) return { debut: c[1], fin: `${c[1]}999999` }
+  return null
+}
+
+function DrillModal({
+  target, societeId, exercice, onClose, locale,
+}: { target: DrillTarget | null; societeId: string | null; exercice: string; onClose: () => void; locale: Locale }) {
+  const [rows, setRows] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!target || !societeId) return
+    setLoading(true); setErr(null); setRows([])
+    const qs = new URLSearchParams({ societe_id: societeId, compte_debut: target.debut, compte_fin: target.fin, limit: "500" })
+    if (exercice) qs.set("exercice", exercice)
+    fetch(`/api/comptable/grand-livre?${qs.toString()}`)
+      .then(r => r.json())
+      .then(d => { if (d?.error) throw new Error(d.error); setRows(d.ecritures || d.data || []) })
+      .catch(e => setErr(e.message))
+      .finally(() => setLoading(false))
+  }, [target, societeId, exercice])
+
+  const totalD = rows.reduce((s, r) => s + (Number(r.debit_mur ?? r.debit) || 0), 0)
+  const totalC = rows.reduce((s, r) => s + (Number(r.credit_mur ?? r.credit) || 0), 0)
+
+  return (
+    <Dialog open={!!target} onOpenChange={o => { if (!o) onClose() }}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle className="text-base">{target?.label} — {t('cbil.drill_source', locale)}{exercice ? ` · ${exercice}` : ""}</DialogTitle>
+        </DialogHeader>
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm text-slate-500 py-8 justify-center"><Loader2 className="h-4 w-4 animate-spin" />{t('cbil.drill_loading', locale)}</div>
+        ) : err ? (
+          <div className="text-sm text-red-600 flex gap-2 p-2"><AlertCircle className="h-4 w-4" />{err}</div>
+        ) : rows.length === 0 ? (
+          <div className="text-sm text-slate-500 p-4 text-center">{t('cbil.drill_empty', locale)}</div>
+        ) : (
+          <div className="max-h-[60vh] overflow-auto">
+            <table className="w-full text-xs">
+              <thead className="text-slate-500 sticky top-0 bg-white">
+                <tr>
+                  <th className="text-left py-1.5">{t('cbil.drill_date', locale)}</th>
+                  <th className="text-left py-1.5">{t('cbil.drill_account', locale)}</th>
+                  <th className="text-left py-1.5">{t('cbil.drill_label', locale)}</th>
+                  <th className="text-left py-1.5">Jrnl</th>
+                  <th className="text-right py-1.5">{t('cbil.drill_debit', locale)}</th>
+                  <th className="text-right py-1.5">{t('cbil.drill_credit', locale)}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={r.id || i} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="py-1.5 whitespace-nowrap">{(r.date_ecriture || "").slice(0, 10)}</td>
+                    <td className="py-1.5 font-mono text-[11px]">{r.nom_compte || r.numero_compte}</td>
+                    <td className="py-1.5 max-w-[280px] truncate" title={r.description || r.libelle}>{r.description || r.libelle}</td>
+                    <td className="py-1.5 font-mono text-[10px] text-slate-400">{r.journal}</td>
+                    <td className="py-1.5 text-right text-red-600">{Number(r.debit_mur ?? r.debit) ? fmt(Number(r.debit_mur ?? r.debit)) : ""}</td>
+                    <td className="py-1.5 text-right text-green-600">{Number(r.credit_mur ?? r.credit) ? fmt(Number(r.credit_mur ?? r.credit)) : ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 font-bold">
+                  <td colSpan={4} className="py-1.5 text-right">{t('cbil.drill_total', locale)} ({rows.length})</td>
+                  <td className="py-1.5 text-right text-red-700">{fmt(totalD)}</td>
+                  <td className="py-1.5 text-right text-green-700">{fmt(totalC)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 // Revenue account labels
@@ -122,12 +217,25 @@ function VarianceBadge({ current, prev }: { current: number; prev: number }) {
   )
 }
 
-function SubItem({ label, current, prev }: { label: string; current: number; prev?: number }) {
+function SubItem({ label, current, prev, drill }: { label: string; current: number; prev?: number; drill?: { debut: string; fin: string } }) {
   const a = amountCell(current)
   const prevDisplay = prev !== undefined ? amountCell(prev) : null
+  const openDrill = useContext(DrillContext)
+  const canDrill = !!drill && !!openDrill
   return (
     <TableRow>
-      <TableCell className="pl-8 text-sm py-2">{label}</TableCell>
+      <TableCell className="pl-8 text-sm py-2">
+        {canDrill ? (
+          <button
+            type="button"
+            onClick={() => openDrill!({ label, debut: drill!.debut, fin: drill!.fin })}
+            className="text-left text-sky-700 hover:underline decoration-dotted underline-offset-2"
+            title="Voir les écritures source"
+          >
+            {label}
+          </button>
+        ) : label}
+      </TableCell>
       <TableCell className="text-right text-sm font-mono tabular-nums py-2" style={a.style}>{a.display}</TableCell>
       <TableCell className="text-right text-sm font-mono tabular-nums py-2 text-muted-foreground">
         {prevDisplay ? <span style={prevDisplay.style}>{prevDisplay.display}</span> : "\u2014"}
@@ -203,26 +311,26 @@ function BalanceSheetTable({ data, prevData, exercice, prevExercice, locale }: {
       </TableHeader>
       <TableBody>
         <SectionHeader label={t('cbil.sec.non_current_assets', locale)} />
-        <SubItem label={t('cbil.row.ppe', locale)} current={immobilisations} prev={pImmo} />
+        <SubItem label={t('cbil.row.ppe', locale)} current={immobilisations} prev={pImmo} drill={{ debut: '20', fin: '28999999' }} />
         <SubItem label={t('cbil.row.intangible', locale)} current={0} prev={prevData ? 0 : undefined} />
         <TotalRow label={t('cbil.row.total_non_current_assets', locale)} current={totalNonCurrentAssets} prev={pNonCurrent} />
 
         <SectionHeader label={t('cbil.sec.current_assets', locale)} />
-        <SubItem label={t('cbil.row.trade_receivables', locale)} current={creancesClients} prev={pCreances} />
-        <SubItem label={t('cbil.row.cash_bank', locale)} current={tresorerie} prev={pTreso} />
+        <SubItem label={t('cbil.row.trade_receivables', locale)} current={creancesClients} prev={pCreances} drill={prefixRange('41')} />
+        <SubItem label={t('cbil.row.cash_bank', locale)} current={tresorerie} prev={pTreso} drill={prefixRange('5')} />
         <TotalRow label={t('cbil.row.total_current_assets', locale)} current={totalCurrentAssets} prev={pCurrentAssets} />
 
         <TotalRow label={t('cbil.row.total_assets', locale)} current={totalAssets} prev={pTotalAssets} grand />
 
         <SectionHeader label={t('cbil.sec.equity', locale)} />
-        <SubItem label={t('cbil.row.share_capital', locale)} current={capitauxPropres} prev={pCapitaux} />
+        <SubItem label={t('cbil.row.share_capital', locale)} current={capitauxPropres} prev={pCapitaux} drill={{ debut: '10', fin: '13999999' }} />
         <SubItem label={t('cbil.row.retained_earnings', locale)} current={retainedEarnings} prev={pRetained} />
         <TotalRow label={t('cbil.row.total_equity', locale)} current={totalEquity} prev={pEquity} />
 
         <SectionHeader label={t('cbil.sec.current_liabilities', locale)} />
-        <SubItem label={t('cbil.row.trade_payables', locale)} current={dettesFournisseurs} prev={pDettesFourn} />
-        <SubItem label={t('cbil.row.vat_payable', locale)} current={dettesFiscales} prev={pDettesFisc} />
-        <SubItem label={t('cbil.row.csg_payable', locale)} current={dettesSociales} prev={pDettesSoc} />
+        <SubItem label={t('cbil.row.trade_payables', locale)} current={dettesFournisseurs} prev={pDettesFourn} drill={prefixRange('40')} />
+        <SubItem label={t('cbil.row.vat_payable', locale)} current={dettesFiscales} prev={pDettesFisc} drill={prefixRange('44')} />
+        <SubItem label={t('cbil.row.csg_payable', locale)} current={dettesSociales} prev={pDettesSoc} drill={prefixRange('43')} />
         <TotalRow label={t('cbil.row.total_current_liabilities', locale)} current={totalCurrentLiabilities} prev={pCurrentLiab} />
 
         <TotalRow label={t('cbil.row.total_equity_liabilities', locale)} current={totalEquityAndLiabilities} prev={pTotal} grand />
@@ -269,7 +377,7 @@ function ProfitLossTable({ data, prevData, exercice, prevExercice, locale }: { d
       <TableBody>
         <SectionHeader label={t('cbil.sec.revenue', locale)} />
         {revenueDetails.map(([prefix, amount]) => (
-          <SubItem key={prefix} label={REVENUE_LABELS[prefix] || t('cbil.account_label', locale).replace('{prefix}', prefix)} current={amount} prev={prevData ? (prevRevenueByAccount[prefix] ?? 0) : undefined} />
+          <SubItem key={prefix} label={REVENUE_LABELS[prefix] || t('cbil.account_label', locale).replace('{prefix}', prefix)} current={amount} prev={prevData ? (prevRevenueByAccount[prefix] ?? 0) : undefined} drill={prefixRange(prefix)} />
         ))}
         {revenueDetails.length === 0 && (
           <TableRow>
@@ -282,7 +390,7 @@ function ProfitLossTable({ data, prevData, exercice, prevExercice, locale }: { d
         {allExpenseGroups.map((group) => {
           const prevGroup = prevExpenseGroups.find(g => g.label === group.label)
           return (
-            <SubItem key={group.label} label={`${group.label} (${group.range})`} current={-group.amount} prev={prevGroup ? -prevGroup.amount : (prevData ? 0 : undefined)} />
+            <SubItem key={group.label} label={`${group.label} (${group.range})`} current={-group.amount} prev={prevGroup ? -prevGroup.amount : (prevData ? 0 : undefined)} drill={parseGroupRange(group.range) ?? undefined} />
           )
         })}
         {allExpenseGroups.length === 0 && (
@@ -314,6 +422,7 @@ export default function BilanPage() {
   const [purging, setPurging] = useState(false)
   const [viewMode, setViewMode] = useState<"exercice" | "mensuel">("exercice")
   const [activeTab, setActiveTab] = useState("balance-sheet")
+  const [drillTarget, setDrillTarget] = useState<DrillTarget | null>(null)
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const n = new Date()
     return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`
@@ -480,6 +589,8 @@ export default function BilanPage() {
 
   return (
     <ClientPageShell hideHero disableParticles>
+    <DrillContext.Provider value={setDrillTarget}>
+    <DrillModal target={drillTarget} societeId={societeId} exercice={exercice} onClose={() => setDrillTarget(null)} locale={locale} />
     <div className="space-y-6 max-w-[900px] mx-auto">
       <style jsx global>{`
         @media print {
@@ -898,6 +1009,7 @@ export default function BilanPage() {
         </div>
       </div>
     </div>
+    </DrillContext.Provider>
     </ClientPageShell>
   )
 }
