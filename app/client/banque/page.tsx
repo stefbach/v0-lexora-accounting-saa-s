@@ -47,6 +47,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { useComptesLibelles } from "@/lib/accounting/use-comptes-libelles"
 import { t, getLocale, type Locale } from '@/lib/i18n'
 import {
   Tooltip,
@@ -114,6 +115,7 @@ function daysSince(d: string | null): number {
 export default function ClientBanquePage() {
   const locale = getLocale()
   const { societeId } = useSocieteActive()
+  const { libelle: compteLibelle } = useComptesLibelles(societeId)
   const [comptes, setComptes] = useState<CompteBancaire[]>([])
   const [releves, setReleves] = useState<ReleveBancaire[]>([])
   const [loading, setLoading] = useState(false)
@@ -380,9 +382,11 @@ export default function ClientBanquePage() {
                             <Badge variant="outline" className="text-[10px] font-mono">
                               {c.devise}
                             </Badge>
-                            <Badge variant="outline" className="text-[10px] font-mono">
-                              PCM {c.compte_comptable}
-                            </Badge>
+                            {c.compte_comptable && (
+                              <Badge variant="outline" className="text-[10px]">
+                                {compteLibelle(c.compte_comptable)}
+                              </Badge>
+                            )}
                             {c.compte_principal && (
                               <Badge className="text-[10px] bg-blue-100 text-blue-700 border border-blue-300">
                                 {t('acc.bnq.principal', locale)}
@@ -561,6 +565,7 @@ export default function ClientBanquePage() {
               maxRows={maxRows}
               setMaxRows={setMaxRows}
               locale={locale}
+              compteLibelle={compteLibelle}
             />
 
             {/* CTA Lex Banque */}
@@ -613,6 +618,7 @@ function TransactionsList({
   maxRows,
   setMaxRows,
   locale,
+  compteLibelle,
 }: {
   comptes: CompteBancaire[]
   releves: ReleveBancaire[]
@@ -625,6 +631,7 @@ function TransactionsList({
   maxRows: number
   setMaxRows: (n: number) => void
   locale: Locale
+  compteLibelle: (compte: string) => string
 }) {
   // Aplatit toutes les transactions de tous les relevés
   const allTx = useMemo(() => {
@@ -818,8 +825,8 @@ function TransactionsList({
                           </Badge>
                         )}
                         {tx.compte_comptable && (
-                          <Badge variant="outline" className="text-[10px] font-mono">
-                            PCM {tx.compte_comptable}
+                          <Badge variant="outline" className="text-[10px]">
+                            {compteLibelle(tx.compte_comptable)}
                           </Badge>
                         )}
                         {tx.lettre && (

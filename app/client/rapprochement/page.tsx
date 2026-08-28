@@ -1371,24 +1371,32 @@ function SourceBadge({ source }: { source: string | null | undefined }) {
   )
 }
 
+// Affichage neutre : le libellé seul est montré au client, le code PCG reste
+// interne (champ `compte`, utilisé par le moteur comptable).
 const RECLASS_OPTIONS_CLIENT: Array<{ value: string; compte: string; label: string }> = [
-  { value: "fournisseur", compte: "401", label: "401 — Fournisseur" },
-  { value: "client", compte: "411", label: "411 — Client" },
-  { value: "salaire_bulk", compte: "4210", label: "4210 — Salaires nets" },
-  { value: "charges_sociales", compte: "4421", label: "4421 — PAYE / MRA" },
-  { value: "nsf_csg", compte: "4431", label: "4431 — NSF / CSG" },
-  { value: "tva", compte: "4471", label: "4471 — TVA" },
-  { value: "inter_societe", compte: "451", label: "451 — Inter-sociétés (DDS ↔ OCC, groupe)" },
-  { value: "compte_courant_associe", compte: "455", label: "455 — CCA (Associé personne physique)" },
-  { value: "virement_interne", compte: "5800", label: "5800 — Intercompte (même société, 2 banques)" },
-  { value: "frais_bancaires", compte: "6271", label: "6271 — Services bancaires" },
-  { value: "interets", compte: "6611", label: "6611 — Intérêts" },
-  { value: "loyer", compte: "613", label: "613 — Locations / Loyer" },
-  { value: "electricite", compte: "6061", label: "6061 — Électricité / Eau" },
-  { value: "telecom", compte: "626", label: "626 — Télécommunications" },
-  { value: "assurance", compte: "616", label: "616 — Assurances" },
-  { value: "autre", compte: "658", label: "658 — Charges diverses" },
+  { value: "fournisseur", compte: "401", label: "Fournisseur" },
+  { value: "client", compte: "411", label: "Client" },
+  { value: "salaire_bulk", compte: "4210", label: "Salaires nets" },
+  { value: "charges_sociales", compte: "4421", label: "PAYE / MRA" },
+  { value: "nsf_csg", compte: "4431", label: "NSF / CSG" },
+  { value: "tva", compte: "4471", label: "TVA" },
+  { value: "inter_societe", compte: "451", label: "Inter-sociétés (groupe)" },
+  { value: "compte_courant_associe", compte: "455", label: "Compte courant associé" },
+  { value: "virement_interne", compte: "5800", label: "Virement interne (même société, 2 banques)" },
+  { value: "frais_bancaires", compte: "6271", label: "Services bancaires" },
+  { value: "interets", compte: "6611", label: "Intérêts" },
+  { value: "loyer", compte: "613", label: "Locations / Loyer" },
+  { value: "electricite", compte: "6061", label: "Électricité / Eau" },
+  { value: "telecom", compte: "626", label: "Télécommunications" },
+  { value: "assurance", compte: "616", label: "Assurances" },
+  { value: "autre", compte: "658", label: "Charges diverses" },
 ]
+
+/** Libellé neutre d'une reclassification (par compte ou par classification). */
+function reclassLabel(compte?: string | null, classification?: string | null): string {
+  const opt = RECLASS_OPTIONS_CLIENT.find(o => o.compte === compte || o.value === classification)
+  return opt?.label || classification || compte || "?"
+}
 
 function SuggestionRow({
   tx,
@@ -1492,10 +1500,10 @@ function SuggestionRow({
                     className="h-6 px-2 py-0 text-[10px] font-mono w-auto inline-flex min-w-[200px]"
                   >
                     <SelectValue>
-                      <span className="font-mono">
+                      <span>
                         {override
-                          ? `${override.compte} (${override.classification}) ✏️`
-                          : `${tx.compte_comptable || "?"} (${tx.classification || "?"})`}
+                          ? `${reclassLabel(override.compte, override.classification)} ✏️`
+                          : reclassLabel(tx.compte_comptable, tx.classification)}
                       </span>
                     </SelectValue>
                   </SelectTrigger>
@@ -1827,25 +1835,27 @@ function TxRow({
 // ── AffectDialog : imputation manuelle d'une tx orpheline ────────────
 // Deux modes : (a) lier à une facture existante, (b) imputer sur un compte PCM.
 
+// Affichage neutre : libellé seul côté client, le code PCG reste la `value`
+// (interne, utilisée par le moteur comptable).
 const PCM_PRESETS: Array<{ value: string; label: string; classification: string }> = [
-  { value: "6270", label: "6270 — Frais bancaires", classification: "frais_bancaires" },
-  { value: "6611", label: "6611 — Intérêts emprunts / agios", classification: "interets" },
-  { value: "5811", label: "5811 — Virements internes en cours", classification: "virement_interne" },
-  { value: "4210", label: "4210 — Rémunérations dues (salaires)", classification: "salaire_individuel" },
-  { value: "4310", label: "4310 — Sécurité sociale", classification: "charges_sociales" },
-  { value: "4330", label: "4330 — MRA / PAYE", classification: "paiement_mra" },
-  { value: "4455", label: "4455 — TVA à décaisser", classification: "tva" },
-  { value: "4671", label: "4671 — Compte courant associé (associé)", classification: "cca" },
-  { value: "4672", label: "4672 — Compte courant associé (groupe)", classification: "cca" },
-  { value: "451", label: "451 — Compte courant intersociétés (groupe)", classification: "interco" },
-  { value: "1681", label: "1681 — Emprunts auprès d'entreprises liées", classification: "interco_emprunt" },
-  { value: "2671", label: "2671 — Créances rattachées à des participations", classification: "interco_creance" },
-  { value: "411", label: "411 — Clients (créance)", classification: "client_divers" },
-  { value: "401", label: "401 — Fournisseurs (dette)", classification: "fournisseur_divers" },
-  { value: "1641", label: "1641 — Emprunts (remboursement)", classification: "remboursement_pret" },
-  { value: "627", label: "627 — Services bancaires (autre)", classification: "services_bancaires" },
-  { value: "658", label: "658 — Charges diverses gestion courante", classification: "autre_charge" },
-  { value: "758", label: "758 — Produits divers gestion courante", classification: "autre_produit" },
+  { value: "6270", label: "Frais bancaires", classification: "frais_bancaires" },
+  { value: "6611", label: "Intérêts emprunts / agios", classification: "interets" },
+  { value: "5811", label: "Virements internes en cours", classification: "virement_interne" },
+  { value: "4210", label: "Rémunérations dues (salaires)", classification: "salaire_individuel" },
+  { value: "4310", label: "Sécurité sociale", classification: "charges_sociales" },
+  { value: "4330", label: "MRA / PAYE", classification: "paiement_mra" },
+  { value: "4455", label: "TVA à décaisser", classification: "tva" },
+  { value: "4671", label: "Compte courant associé (associé)", classification: "cca" },
+  { value: "4672", label: "Compte courant associé (groupe)", classification: "cca" },
+  { value: "451", label: "Compte courant intersociétés (groupe)", classification: "interco" },
+  { value: "1681", label: "Emprunts auprès d'entreprises liées", classification: "interco_emprunt" },
+  { value: "2671", label: "Créances rattachées à des participations", classification: "interco_creance" },
+  { value: "411", label: "Clients (créance)", classification: "client_divers" },
+  { value: "401", label: "Fournisseurs (dette)", classification: "fournisseur_divers" },
+  { value: "1641", label: "Emprunts (remboursement)", classification: "remboursement_pret" },
+  { value: "627", label: "Services bancaires (autre)", classification: "services_bancaires" },
+  { value: "658", label: "Charges diverses gestion courante", classification: "autre_charge" },
+  { value: "758", label: "Produits divers gestion courante", classification: "autre_produit" },
 ]
 
 function AffectDialog({

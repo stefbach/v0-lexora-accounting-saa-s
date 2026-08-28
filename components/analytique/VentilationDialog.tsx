@@ -126,7 +126,7 @@ export function VentilationDialog({
         {!editing ? (
           <div className="space-y-3">
             <p className="text-sm text-slate-500">
-              Écritures de charge (classe 6) et de produit (classe 7) non encore affectées à une section.
+              Écritures de charges et de produits non encore affectées à une section.
               Répartissez-les sur vos sections analytiques.
             </p>
             {loading ? (

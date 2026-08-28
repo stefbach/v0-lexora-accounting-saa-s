@@ -129,6 +129,11 @@ function DrillModal({
   )
 }
 
+/** Affichage neutre : retire un code de compte en fin de libellé — « … (706) » → « … ». */
+function neutralLabel(s: string): string {
+  return s.replace(/\s*\(\d{2,4}\)\s*$/, "").trim()
+}
+
 // Revenue account labels
 const REVENUE_LABELS: Record<string, string> = {
   "706": "Prestations de services (706)",
@@ -377,7 +382,7 @@ function ProfitLossTable({ data, prevData, exercice, prevExercice, locale }: { d
       <TableBody>
         <SectionHeader label={t('cbil.sec.revenue', locale)} />
         {revenueDetails.map(([prefix, amount]) => (
-          <SubItem key={prefix} label={REVENUE_LABELS[prefix] || t('cbil.account_label', locale).replace('{prefix}', prefix)} current={amount} prev={prevData ? (prevRevenueByAccount[prefix] ?? 0) : undefined} drill={prefixRange(prefix)} />
+          <SubItem key={prefix} label={neutralLabel(REVENUE_LABELS[prefix] || t('cbil.account_label', locale).replace('{prefix}', prefix))} current={amount} prev={prevData ? (prevRevenueByAccount[prefix] ?? 0) : undefined} drill={prefixRange(prefix)} />
         ))}
         {revenueDetails.length === 0 && (
           <TableRow>
@@ -390,7 +395,7 @@ function ProfitLossTable({ data, prevData, exercice, prevExercice, locale }: { d
         {allExpenseGroups.map((group) => {
           const prevGroup = prevExpenseGroups.find(g => g.label === group.label)
           return (
-            <SubItem key={group.label} label={`${group.label} (${group.range})`} current={-group.amount} prev={prevGroup ? -prevGroup.amount : (prevData ? 0 : undefined)} drill={parseGroupRange(group.range) ?? undefined} />
+            <SubItem key={group.label} label={group.label} current={-group.amount} prev={prevGroup ? -prevGroup.amount : (prevData ? 0 : undefined)} drill={parseGroupRange(group.range) ?? undefined} />
           )
         })}
         {allExpenseGroups.length === 0 && (
