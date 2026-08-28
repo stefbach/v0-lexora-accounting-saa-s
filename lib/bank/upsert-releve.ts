@@ -16,6 +16,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { createEcritureSoldeOuvertureBancaire } from '@/lib/accounting/bank-opening-balance'
 
 export type UploadSource = 'web' | 'telegram' | 'api' | 'cron' | 'manual'
 
@@ -181,6 +182,48 @@ export async function upsertReleveBancaire(
     }
   } catch {
     // Best-effort : un échec du garde-fou ne doit pas faire échouer l'import.
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // À-nouveau du SOLDE D'OUVERTURE bancaire (bug remonté par un comptable).
+  // Le solde d'ouverture était stocké sur le relevé mais ne générait aucune
+  // écriture → le compte de banque du grand-livre n'affichait que les
+  // mouvements, jamais le solde de départ. On enregistre le solde d'ouverture
+  // du relevé LE PLUS ANCIEN du compte comme un à-nouveau (D 512 / C 1101),
+  // idempotent et avec garde-fou anti double-comptage (onboarding).
+  //
+  // Limite connue (v1) : si un relevé antérieur est importé APRÈS coup, l'à-
+  // nouveau n'est pas recalculé (il faut supprimer l'écriture ANBQ-<compte>
+  // ou passer par l'onboarding). Import chronologique = cas nominal.
+  try {
+    const { data: earliest } = await supabase
+      .from('releves_bancaires')
+      .select('solde_ouverture, date_debut')
+      .eq('compte_bancaire_id', input.compte_bancaire_id)
+      .is('superseded_by_id', null)
+      .not('date_debut', 'is', null)
+      .order('date_debut', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    if (earliest && earliest.date_debut) {
+      const { data: compte } = await supabase
+        .from('comptes_bancaires')
+        .select('compte_comptable, nom_compte, banque')
+        .eq('id', input.compte_bancaire_id)
+        .maybeSingle()
+
+      await createEcritureSoldeOuvertureBancaire(supabase, {
+        societe_id: input.societe_id,
+        compte_bancaire_id: input.compte_bancaire_id,
+        compte_comptable: compte?.compte_comptable ?? null,
+        nom_banque: compte?.nom_compte || compte?.banque || null,
+        solde_ouverture: Number(earliest.solde_ouverture) || 0,
+        date_ouverture: earliest.date_debut,
+      })
+    }
+  } catch {
+    // Best-effort : l'à-nouveau ne doit pas faire échouer l'import du relevé.
   }
 
   return {

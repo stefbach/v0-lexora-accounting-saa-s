@@ -23,11 +23,38 @@ import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
 import { validateProduitPayload } from '@/lib/inventaire/produits'
-import { createEcrituresForMouvementStock } from '@/lib/inventaire/ecritures'
+import { createEcritureStockInitial } from '@/lib/inventaire/ecritures'
 
 export const dynamic = 'force-dynamic'
 
 const MAX_ROWS = 1000
+
+/**
+ * Date d'ouverture d'exercice pour dater les à-nouveaux (stock initial).
+ * Priorité : exercice en cours (exercices_fiscaux) → date_debut_exercice de la
+ * société → 1er janvier de l'année courante en dernier recours.
+ */
+async function resolveDateOuverture(supabase: any, societeId: string): Promise<string> {
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: ex } = await supabase
+    .from('exercices_fiscaux')
+    .select('date_debut, date_fin')
+    .eq('societe_id', societeId)
+    .lte('date_debut', today)
+    .order('date_debut', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (ex?.date_debut) return ex.date_debut
+
+  const { data: soc } = await supabase
+    .from('societes')
+    .select('date_debut_exercice')
+    .eq('id', societeId)
+    .maybeSingle()
+  if (soc?.date_debut_exercice) return soc.date_debut_exercice
+
+  return `${today.slice(0, 4)}-01-01`
+}
 
 async function resolveDepot(supabase: any, societeId: string, depotId: string | null): Promise<string> {
   if (depotId) {
@@ -69,6 +96,11 @@ export async function POST(request: Request) {
     if (authError || !user) return apiError('unauthorized', 401)
 
     await assertSocieteAccess(supabase, user.id, societe_id)
+
+    // Date d'ouverture d'exercice — le stock initial est un à-nouveau, il
+    // doit être daté à l'ouverture de l'exercice (pas à la date d'import) et
+    // imputé au report à nouveau, pas à une charge de la classe 6.
+    const dateOuverture = await resolveDateOuverture(supabase, societe_id)
 
     let depotId: string
     try {
@@ -128,7 +160,7 @@ export async function POST(request: Request) {
           errors.push({ ligne, sku: payload.sku, error: `Stock initial: ${rpcError.message}` })
         } else {
           stockSeeded++
-          await createEcrituresForMouvementStock(
+          await createEcritureStockInitial(
             supabase,
             {
               id: String(rpcResult?.mouvement_id || ''),
@@ -139,6 +171,7 @@ export async function POST(request: Request) {
               quantite: stockInitial,
             },
             prod,
+            { dateOuverture },
           )
         }
       }

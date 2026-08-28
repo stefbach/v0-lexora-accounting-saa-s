@@ -2,10 +2,13 @@ import { describe, it, expect } from 'vitest'
 import { createMockSupabase } from '@/tests/__mocks__/supabase'
 import {
   buildEcrituresMouvementStock,
+  buildEcritureStockInitial,
   contrepartieMouvement,
   createEcrituresForMouvementStock,
+  createEcritureStockInitial,
   refFolioMouvement,
   nomCompteStock,
+  COMPTE_CONTREPARTIE_OUVERTURE,
   type MouvementPourEcritures,
 } from '@/lib/inventaire/ecritures'
 import type { TypeMouvement } from '@/lib/inventaire/types'
@@ -129,6 +132,82 @@ describe('buildEcrituresMouvementStock', () => {
     expect(lignes[0].libelle).toContain('Ciment 25kg')
     expect(lignes[0].libelle).toContain('CIM-25')
     expect(lignes[0].libelle).toContain('10')
+  })
+})
+
+describe('buildEcritureStockInitial (à-nouveau — anti profit fictif)', () => {
+  it('impute D stock / C 1101 (report à nouveau), journal AN — jamais un compte de charge 6xxx', () => {
+    const lignes = buildEcritureStockInitial(makeMouvement(), produit)
+    expect(lignes).toHaveLength(2)
+    expect(lignes[0]).toMatchObject({
+      numero_compte: '3701',
+      debit_mur: 1000,
+      credit_mur: 0,
+      journal: 'AN',
+      ref_folio: 'STK-mvt-1',
+    })
+    expect(lignes[1]).toMatchObject({
+      numero_compte: COMPTE_CONTREPARTIE_OUVERTURE,
+      debit_mur: 0,
+      credit_mur: 1000,
+      journal: 'AN',
+    })
+    // La contrepartie ne doit JAMAIS être une charge (classe 6) : c'est ce qui
+    // créait un résultat fictif égal à la valeur du stock.
+    expect(lignes[1].numero_compte.startsWith('6')).toBe(false)
+    expect(sums(lignes)).toEqual({ debit: 1000, credit: 1000 })
+  })
+
+  it('date l\'écriture à la date d\'ouverture d\'exercice fournie (pas la date d\'import)', () => {
+    const lignes = buildEcritureStockInitial(
+      makeMouvement({ date_mouvement: '2026-08-27' }),
+      produit,
+      { dateOuverture: '2024-07-01' },
+    )
+    expect(lignes[0].date_ecriture).toBe('2024-07-01')
+    expect(lignes[0].exercice).toBe('2024')
+    expect(lignes[1].date_ecriture).toBe('2024-07-01')
+  })
+
+  it('respecte le compte de stock personnalisé et une contrepartie custom', () => {
+    const lignes = buildEcritureStockInitial(
+      makeMouvement(),
+      { ...produit, compte_stock: '3702' },
+      { compteContrepartie: '110' },
+    )
+    expect(lignes[0].numero_compte).toBe('3702')
+    expect(lignes[1].numero_compte).toBe('110')
+  })
+
+  it('valeur nulle — aucune écriture', () => {
+    expect(buildEcritureStockInitial(makeMouvement({ valeur_mouvement: 0 }), produit)).toEqual([])
+  })
+})
+
+describe('createEcritureStockInitial', () => {
+  it('insère l\'à-nouveau équilibré (journal AN) avec dossier_id résolu', async () => {
+    const supabase = createMockSupabase()
+    supabase._seed('dossiers', [{ id: 'doss-1', societe_id: 'soc-1' }])
+    const res = await createEcritureStockInitial(supabase, makeMouvement(), produit, {
+      dateOuverture: '2024-07-01',
+    })
+    expect(res).toEqual({ ok: true, nb_entries: 2 })
+    const rows = supabase._state.tables['ecritures_comptables_v2']
+    expect(rows).toHaveLength(2)
+    expect(rows.every((r: any) => r.journal === 'AN')).toBe(true)
+    expect(rows.find((r: any) => r.numero_compte === COMPTE_CONTREPARTIE_OUVERTURE)).toBeTruthy()
+    expect(rows.every((r: any) => r.date_ecriture === '2024-07-01')).toBe(true)
+    expect(sums(rows)).toEqual({ debit: 1000, credit: 1000 })
+  })
+
+  it('idempotent — pas de doublon si le ref_folio existe déjà', async () => {
+    const supabase = createMockSupabase()
+    supabase._seed('ecritures_comptables_v2', [
+      { id: 'e-1', societe_id: 'soc-1', ref_folio: 'STK-mvt-1' },
+    ])
+    const res = await createEcritureStockInitial(supabase, makeMouvement(), produit)
+    expect(res).toEqual({ ok: true, nb_entries: 0 })
+    expect(supabase._state.tables['ecritures_comptables_v2']).toHaveLength(1)
   })
 })
 
