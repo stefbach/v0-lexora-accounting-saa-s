@@ -557,13 +557,22 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { action } = body
 
-    // Tenant isolation — verify user has access to the requested societe_id
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-    const { data: userSocietes } = await supabase.from('user_societes').select('societe_id').eq('user_id', user.id)
-    const allowedIds = userSocietes?.map(s => s.societe_id) || []
+    // Tenant isolation — verify user has access to the requested societe_id.
+    // On utilise assertSocieteAccess (les 7 voies d'accès : user_societes,
+    // societes.created_by, dossiers.client_id/comptable_id, comptable_societes,
+    // societes.comptable_id, cabinet_collaborateurs_acces) — cohérent avec le
+    // handler GET et /reclassify. L'ancien contrôle ne regardait QUE
+    // user_societes : un client propriétaire de sa société (via created_by,
+    // sans ligne user_societes) recevait un 403 Forbidden dès qu'il modifiait
+    // un rapprochement ou rapprochait des frais bancaires.
     const requestedId = body.societe_id || body.societeId
-    if (requestedId && !allowedIds.includes(requestedId) && !['admin', 'super_admin'].includes(profile?.role || '')) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (requestedId) {
+      try {
+        await assertSocieteAccess(supabase, user.id, requestedId)
+      } catch (err) {
+        if (err instanceof SocieteAccessError) return apiError('access_denied_company', 403)
+        throw err
+      }
     }
 
     // === AUTO-RAPPROCHEMENT INTELLIGENT (4 phases) ===
