@@ -129,6 +129,7 @@ const MENU: MenuSection[] = [
       { href: "/client/grand-livre", label: "Grand Livre", labelKey: "comp.client_sidebar.general_ledger", icon: BookOpen },
       { href: "/client/ecritures", label: "Écritures (édition)", labelKey: "comp.client_sidebar.entries_edit", icon: BookOpen },
       { href: "/client/plan-comptable", label: "Plan Comptable", labelKey: "comp.client_sidebar.chart_accounts", icon: BookOpen },
+      { href: "/client/immobilisations", label: "Immobilisations", icon: Building2 },
       { href: "/client/salaires-compta", label: "Salaires", labelKey: "comp.client_sidebar.salaries", icon: CreditCard },
       { href: "/client/compte-courant", label: "Comptes Courants Associés", labelKey: "acc.current_accounts", icon: Users },
     ]
