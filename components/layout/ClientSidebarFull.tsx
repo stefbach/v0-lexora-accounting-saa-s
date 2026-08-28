@@ -16,7 +16,7 @@ import {
   Settings, LogOut, ChevronDown, ChevronRight, FileSpreadsheet,
   Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
   CalendarDays, FilePlus2, SlidersHorizontal, Menu, X, FilePen, UserCircle,
-  Sparkles, Package, Send, Repeat, MessageCircle, Mail, Inbox, KeyRound, ArrowRightLeft,
+  Sparkles, Package, Send, Repeat, MessageCircle, Mail, Inbox, KeyRound, ArrowRightLeft, Ship,
   TrendingUp, FolderKanban, ShieldCheck, ShoppingCart, Layers, Factory, Briefcase
 } from "lucide-react"
 
@@ -139,6 +139,7 @@ const MENU: MenuSection[] = [
     requiredModule: "comptabilite",
     items: [
       { href: "/client/inventaire", label: "Inventaire & Stock", icon: Package },
+      { href: "/client/inventaire/reception-import", label: "Réception import (coût de revient)", icon: Ship },
       { href: "/client/pos", label: "Point de vente", icon: ShoppingCart },
       { href: "/client/manufacturing", label: "Production", icon: Factory },
       { href: "/client/jobs", label: "Chantiers & affaires", icon: Briefcase },
