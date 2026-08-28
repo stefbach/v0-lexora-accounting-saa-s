@@ -125,6 +125,7 @@ const MENU: MenuSection[] = [
       { href: "/client/banque", label: "Banque", labelKey: "acc.bank", icon: Banknote },
       { href: "/client/rapprochement", label: "Rapprochement & Lettrage", labelKey: "acc.reconciliation", icon: CreditCard },
       { href: "/client/rapprochement-mensuel", label: "Rapprochement mensuel", labelKey: "clay.monthly_reconciliation", icon: Calendar },
+      { href: "/client/rapprochement-carte", label: "Règlement carte agrégé", icon: CreditCard },
       { href: "/client/virements", label: "Virements", labelKey: "clay.transfers", icon: ArrowRightLeft },
       { href: "/client/grand-livre", label: "Grand Livre", labelKey: "comp.client_sidebar.general_ledger", icon: BookOpen },
       { href: "/client/ecritures", label: "Écritures (édition)", labelKey: "comp.client_sidebar.entries_edit", icon: BookOpen },
