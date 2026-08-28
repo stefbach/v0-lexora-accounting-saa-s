@@ -25,11 +25,22 @@ export const COMPTE_VARIATION_DEFAUT = '6037'
 export const COMPTE_PERTES_STOCK = '6586'
 export const COMPTE_ECARTS_INVENTAIRE = '6588'
 
+/**
+ * Contrepartie des à-nouveaux (solde d'ouverture). Un stock initial n'est PAS
+ * un achat de la période : c'est un solde d'ouverture qui doit s'imputer sur
+ * les capitaux propres (report à nouveau), jamais sur un compte de charge de
+ * la classe 6 — sinon on crée un résultat fictif (une entrée D3701/C6037 sans
+ * la charge d'achat 607 en face gonfle le résultat du montant du stock).
+ * Même compte que la RPC `enregistrer_soldes_ouverture` (journal AN).
+ */
+export const COMPTE_CONTREPARTIE_OUVERTURE = '1101'
+
 const NOMS_COMPTES: Record<string, string> = {
   [COMPTE_STOCK_DEFAUT]: 'Stock de marchandises',
   [COMPTE_VARIATION_DEFAUT]: 'Variation des stocks de marchandises',
   [COMPTE_PERTES_STOCK]: 'Pertes sur stocks',
   [COMPTE_ECARTS_INVENTAIRE]: 'Écarts d\'inventaire',
+  [COMPTE_CONTREPARTIE_OUVERTURE]: 'Report à nouveau — solde d\'ouverture',
 }
 
 export function nomCompteStock(compte: string): string {
@@ -40,7 +51,7 @@ export interface EcritureStockLine {
   societe_id: string
   dossier_id: string | null
   date_ecriture: string
-  journal: 'OD'
+  journal: 'OD' | 'AN'
   ref_folio: string
   numero_compte: string
   nom_compte: string
@@ -155,6 +166,108 @@ export function buildEcrituresMouvementStock(
     throw new Error('R1 violée — écriture de stock déséquilibrée')
   }
   return lignes
+}
+
+/**
+ * Écriture de STOCK INITIAL (solde d'ouverture d'un import).
+ *
+ * Un stock initial n'est pas une entrée d'achat de la période : c'est un
+ * à-nouveau. La contrepartie est le report à nouveau (capitaux propres),
+ * journal AN, à la date d'ouverture de l'exercice — pas un compte de
+ * variation de stock (classe 6), qui gonflerait le résultat d'un profit
+ * fictif égal à la valeur du stock.
+ *
+ *   D <compte_stock>   (actif — bilan)
+ *   C 1101             (capitaux propres — bilan)
+ */
+export function buildEcritureStockInitial(
+  mouvement: MouvementPourEcritures,
+  produit: ProduitPourEcritures,
+  opts?: { compteContrepartie?: string; dateOuverture?: string },
+): EcritureStockLine[] {
+  const valeur = round2(mouvement.valeur_mouvement)
+  if (valeur <= 0) return []
+
+  const compteStock = produit.compte_stock || COMPTE_STOCK_DEFAUT
+  const compteContrepartie = opts?.compteContrepartie || COMPTE_CONTREPARTIE_OUVERTURE
+  const dateEcriture = opts?.dateOuverture || mouvement.date_mouvement
+
+  const libelle =
+    `Stock initial (à-nouveau) — ${produit.designation} (${produit.sku}) × ${mouvement.quantite}`
+  const base = {
+    societe_id: mouvement.societe_id,
+    dossier_id: mouvement.dossier_id ?? null,
+    date_ecriture: dateEcriture,
+    journal: 'AN' as const,
+    ref_folio: refFolioMouvement(mouvement.id),
+    libelle,
+    description: libelle,
+    exercice: dateEcriture.slice(0, 4),
+  }
+
+  const lignes: EcritureStockLine[] = [
+    {
+      ...base,
+      numero_compte: compteStock,
+      nom_compte: nomCompteStock(compteStock),
+      debit_mur: valeur,
+      credit_mur: 0,
+    },
+    {
+      ...base,
+      numero_compte: compteContrepartie,
+      nom_compte: nomCompteStock(compteContrepartie),
+      debit_mur: 0,
+      credit_mur: valeur,
+    },
+  ]
+
+  if (!isBalanced(lignes.map((l) => l.debit_mur), lignes.map((l) => l.credit_mur))) {
+    throw new Error('R1 violée — écriture de stock initial déséquilibrée')
+  }
+  return lignes
+}
+
+/**
+ * Insère l'écriture de stock initial (à-nouveau) — même idempotence par
+ * ref_folio que createEcrituresForMouvementStock, mais imputée sur le report
+ * à nouveau (journal AN) et non sur la variation de stock.
+ */
+export async function createEcritureStockInitial(
+  supabase: SupabaseClient,
+  mouvement: MouvementPourEcritures | MouvementStock,
+  produit: ProduitPourEcritures,
+  opts?: { compteContrepartie?: string; dateOuverture?: string },
+): Promise<{ ok: boolean; nb_entries: number; error?: string }> {
+  try {
+    let dossierId = mouvement.dossier_id ?? null
+    if (!dossierId) {
+      const { data: dossier } = await supabase
+        .from('dossiers')
+        .select('id')
+        .eq('societe_id', mouvement.societe_id)
+        .limit(1)
+        .maybeSingle()
+      dossierId = dossier?.id || null
+    }
+
+    const lignes = buildEcritureStockInitial({ ...mouvement, dossier_id: dossierId }, produit, opts)
+    if (lignes.length === 0) return { ok: true, nb_entries: 0 }
+
+    const { data: existing } = await supabase
+      .from('ecritures_comptables_v2')
+      .select('id')
+      .eq('societe_id', mouvement.societe_id)
+      .eq('ref_folio', refFolioMouvement(mouvement.id))
+      .limit(1)
+    if (existing && existing.length > 0) return { ok: true, nb_entries: 0 }
+
+    const { error } = await supabase.from('ecritures_comptables_v2').insert(lignes)
+    if (error) return { ok: false, nb_entries: 0, error: error.message }
+    return { ok: true, nb_entries: lignes.length }
+  } catch (e: any) {
+    return { ok: false, nb_entries: 0, error: e?.message || 'Erreur inconnue' }
+  }
 }
 
 /**
