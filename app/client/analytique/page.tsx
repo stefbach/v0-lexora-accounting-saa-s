@@ -144,8 +144,8 @@ export default function AnalytiquePage() {
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-            <KpiCard label="Produits analytiques" value={fmt(totals.produits)} icon={TrendingUp} color={TEAL} hint="Comptes classe 7" />
-            <KpiCard label="Charges analytiques" value={fmt(totals.charges)} icon={TrendingDown} color={RED} hint="Comptes classe 6" />
+            <KpiCard label="Produits analytiques" value={fmt(totals.produits)} icon={TrendingUp} color={TEAL} hint="Produits" />
+            <KpiCard label="Charges analytiques" value={fmt(totals.charges)} icon={TrendingDown} color={RED} hint="Charges" />
             <KpiCard label="Marge globale" value={fmt(totals.marge)} icon={Wallet} color={totals.marge < 0 ? RED : GOLD} hint="Produits − charges" />
             <KpiCard label="Sections actives" value={totals.actives} icon={Layers} color={NAVY} hint={`${sections.length} au total`} />
           </div>

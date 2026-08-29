@@ -135,7 +135,7 @@ export default function SalairesComptaPage() {
         </CardContent></Card>
         {/* NOUVEAU : charges patronales — manquaient dans le récap du haut */}
         <Card className="border-l-4 border-l-orange-500"><CardContent className="p-4">
-          <p className="text-xs text-gray-400">{locale === 'fr' ? '645 — Charges patronales' : '645 — Employer charges'}</p>
+          <p className="text-xs text-gray-400">{locale === 'fr' ? 'Charges patronales' : 'Employer charges'}</p>
           <p className="text-2xl font-bold text-orange-600">{fmt(totalCharges)} MUR</p>
           <p className="text-xs text-gray-400 mt-1">CSG {fmt(totalCSGPat)} • NSF {fmt(totalNSFPat)} • Levy {fmt(totalLevy)} • PRGF {fmt(totalPrgf)}</p>
         </CardContent></Card>

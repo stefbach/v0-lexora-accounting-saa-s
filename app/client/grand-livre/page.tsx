@@ -598,6 +598,11 @@ export default function ClientGrandLivrePage() {
                                         >
                                           {afficherCompte({ compte: c.numero_compte, libelle: c.libelle })}
                                         </Badge>
+                                        {c.libelle && (
+                                          <span className="text-[10px] text-muted-foreground/60 font-mono" title="Code interne">
+                                            {c.numero_compte}
+                                          </span>
+                                        )}
                                         <span className="text-xs text-muted-foreground">
                                           {c.nb_ecritures} {c.nb_ecritures > 1 ? t('acc.gl.entry_plural', locale) : t('acc.gl.entry_singular', locale)}
                                         </span>
