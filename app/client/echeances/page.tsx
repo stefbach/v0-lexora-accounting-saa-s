@@ -26,6 +26,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { ConformiteMRA } from "@/components/compliance/ConformiteMRA"
 import { t, getLocale } from "@/lib/i18n"
 
 interface Facture {
@@ -187,6 +188,9 @@ export default function ClientEcheancesPage() {
           </div>
         ) : (
           <>
+            {/* Obligations fiscales & sociales MRA (cible dirigeant autonome) */}
+            <ConformiteMRA societeId={societeId} />
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <KpiCard
                 label={t('mra.echeances.kpi_overdue', locale)}
