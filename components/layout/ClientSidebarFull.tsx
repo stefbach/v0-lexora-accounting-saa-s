@@ -94,6 +94,7 @@ const MENU: MenuSection[] = [
     section: "Mon Espace", sectionKey: "nav.my_space",
     items: [
       { href: "/client/tableau-de-bord", label: "Tableau de bord", labelKey: "nav.dashboard", icon: LayoutDashboard },
+      { href: "/client/synthese-mensuelle", label: "Synthèse du mois", icon: BarChart3 },
       { href: "/client/societes", label: "Mes Sociétés", labelKey: "nav.companies", icon: Building2 },
       { href: "/client/documents", label: "Documents & OCR", labelKey: "nav.documents", icon: FileText },
       { href: "/client/lex-ocr", label: "Lex OCR (contrôle)", labelKey: "comp.client_sidebar.lex_ocr", icon: Sparkles },
