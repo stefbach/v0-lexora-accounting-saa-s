@@ -361,7 +361,7 @@ export default function DemarragePage() {
                       <Sparkles className="h-4 w-4" /> Pour aller plus loin (facultatif)
                     </p>
                     <p>
-                      • Saisissez vos <Link href="/client/echeances" className="underline">soldes d'ouverture</Link> pour un bilan exact.
+                      • Saisissez vos <Link href="/onboarding/soldes-ouverture" className="underline">soldes d'ouverture</Link> pour un bilan exact.
                     </p>
                     <p>
                       • Si vous employez du personnel, ajoutez vos <Link href="/rh/employes" className="underline">salariés</Link> (paie + déclarations MRA).
