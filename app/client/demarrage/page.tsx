@@ -44,7 +44,7 @@ const SECTEURS = [
 
 const STEP_ICONS = [Building2, Landmark, FileText, PartyPopper]
 
-interface Signals extends OnboardingSignals {}
+type Signals = OnboardingSignals
 interface SocieteProfil {
   id: string
   nom?: string
