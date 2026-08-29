@@ -71,7 +71,7 @@ export function computeChecklist(s: OnboardingSignals): ChecklistResult {
       description: "Solde de banque, clients et fournisseurs au démarrage — pour un bilan exact.",
       fait: s.soldes_ouverture,
       optionnel: false,
-      lien: '/client/echeances',
+      lien: '/onboarding/soldes-ouverture',
     },
     {
       key: 'salaries',
