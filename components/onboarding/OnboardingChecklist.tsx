@@ -56,6 +56,11 @@ export function OnboardingChecklist({ societeId }: { societeId: string | null })
         </button>
       </CardHeader>
       <CardContent className="space-y-1.5">
+        <Link href="/client/demarrage" className="block">
+          <Button size="sm" className="w-full mb-1.5 bg-indigo-600 hover:bg-indigo-700 text-white">
+            <Rocket className="h-3.5 w-3.5 mr-1.5" /> Lancer l'assistant guidé
+          </Button>
+        </Link>
         {data.items.map(item => (
           <div key={item.key} className={`flex items-center justify-between gap-3 p-2 rounded ${item.fait ? "opacity-60" : "hover:bg-white"}`}>
             <div className="flex items-center gap-2.5 min-w-0">

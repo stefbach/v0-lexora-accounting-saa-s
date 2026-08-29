@@ -210,6 +210,10 @@ export async function PATCH(request: Request) {
     if (body.numero_tva_mra !== undefined) updateData.numero_tva_mra = body.numero_tva_mra || null
     if (body.statut_tva !== undefined) updateData.statut_tva = body.statut_tva
     if (body.secteur_activite !== undefined) updateData.secteur_activite = body.secteur_activite || null
+    // Exercice comptable (mig 006/014) — nécessaire pour les échéances MRA et le
+    // profil de démarrage (assistant / checklist). Champs DATE, facultatifs.
+    if (body.date_debut_exercice !== undefined) updateData.date_debut_exercice = body.date_debut_exercice || null
+    if (body.date_fin_exercice !== undefined) updateData.date_fin_exercice = body.date_fin_exercice || null
     if (body.adresse !== undefined) updateData.adresse = body.adresse || null
     if (body.telephone !== undefined) updateData.telephone = body.telephone || null
     if (body.email !== undefined) updateData.email = body.email || null
