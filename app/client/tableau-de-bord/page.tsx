@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useProfile } from "@/hooks/use-profile"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { ConformiteMRA } from "@/components/compliance/ConformiteMRA"
+import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -267,6 +268,9 @@ export default function TableauDeBord() {
 
       {societeId && (
         <>
+          {/* Onboarding : checklist de mise en route (se masque une fois terminée) */}
+          <OnboardingChecklist societeId={societeId} />
+
           {/* ROW 1: Ce mois — 7 KPIs */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
