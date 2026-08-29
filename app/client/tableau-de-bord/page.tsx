@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useProfile } from "@/hooks/use-profile"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { ConformiteMRA } from "@/components/compliance/ConformiteMRA"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -390,6 +391,9 @@ export default function TableauDeBord() {
               </CardContent>
             </Card>
           )}
+
+          {/* Conformité MRA — « suis-je en règle ? » (cible dirigeant autonome) */}
+          <ConformiteMRA societeId={societeId} />
 
           {/* Alertes & Rappels */}
           <div id="alertes-section">
