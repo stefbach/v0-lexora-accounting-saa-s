@@ -177,6 +177,17 @@ export async function POST(request: Request) {
       allBulletins = allBulletins.filter((b: any) => !excludeSet.has(b.employe_id))
     }
 
+    // Bug OCC — un bulletin à salaire net 0 (ex: consultant géré uniquement
+    // pour le planning, sans rémunération) n'a rien à virer et n'a en général
+    // pas de coordonnées bancaires saisies. Le laisser dans le fichier de
+    // virement le faisait tomber dans la branche "banque inconnue"
+    // (normaliserCodeBanque(null) = 'SANS_BANQUE', absente de la table des
+    // codes MCB BP) → genererVirementMCB_BPV1 levait BankCodeMissingError et
+    // bloquait la génération du virement pour TOUTE la société, pas
+    // seulement pour cet employé. Rien à transférer pour un net à 0 : on
+    // l'exclut en amont, avant toute construction de fichier.
+    allBulletins = allBulletins.filter((b: any) => Number(b.salaire_net) > 0)
+
     if (allBulletins.length === 0) {
       return NextResponse.json({
         error: `Aucun bulletin pour ${periode}. Importez ou calculez les bulletins d'abord.`,
