@@ -148,32 +148,32 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     // actuel est TOUJOURS employes.salaire_base — source de vérité
     // unique, modifiable depuis l'UI (cf. FIX 1).
     //
-    // Garde-fou : rejet si salaire_base invalide (NaN, <= 0) pour
-    // éviter l'écrasement accidentel à 0.
+    // Garde-fou : rejet si salaire_base invalide (NaN, < 0) pour éviter
+    // l'écrasement accidentel à 0 — SAUF pour un collaborateur exclure_mra
+    // (ex: consultant géré uniquement pour le planning, sans rémunération),
+    // où un salaire à 0 est légitime et ne doit pas bloquer la sauvegarde
+    // de sa fiche.
     let oldSalaire: number | null = null
     if (body.salaire_base !== undefined) {
       const n = Number(body.salaire_base)
-      if (!Number.isFinite(n) || n <= 0) {
+      // Sprint 9 BUG 2 — capturer l'ancien salaire AVANT update pour décider
+      // s'il faut recalculer les bulletins non verrouillés ; réutilisé aussi
+      // pour la vérification exclure_mra ci-dessous (une seule requête).
+      const { data: current } = await supabase
+        .from('employes').select('salaire_base, exclure_mra').eq('id', id).maybeSingle()
+      const estExclureMra = body.exclure_mra === true || current?.exclure_mra === true
+      if (!Number.isFinite(n) || n < 0 || (n === 0 && !estExclureMra)) {
         return NextResponse.json({
           error: 'salaire_base invalide — valeur > 0 requise pour éviter d\'écraser le salaire à 0',
         }, { status: 400 })
       }
       // Salaire minimum (Finance Act 2024 : 16 500 MUR)
-      if (n < 16500 && !body.exclure_mra) {
-        // Vérifier si l'employé est exclure_mra avant de bloquer
-        const { data: currentEmp } = await supabase.from('employes')
-          .select('exclure_mra').eq('id', id).maybeSingle()
-        if (!currentEmp?.exclure_mra) {
-          return NextResponse.json({
-            error: `Salaire inférieur au minimum légal (${n} MUR < 16 500 MUR — Finance Act 2024).`,
-          }, { status: 400 })
-        }
+      if (n > 0 && n < 16500 && !estExclureMra) {
+        return NextResponse.json({
+          error: `Salaire inférieur au minimum légal (${n} MUR < 16 500 MUR — Finance Act 2024).`,
+        }, { status: 400 })
       }
       body.salaire_base = n
-      // Sprint 9 BUG 2 — capturer l'ancien salaire AVANT update pour décider
-      // s'il faut recalculer les bulletins non verrouillés.
-      const { data: current } = await supabase
-        .from('employes').select('salaire_base').eq('id', id).maybeSingle()
       oldSalaire = Number(current?.salaire_base) || 0
     }
     // motif_revision_salaire n'est pas une colonne employes → ne pas l'envoyer
