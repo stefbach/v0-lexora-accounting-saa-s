@@ -27,8 +27,9 @@ describe('getMauritiusHolidaysWithNames', () => {
   })
 
   it('returns only fixed holidays for years without variable data', () => {
-    // 2030 has no variable seed → only the 8 fixed ones
-    expect(getMauritiusHolidaysWithNames(2030)).toHaveLength(8)
+    // 2030 has no variable seed → only the 7 truly-fixed ones (le férié
+    // chrétien Assomption/Toussaint est annuel, cf. VARIABLE_HOLIDAYS).
+    expect(getMauritiusHolidaysWithNames(2030)).toHaveLength(7)
   })
 })
 
