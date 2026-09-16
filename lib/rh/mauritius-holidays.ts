@@ -68,7 +68,9 @@ const VARIABLE_HOLIDAYS: Record<number, Holiday[]> = {
     { date: '2026-03-19', name: 'Ougadi' },
     { date: '2026-03-21', name: 'Eid-Ul-Fitr' },
     { date: '2026-08-15', name: 'Assumption' },
-    { date: '2026-09-16', name: 'Ganesh Chaturthi' },
+    // Ganesh Chaturthi 2026 : déplacé du 16/09 au 15/09 par arrêté du Cabinet
+    // (General Notice No. 611 of 2026, PMO). Date officielle = mardi 15/09.
+    { date: '2026-09-15', name: 'Ganesh Chaturthi' },
     { date: '2026-11-08', name: 'Divali' },
   ],
   // Dates officielles 2027 (arrêté du Cabinet Maurice) — alignées sur la table
