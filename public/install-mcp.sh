@@ -11,7 +11,7 @@ set -euo pipefail
 
 INSTALL_DIR="${LEXORA_MCP_DIR:-$HOME/.lexora-mcp}"
 REPO_URL="${LEXORA_MCP_REPO:-https://github.com/stefbach/v0-lexora-accounting-saa-s.git}"
-BRANCH="${LEXORA_MCP_BRANCH:-claude/lexora-ifrs-realtime-editable-mcp}"
+BRANCH="${LEXORA_MCP_BRANCH:-main}"
 
 if [[ -t 1 ]]; then
   C_OK=$'\033[0;32m'; C_WARN=$'\033[1;33m'; C_ERR=$'\033[0;31m'
@@ -64,6 +64,8 @@ read -p "URL de ton instance Lexora (ex: https://lexora.vercel.app) : " LEXORA_U
 read -p "Ta clé API Lexora (format lex_...)                          : " LEXORA_KEY < "$PROMPT_IN"
 
 [[ -z "$LEXORA_URL" || -z "$LEXORA_KEY" ]] && { err "URL et clé requises."; exit 1; }
+[[ "$LEXORA_URL" == lex_* ]] && { err "Tu as collé la clé API dans le champ URL. L'URL doit ressembler à https://lexora.vercel.app."; exit 1; }
+[[ ! "$LEXORA_URL" =~ ^https?:// ]] && { err "URL invalide : elle doit commencer par https:// (ex: https://lexora.vercel.app)."; exit 1; }
 [[ "$LEXORA_KEY" != lex_* ]] && { err "La clé doit commencer par 'lex_'. Génère-en une depuis ton Lexora → Direction → Connecter à Claude Desktop."; exit 1; }
 LEXORA_URL="${LEXORA_URL%/}"
 
@@ -71,9 +73,10 @@ LEXORA_URL="${LEXORA_URL%/}"
 printf "\n"
 if [[ -d "$INSTALL_DIR/.git" ]]; then
   info "MAJ Lexora MCP dans $INSTALL_DIR..."
-  git -C "$INSTALL_DIR" fetch --quiet
-  git -C "$INSTALL_DIR" checkout --quiet "$BRANCH"
-  git -C "$INSTALL_DIR" pull --quiet
+  # fetch explicite : les anciennes installs sont des clones --single-branch
+  # d'une autre branche, un simple checkout "$BRANCH" échouerait.
+  git -C "$INSTALL_DIR" fetch --quiet origin "$BRANCH"
+  git -C "$INSTALL_DIR" checkout --quiet -f -B "$BRANCH" FETCH_HEAD
 else
   info "Clone Lexora MCP dans $INSTALL_DIR (peut prendre 30s)..."
   git clone --quiet --branch "$BRANCH" --single-branch "$REPO_URL" "$INSTALL_DIR"

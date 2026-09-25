@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 
 $InstallDir = if ($env:LEXORA_MCP_DIR) { $env:LEXORA_MCP_DIR } else { "$env:USERPROFILE\.lexora-mcp" }
 $RepoUrl    = if ($env:LEXORA_MCP_REPO) { $env:LEXORA_MCP_REPO } else { 'https://github.com/stefbach/v0-lexora-accounting-saa-s.git' }
-$Branch     = if ($env:LEXORA_MCP_BRANCH) { $env:LEXORA_MCP_BRANCH } else { 'claude/lexora-ifrs-realtime-editable-mcp' }
+$Branch     = if ($env:LEXORA_MCP_BRANCH) { $env:LEXORA_MCP_BRANCH } else { 'main' }
 $ConfigPath = "$env:APPDATA\Claude\claude_desktop_config.json"
 
 function Info($msg)  { Write-Host "▸ $msg" -ForegroundColor Cyan }
@@ -37,16 +37,26 @@ Ok "Node.js $(node -v), npm $(npm -v)"
 
 # ── 2. Saisie des paramètres ──────────────────────────────────────────
 Write-Host ""
-Write-Host "Paramètres Lexora (3 champs requis, 1 optionnel)" -ForegroundColor White -BackgroundColor DarkBlue
+Write-Host "Paramètres Lexora (2 champs)" -ForegroundColor White -BackgroundColor DarkBlue
 Write-Host ""
 
-$LexoraUrl   = Read-Host "URL de ton instance Lexora (ex: https://lexora.vercel.app)"
-$LexoraToken = Read-Host "Token interne (variable INTERNAL_API_TOKEN côté Vercel)"
-$LexoraUid   = Read-Host "Ton UUID utilisateur Lexora"
-$LexoraEmail = Read-Host "Ton email (optionnel)"
+$LexoraUrl = (Read-Host "URL de ton instance Lexora (ex: https://lexora.vercel.app)").Trim()
+$LexoraKey = (Read-Host "Ta clé API Lexora (format lex_...)").Trim()
 
-if (-not $LexoraUrl -or -not $LexoraToken -or -not $LexoraUid) {
-  Err "Les 3 premiers champs sont obligatoires. Abandon."
+if (-not $LexoraUrl -or -not $LexoraKey) {
+  Err "URL et clé requises. Abandon."
+  exit 1
+}
+if ($LexoraUrl.StartsWith('lex_')) {
+  Err "Tu as collé la clé API dans le champ URL. L'URL doit ressembler à https://lexora.vercel.app."
+  exit 1
+}
+if ($LexoraUrl -notmatch '^https?://') {
+  Err "URL invalide : elle doit commencer par https:// (ex: https://lexora.vercel.app)."
+  exit 1
+}
+if (-not $LexoraKey.StartsWith('lex_')) {
+  Err "La clé doit commencer par 'lex_'. Génère-en une depuis ton Lexora → Direction → Connecter à Claude Desktop."
   exit 1
 }
 
@@ -57,9 +67,10 @@ $LexoraUrl = $LexoraUrl.TrimEnd('/')
 Write-Host ""
 if (Test-Path "$InstallDir\.git") {
   Info "Mise à jour du repo Lexora MCP dans $InstallDir..."
-  git -C $InstallDir fetch --quiet
-  git -C $InstallDir checkout --quiet $Branch
-  git -C $InstallDir pull --quiet
+  # fetch explicite : les anciennes installs sont des clones --single-branch
+  # d'une autre branche, un simple checkout $Branch échouerait.
+  git -C $InstallDir fetch --quiet origin $Branch
+  git -C $InstallDir checkout --quiet -f -B $Branch FETCH_HEAD
 } else {
   Info "Clone du repo Lexora MCP dans $InstallDir (peut prendre 30s)..."
   git clone --quiet --branch $Branch --single-branch $RepoUrl $InstallDir
@@ -119,10 +130,8 @@ $mcpServers['lexora'] = @{
   command = 'node'
   args    = @($Dist)
   env     = @{
-    LEXORA_API_URL        = $LexoraUrl
-    LEXORA_INTERNAL_TOKEN = $LexoraToken
-    LEXORA_USER_ID        = $LexoraUid
-    LEXORA_USER_EMAIL     = $LexoraEmail
+    LEXORA_API_URL = $LexoraUrl
+    LEXORA_API_KEY = $LexoraKey
   }
 }
 $cfgHash['mcpServers'] = $mcpServers

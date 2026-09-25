@@ -49,31 +49,26 @@ d'approbation humain.
 ```
 Claude Desktop  ──stdio──▶  mcp-server (Node, ce package)
                                 │
-                                │  HTTP avec headers :
-                                │    X-Internal-Token: <secret partagé>
-                                │    X-Internal-User-Id: <UUID utilisateur>
+                                │  HTTP avec header :
+                                │    X-Lexora-Api-Key: lex_...
                                 ▼
                          Lexora API (Next.js sur Vercel)
                                 │
                                 └─▶ Supabase (PostgreSQL)
 ```
 
-Le token interne est validé côté Lexora dans `lib/lexora-internal-auth.ts`
-contre la variable d'environnement `INTERNAL_API_TOKEN`. La résolution
-d'utilisateur (session OR token) se fait via `lib/supabase/auth-resolver.ts`.
+La clé personnelle est résolue côté Lexora par `lib/supabase/auth-resolver.ts`
+(via `lib/supabase/api-keys.ts`) : elle identifie l'utilisateur et ses droits.
 
 ## Installation
 
-### 1. Pré-requis côté Lexora
+Le plus simple : `curl -fsSL https://<ton-instance>/install-mcp.sh | bash`
+(2 champs : URL de l'instance, puis clé API). Installation manuelle :
 
-Sur ton déploiement Vercel, ajouter la variable d'env :
+### 1. Générer une clé API
 
-```
-INTERNAL_API_TOKEN=<un secret long aléatoire — 32+ caractères>
-```
-
-Récupérer l'UUID de ton utilisateur Lexora (visible dans Supabase Studio
-ou via `SELECT id FROM auth.users WHERE email = 'toi@x.mu'`).
+Dans Lexora → Direction → Connecter à Claude Desktop. La clé commence par
+`lex_`.
 
 ### 2. Build du MCP en local
 
@@ -101,14 +96,17 @@ Vérifier que `dist/index.js` existe.
       ],
       "env": {
         "LEXORA_API_URL": "https://ton-lexora.vercel.app",
-        "LEXORA_INTERNAL_TOKEN": "<le même secret que côté Lexora>",
-        "LEXORA_USER_ID": "<ton UUID Supabase auth.users>",
-        "LEXORA_USER_EMAIL": "toi@ton-domaine.mu"
+        "LEXORA_API_KEY": "lex_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
       }
     }
   }
 }
 ```
+
+⚠️ Ne pas inverser les deux valeurs : `LEXORA_API_URL` est une adresse
+`https://...`, `LEXORA_API_KEY` est la clé `lex_...`. Le serveur refuse de
+démarrer si la config est incohérente et affiche la correction à faire dans
+les logs MCP de Claude Desktop.
 
 ### 4. Redémarrer Claude Desktop
 
@@ -125,19 +123,16 @@ Claude doit appeler `list_societes` et te retourner DDS, OCC, etc.
 
 | Variable | Requis | Description |
 |---|---|---|
-| `LEXORA_API_URL` | oui | URL de l'instance Lexora |
-| `LEXORA_INTERNAL_TOKEN` | oui | Secret partagé avec `INTERNAL_API_TOKEN` côté Lexora |
-| `LEXORA_USER_ID` | oui | UUID utilisateur Lexora à usurper (tenant isolation) |
-| `LEXORA_USER_EMAIL` | non | Email pour logs/audit côté Lexora |
+| `LEXORA_API_URL` | oui | URL http(s) de l'instance Lexora (ex: `https://lexora.vercel.app`) |
+| `LEXORA_API_KEY` | oui | Clé personnelle générée dans Lexora (format `lex_...`) |
 
 ## Sécurité
 
-- **Le token interne donne accès à TOUTES les données de l'utilisateur usurpé**.
-  Ne pas le partager. Le stocker uniquement dans le fichier `claude_desktop_config.json`
-  qui est local à ta machine.
-- **Tenant isolation** : `LEXORA_USER_ID` détermine quelles sociétés sont
-  accessibles. Si tu mets l'UUID d'un autre user, tu vois ses sociétés.
-- **Rotation** : change le token Vercel + ton config local en cas de doute.
+- **La clé API donne accès à toutes les données de ton compte Lexora**.
+  Ne pas la partager. La stocker uniquement dans le fichier
+  `claude_desktop_config.json`, qui est local à ta machine.
+- **Rotation** : révoque la clé dans Lexora et génère-en une nouvelle en cas
+  de doute.
 
 ## Développement
 
