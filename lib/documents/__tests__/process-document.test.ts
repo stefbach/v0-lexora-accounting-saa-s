@@ -9,7 +9,7 @@
  * la ligne `factures` (montants, taux de change, lignes), déduplication du
  * numéro de facture, warnings de dates, et le parsing XLSX réel (lib xlsx).
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest'
 
 // ─── Infrastructure de mock Supabase (query-builder chaînable) ──────────────
 interface RecordedOp {
@@ -367,6 +367,11 @@ describe('processDocument — facture fournisseur PDF', () => {
   })
 
   it('date > 6 mois dans le passé + millésime douteux → warnings + alerte date_facture_suspecte', async () => {
+    // Le warning « millésime » exige le même mois que la facture, un an plus
+    // tard : on fige l'horloge (sinon le test ne passe qu'en août 2026).
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-08-20T10:00:00'))
+    onTestFinished(() => { vi.useRealTimers() })
     claudeReplies({
       ...FACTURE_PAYLOAD,
       extraction: { ...FACTURE_PAYLOAD.extraction, date_document: '2025-08-10' },
