@@ -38,6 +38,36 @@
  * salary_compensation n'est effectué par le moteur.
  */
 import type { ParametresPaieMRA } from '@/lib/types'
+import { calculerCsgNsf, partCotisation, type BaremeCotisationsMra } from './cotisations-mra'
+
+/** Barème CSG/NSF extrait des paramètres de paie (champs historiques de ParametresPaieMRA). */
+export function baremeCotisationsDepuisParams(params: ParametresPaieMRA): BaremeCotisationsMra {
+  return {
+    csg_seuil_taux_reduit: params.csg_seuil_taux_reduit,
+    csg_salarie_taux_reduit: params.csg_salarie_taux_reduit,
+    csg_salarie_taux_plein: params.csg_salarie_taux_plein,
+    csg_patronal_taux_reduit: params.csg_patronal_taux_reduit,
+    csg_patronal_taux_plein: params.csg_patronal,
+    nsf_salarie: params.nsf_salarie,
+    nsf_patronal: params.nsf_patronal,
+    nsf_plafond_mensuel: params.nsf_plafond_mensuel ?? Number.POSITIVE_INFINITY,
+  }
+}
+
+/** Surcharge les champs CSG/NSF des paramètres de paie par le barème daté de la période. */
+export function appliquerBaremeCotisations(params: ParametresPaieMRA, bareme: BaremeCotisationsMra): ParametresPaieMRA {
+  return {
+    ...params,
+    csg_seuil_taux_reduit: bareme.csg_seuil_taux_reduit,
+    csg_salarie_taux_reduit: bareme.csg_salarie_taux_reduit,
+    csg_salarie_taux_plein: bareme.csg_salarie_taux_plein,
+    csg_patronal_taux_reduit: bareme.csg_patronal_taux_reduit,
+    csg_patronal: bareme.csg_patronal_taux_plein,
+    nsf_salarie: bareme.nsf_salarie,
+    nsf_patronal: bareme.nsf_patronal,
+    nsf_plafond_mensuel: bareme.nsf_plafond_mensuel,
+  }
+}
 
 export const PARAMS_MRA_DEFAUT: ParametresPaieMRA = {
   csg_seuil_taux_reduit: 50000,
@@ -188,20 +218,16 @@ export function calculerBulletin(
     special_allowance_1 + special_allowance_2 + special_allowance_3 +
     commission
 
-  // F11 — CSG sur base_csg_nsf (basic salary). Seuil sur la même base.
-  const csgTaux = base_csg_nsf <= params.csg_seuil_taux_reduit
-    ? params.csg_salarie_taux_reduit
-    : params.csg_salarie_taux_plein
-
-  const csg_salarie = Math.round(base_csg_nsf * csgTaux)
+  // CSG / NSF — calcul partagé avec l'export PACO (lib/rh/cotisations-mra.ts) :
+  // chaque part (salarié, employeur) arrondie séparément, en Decimal, pour que
+  // la part salarié du bulletin soit exactement celle déclarée à la MRA.
+  // NSF plafonné à nsf_plafond_mensuel (barème daté de la période).
+  const cotis = calculerCsgNsf(base_csg_nsf, baremeCotisationsDepuisParams(params))
+  const csgTaux = cotis.csg_taux_salarie
+  const csg_salarie = cotis.csg_salarie
   // Sprint 14 FIX 5 — CSG bonus suit la même tranche que le salaire de base.
-  const csg_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * csgTaux) : 0
-
-  // F9 + F11 — NSF sur base_csg_nsf (basic salary), plafonné à
-  // nsf_plafond_mensuel (28 570 MUR effective 2025-07-01). Max mensuel = 285,70 MUR.
-  const nsfPlafond = params.nsf_plafond_mensuel ?? Number.POSITIVE_INFINITY
-  const nsf_base = Math.min(base_csg_nsf, nsfPlafond)
-  const nsf_salarie = Math.round(nsf_base * params.nsf_salarie)
+  const csg_bonus = eoy_bonus > 0 ? partCotisation(eoy_bonus, csgTaux) : 0
+  const nsf_salarie = cotis.nsf_salarie
 
   // F10 — PAYE méthode cumulative MRA annualisée × 13 (12 mois + bonus de
   // fin d'année). Base = base_paye (brut total - absences, allowances
@@ -234,17 +260,11 @@ export function calculerBulletin(
   // applique la déduction finale avec plafonds + cap 0).
   const salaire_net = Math.max(0, salaire_brut - total_deductions)
 
-  // F11 — Charges patronales : CSG/NSF patronal sur base_csg_nsf aussi
-  // (règle MRA cohérente avec la part salarié). PRGF et training levy
-  // conservent leurs bases respectives (total_emoluments / salaire_base).
-  const csgPatronalTaux = base_csg_nsf <= params.csg_seuil_taux_reduit
-    ? (params.csg_patronal_taux_reduit || 0.030)
-    : params.csg_patronal
-  const csg_patronal = Math.round(base_csg_nsf * csgPatronalTaux)
+  // Charges patronales CSG/NSF : même calcul partagé (cotis ci-dessus).
+  const csg_patronal = cotis.csg_patronal
   // Sprint 14 FIX 5 — CSG patronal bonus suit la même tranche que le salaire.
-  const csg_patronal_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * csgPatronalTaux) : 0
-  // F9 + F11 — NSF patronal même base (basic plafonné à nsf_plafond_mensuel).
-  const nsf_patronal = Math.round(nsf_base * params.nsf_patronal)
+  const csg_patronal_bonus = eoy_bonus > 0 ? partCotisation(eoy_bonus, cotis.csg_taux_patronal) : 0
+  const nsf_patronal = cotis.nsf_patronal
 
   // Training Levy (HRDC): 1.5% of basic salary only (effective 2021-07-01).
   // Household workers have a 0% rate — handled at societe / employe level.

@@ -28,6 +28,8 @@
  * et on valide qu'elle est dans l'alphabet MRA. Fallback 'S' (Standard).
  */
 
+import { calculerCsgNsf, type BaremeCotisationsMra } from './cotisations-mra'
+
 export interface PacoSociete {
   nom: string
   ern: string                          // 8 chiffres
@@ -78,22 +80,13 @@ export interface PacoGenerationOptions {
   bulletins: PacoBulletin[]            // bulletins de la période demandée
   periode: string                      // YYYY-MM (ex: 2026-04)
   /**
-   * Paramètres MRA depuis parametres_paie_mra (mig 212).
-   * Utilisés pour RECALCULER CSG/NSF à la volée à l'export plutôt que de
-   * lire les valeurs des bulletins (qui peuvent dater d'avant la mise à
-   * jour des taux/plafonds — bug NSF 28600 vs 28570 sur OCC avril 2026).
+   * Barème CSG/NSF daté de la période (table cotisations_mra_baremes, mig 513).
+   * CSG/NSF sont RECALCULÉS à la volée depuis base_csg_nsf, avec le même
+   * calcul que le bulletin (calculerCsgNsf) : un bulletin calculé avant une
+   * mise à jour de taux/plafond n'impose pas de recalculer toute la paie.
    * Si non fourni, on lit les bulletins (legacy comportement).
    */
-  params?: {
-    csg_seuil_taux_reduit: number       // 50000
-    csg_salarie_taux_reduit: number     // 0.015
-    csg_salarie_taux_plein: number      // 0.030
-    csg_patronal: number                // 0.060
-    csg_patronal_taux_reduit?: number   // 0.030 (default si null)
-    nsf_salarie: number                 // 0.010
-    nsf_patronal: number                // 0.025
-    nsf_plafond_mensuel: number         // 28570
-  }
+  params?: BaremeCotisationsMra
 }
 
 export interface PacoGenerationResult {
@@ -339,30 +332,17 @@ export function genererPacoMra(opts: PacoGenerationOptions): PacoGenerationResul
     // Col 9 — Frequency (1 pour M)
     const frequency = '1'
 
-    // Col 10 / Col 11 — CSG et NSF totaux.
-    // Bug PACO #B — On RECALCULE CSG/NSF à la volée à partir de
-    // base_csg_nsf et des paramètres MRA courants (params), au lieu de
-    // lire bulletin.csg_salarie + csg_patronal qui peuvent avoir été
-    // calculés AVANT la mise à jour des taux/plafonds (mig 212 :
-    // NSF 28600→28570). Évite de devoir recalculer toute la paie pour
-    // que le PACO soit aligné aux nouveaux barèmes.
-    //
+    // Col 10 / Col 11 — CSG et NSF totaux = part salarié + part employeur,
+    // chacune arrondie séparément (calculerCsgNsf, identique au bulletin).
+    // Recalcul depuis base_csg_nsf et le barème daté de la période, plutôt
+    // que de lire des bulletins calculés avant une mise à jour des taux.
     // Si params absent (legacy fallback), on lit le bulletin tel quel.
     let csgTotal: number
     let nsfTotal: number
     if (opts.params) {
-      const baseCsg = Math.max(0, wageBillRaw) // = base_csg_nsf ou fallback salaire_base-absence
-      const baseNsf = Math.min(baseCsg, opts.params.nsf_plafond_mensuel)
-      // Palier CSG : > 50 000 = taux plein, sinon réduit
-      const isReduit = baseCsg <= opts.params.csg_seuil_taux_reduit
-      const csgSalarieRate = isReduit
-        ? opts.params.csg_salarie_taux_reduit
-        : opts.params.csg_salarie_taux_plein
-      const csgPatronalRate = isReduit
-        ? (opts.params.csg_patronal_taux_reduit ?? 0.030)
-        : opts.params.csg_patronal
-      csgTotal = Math.round(baseCsg * (csgSalarieRate + csgPatronalRate))
-      nsfTotal = Math.round(baseNsf * (opts.params.nsf_salarie + opts.params.nsf_patronal))
+      const cotis = calculerCsgNsf(Math.max(0, wageBillRaw), opts.params)
+      csgTotal = cotis.csg_total
+      nsfTotal = cotis.nsf_total
     } else {
       csgTotal = Math.round(
         (Number(bulletin.csg_salarie) || 0)

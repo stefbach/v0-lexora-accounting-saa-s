@@ -4,7 +4,8 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { resolveInternalAuth } from '@/lib/lexora-internal-auth'
 import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
-import { calculerBulletin, PARAMS_MRA_DEFAUT } from '@/lib/rh/paie'
+import { calculerBulletin, PARAMS_MRA_DEFAUT, appliquerBaremeCotisations } from '@/lib/rh/paie'
+import { chargerBaremeCotisations } from '@/lib/rh/cotisations-mra'
 import { getUserSocieteIds, userHasAccessToSociete, userHasAccessToEmploye } from '@/lib/rh/access'
 import { calculateWorkingDays, getWorkingDaysForEmploye, getMauritiusPublicHolidays } from '@/lib/rh/calculateWorkingDays'
 import { lastDayOfMonth } from '@/lib/rh/period'
@@ -531,7 +532,7 @@ export async function POST(request: Request) {
 
     // Récupérer paramètres MRA
     const { data: paramsDB } = await supabase.from('parametres_paie_mra').select('*').order('annee', { ascending: false }).limit(1).maybeSingle()
-    const params = paramsDB ? {
+    const paramsBase = paramsDB ? {
       csg_seuil_taux_reduit: Number(paramsDB.csg_seuil_taux_reduit),
       csg_salarie_taux_reduit: Number(paramsDB.csg_salarie_taux_reduit),
       csg_salarie_taux_plein: Number(paramsDB.csg_salarie_taux_plein),
@@ -539,8 +540,7 @@ export async function POST(request: Request) {
       csg_patronal_taux_reduit: Number(paramsDB.csg_patronal_taux_reduit ?? 0.030),
       nsf_salarie: Number(paramsDB.nsf_salarie),
       nsf_patronal: Number(paramsDB.nsf_patronal),
-      // F9 — Plafond insurable NSF (28 570 MUR effective 2025-07-01, mig 212).
-      nsf_plafond_mensuel: Number(paramsDB.nsf_plafond_mensuel ?? 28570),
+      nsf_plafond_mensuel: Number(paramsDB.nsf_plafond_mensuel),
       training_levy: Number(paramsDB.training_levy),
       prgf_patronal_par_jour: Number(paramsDB.prgf_patronal_par_jour ?? 4.50),
       prgf_taux_emoluments: Number(paramsDB.prgf_taux_emoluments ?? 0.045),
@@ -564,6 +564,17 @@ export async function POST(request: Request) {
 
     const periodeDate = periode ? `${periode}-01` : `${new Date().toISOString().slice(0, 7)}-01`
     const periodeStr = periodeDate.slice(0, 7)
+
+    // Taux CSG/NSF + plafond NSF : barème daté de la période
+    // (cotisations_mra_baremes, mig 513), identique à l'export PACO. Il
+    // remplace les champs CSG/NSF de parametres_paie_mra (une ligne par année,
+    // incapable de porter un changement de plafond au 1er juillet).
+    let params
+    try {
+      params = appliquerBaremeCotisations(paramsBase, await chargerBaremeCotisations(supabase, periodeDate))
+    } catch (e: any) {
+      return NextResponse.json({ error: e?.message || 'Barème CSG/NSF introuvable' }, { status: 422 })
+    }
 
     // ══════════════════════════════════════════════════════
     // ACTION : calculer (employé unique)
