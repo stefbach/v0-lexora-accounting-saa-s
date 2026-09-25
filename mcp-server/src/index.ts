@@ -37,6 +37,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
 import { createHash } from 'node:crypto'
+import { resolveLexoraConfig } from './config.js'
 
 /**
  * Confirmation 2-step pour les outils modificateurs.
@@ -71,19 +72,12 @@ function confirmGuard(toolName: string, a: Record<string, unknown>, previewLabel
   }
 }
 
-const LEXORA_API_URL = (process.env.LEXORA_API_URL || 'http://localhost:3000').replace(/\/$/, '')
-const LEXORA_API_KEY = process.env.LEXORA_API_KEY ?? ''
-
-if (!LEXORA_API_KEY) {
-  console.error('[lexora-mcp] LEXORA_API_KEY est requis dans l\'env (format "lex_...")')
-  console.error('[lexora-mcp] Génère-en une depuis Lexora → Direction → Connecter à Claude Desktop')
+const configResult = resolveLexoraConfig(process.env)
+if (!configResult.ok) {
+  for (const e of configResult.errors) console.error(`[lexora-mcp] ${e}`)
   process.exit(1)
 }
-
-if (!LEXORA_API_KEY.startsWith('lex_')) {
-  console.error('[lexora-mcp] LEXORA_API_KEY doit commencer par "lex_" — clé invalide')
-  process.exit(1)
-}
+const { apiUrl: LEXORA_API_URL, apiKey: LEXORA_API_KEY } = configResult.config
 
 async function lexoraFetch(path: string, init: RequestInit = {}) {
   const url = `${LEXORA_API_URL}${path.startsWith('/') ? path : '/' + path}`

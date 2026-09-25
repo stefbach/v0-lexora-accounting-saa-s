@@ -64,6 +64,8 @@ read -p "URL de ton instance Lexora (ex: https://lexora.vercel.app) : " LEXORA_U
 read -p "Ta clé API Lexora (format lex_...)                          : " LEXORA_KEY < "$PROMPT_IN"
 
 [[ -z "$LEXORA_URL" || -z "$LEXORA_KEY" ]] && { err "URL et clé requises."; exit 1; }
+[[ "$LEXORA_URL" == lex_* ]] && { err "Tu as collé la clé API dans le champ URL. L'URL doit ressembler à https://lexora.vercel.app."; exit 1; }
+[[ ! "$LEXORA_URL" =~ ^https?:// ]] && { err "URL invalide : elle doit commencer par https:// (ex: https://lexora.vercel.app)."; exit 1; }
 [[ "$LEXORA_KEY" != lex_* ]] && { err "La clé doit commencer par 'lex_'. Génère-en une depuis ton Lexora → Direction → Connecter à Claude Desktop."; exit 1; }
 LEXORA_URL="${LEXORA_URL%/}"
 
