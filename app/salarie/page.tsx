@@ -11,7 +11,7 @@ import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { t, getLocale } from "@/lib/i18n"
 
 import { NAVY, GOLD, MU_TZ, KNOWN_TABS, type Tab } from "./_components/shared/constants"
-import { timeMauritius, todayFR, todayISO } from "./_components/shared/helpers"
+import { todayFR, todayISO } from "./_components/shared/helpers"
 
 import { MaFicheTab } from "./_components/tabs/MaFicheTab"
 import { CongesTab } from "./_components/tabs/CongesTab"
@@ -145,10 +145,15 @@ export default function EspaceEmployePage() {
         sortie: 'sortie',
       }
       const action = actionMap[type] || type
+      // Horodatage côté SERVEUR (heure Maurice fiable) : on n'envoie plus la
+      // date/heure de l'appareil. Une horloge mal réglée côté client faisait
+      // tomber les pointages (entrée, pause, sortie) sur un mauvais jour/heure
+      // — ils n'apparaissaient alors plus dans la journée courante. Le serveur
+      // remplit date + heure via todayDateMU()/nowTimeMU() quand ils sont absents.
       const res = await fetch(`/api/rh/pointage/session?action=${action}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employe_id: employe.id, heure: timeMauritius(), date: todayISO() }),
+        body: JSON.stringify({ employe_id: employe.id }),
       })
       const data = await res.json()
       if (!res.ok || data.error) setFeedback(data.error || `Erreur ${res.status}`)
