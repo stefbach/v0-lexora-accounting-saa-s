@@ -64,12 +64,15 @@ export function validateAndCleanExtraction(
     extraction.nom_societe = null
   }
 
-  // Get candidate société name
+  // Get candidate société name. Sur une facture client, la société du
+  // dossier est l'ÉMETTEUR — le destinataire est le tiers. Sans cette
+  // distinction, une facture interco (DDS → OCC) était rattachée au client
+  // (OCC) et bloquée en doublon contre la facture fournisseur d'OCC.
   const candidate = toStr(
     extraction.nom_societe ||
     extraction.titulaire ||
     extraction.societe ||
-    extraction.destinataire ||
+    (detectedType === 'facture_client' ? extraction.emetteur : extraction.destinataire) ||
     extraction.employeur ||
     '',
   ).toLowerCase().trim()
