@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateAndCleanExtraction, canRerouteToDetectedSociete } from '../bank-utils'
+import { validateAndCleanExtraction, canRerouteToDetectedSociete, areDistinctInvoiceNumbers } from '../bank-utils'
 
 const societes = [
   { id: 'dds', nom: 'Digital Data Solutions Ltd' },
@@ -31,5 +31,20 @@ describe('canRerouteToDetectedSociete', () => {
   it('upload sans société choisie → re-routage autorisé', () => {
     expect(canRerouteToDetectedSociete({ societeId: null, dossierId: null })).toBe(true)
     expect(canRerouteToDetectedSociete({ societeId: '', dossierId: '' })).toBe(true)
+  })
+})
+
+describe('areDistinctInvoiceNumbers', () => {
+  it('numéros différents → factures distinctes', () => {
+    expect(areDistinctInvoiceNumbers('QWFA5IR7-0026', 'QWFA5IR7-0025')).toBe(true)
+  })
+
+  it('même numéro (casse / séparateurs près) → pas distinctes', () => {
+    expect(areDistinctInvoiceNumbers('MI12190', 'mi-12190')).toBe(false)
+  })
+
+  it('numéro manquant → on ne peut pas conclure', () => {
+    expect(areDistinctInvoiceNumbers(null, 'F4FA8804-0022')).toBe(false)
+    expect(areDistinctInvoiceNumbers('', '')).toBe(false)
   })
 })

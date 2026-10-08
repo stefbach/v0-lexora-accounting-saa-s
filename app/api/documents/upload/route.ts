@@ -6,7 +6,7 @@ import { fetchComptesPourPrompt } from '@/lib/accounting/plan-comptable-prompt'
 import { extractBankStatement, extractBankPdfText } from '@/lib/ai/bank-statement-extraction'
 import { findTiersInAnnuaire, incrementTiersUsage, createTiersFromOcr } from '@/lib/tiers-annuaire'
 import { createHash } from 'crypto'
-import { isBankName, validateAndCleanExtraction, computeConfidence, canRerouteToDetectedSociete } from '@/lib/utils/bank-utils'
+import { isBankName, validateAndCleanExtraction, computeConfidence, canRerouteToDetectedSociete, areDistinctInvoiceNumbers } from '@/lib/utils/bank-utils'
 import {
   resolveBankCurrency,
   compareCurrency,
@@ -1713,9 +1713,13 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             .lte('date_facture', fDatePlus1)
             .gte('montant_ttc', fTTC - 1)
             .lte('montant_ttc', fTTC + 1)
-            .limit(1)
-          if (existingDup && existingDup.length > 0) {
-            const dup = existingDup[0] as any
+            .limit(20)
+          // Deux numéros lisibles et différents = deux factures distinctes
+          // (ex. Anthropic QWFA5IR7-0026 vs -0025 : même fournisseur, montants
+          // proches, jours consécutifs) — ce n'est PAS un doublon.
+          const dup = (existingDup || []).find((c: any) =>
+            !areDistinctInvoiceNumbers(c.numero_facture, factureData.numero_facture as string | null)) as any
+          if (dup) {
             console.warn(`[upload] DOUBLON FACTURE détecté: ${dup.numero_facture} du ${dup.date_facture} = ${dup.montant_ttc} TTC (même tiers "${factureData.tiers}")`)
             factureCreateError = `Doublon détecté : facture ${dup.numero_facture} du ${dup.date_facture} avec le même montant (${dup.montant_ttc}) existe déjà pour ${factureData.tiers}`
           }

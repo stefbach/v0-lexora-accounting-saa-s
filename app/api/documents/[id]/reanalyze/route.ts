@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSystemPrompt, injectTauxChange, injectSocietes, injectPlanComptable, CLAUDE_CONFIG, SYSTEM_PROMPT_GENERIC_EXTRACTION } from '@/lib/ai/prompts'
 import { fetchComptesPourPrompt } from '@/lib/accounting/plan-comptable-prompt'
 import type { PromptId } from '@/lib/ai/prompts'
-import { isBankName, validateAndCleanExtraction, computeConfidence, repairBankJSON } from '@/lib/utils/bank-utils'
+import { isBankName, validateAndCleanExtraction, computeConfidence, repairBankJSON, canRerouteToDetectedSociete } from '@/lib/utils/bank-utils'
 import { extractBankStatement } from '@/lib/ai/bank-statement-extraction'
 import { resolveTransactionAmounts, resolveTransactionDate } from '@/lib/utils/bank-amount'
 
@@ -329,8 +329,11 @@ export async function POST(
       },
     }
 
-    // Re-route to correct dossier if société changed
-    if (finalSociete && finalSociete !== 'INCONNU' && dossier?.client_id) {
+    // Re-route to correct dossier if société changed — jamais quand le document
+    // est déjà rangé dans un dossier : ce dossier vient de l'environnement
+    // société de l'upload, il prime sur la lecture IA (sinon une réanalyse
+    // renvoyait chez DDS une facture OCC adressée à « Digital Data Solutions »).
+    if (canRerouteToDetectedSociete({ dossierId: doc.dossier_id }) && finalSociete && finalSociete !== 'INCONNU' && dossier?.client_id) {
       const { data: clientDossiers } = await supabase
         .from('dossiers').select('id, societe_id, societes(nom)')
         .eq('client_id', dossier.client_id)
