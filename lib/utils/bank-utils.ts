@@ -37,6 +37,15 @@ export function isBankName(name: any): boolean {
 }
 
 /**
+ * Un document peut-il être re-routé vers la société détectée par l'IA ?
+ * Non si l'utilisateur a choisi la société (environnement actif) ou le
+ * dossier à l'upload : son choix prime sur la lecture de la facture.
+ */
+export function canRerouteToDetectedSociete(input: { societeId?: string | null; dossierId?: string | null }): boolean {
+  return !input.societeId && !input.dossierId
+}
+
+/**
  * Validates and cleans extraction data after OCR.
  * Fixes common misclassifications (bank name as société, etc.)
  */

@@ -6,7 +6,7 @@ import { fetchComptesPourPrompt } from '@/lib/accounting/plan-comptable-prompt'
 import { extractBankStatement, extractBankPdfText } from '@/lib/ai/bank-statement-extraction'
 import { findTiersInAnnuaire, incrementTiersUsage, createTiersFromOcr } from '@/lib/tiers-annuaire'
 import { createHash } from 'crypto'
-import { isBankName, validateAndCleanExtraction, computeConfidence } from '@/lib/utils/bank-utils'
+import { isBankName, validateAndCleanExtraction, computeConfidence, canRerouteToDetectedSociete } from '@/lib/utils/bank-utils'
 import {
   resolveBankCurrency,
   compareCurrency,
@@ -1010,9 +1010,14 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
       console.warn(`[upload] LOW CONFIDENCE (${extractionConfidence}) for doc ${docId} — type=${typeDocument}, société=${detectedSociete}`)
     }
 
-    // Try to match detected société to client's known sociétés and re-route if needed
+    // Try to match detected société to client's known sociétés and re-route if needed.
+    // Uniquement quand l'utilisateur n'a PAS choisi de société : un upload fait
+    // dans l'environnement OCC reste chez OCC, même si l'IA lit « DDS » sur la
+    // facture (cas observé : 118 factures OCC basculées sur DDS les 6-7/10/2026).
     let finalDossierId = resolvedDossierId
-    if (detectedSociete && detectedSociete !== 'INCONNU' && !isBankName(detectedSociete)) {
+    if (!canRerouteToDetectedSociete({ societeId, dossierId }) && detectedSociete && detectedSociete !== 'INCONNU') {
+      console.warn(`[upload] Société choisie par l'utilisateur conservée (IA a détecté "${detectedSociete}") — pas de re-routage`)
+    } else if (detectedSociete && detectedSociete !== 'INCONNU' && !isBankName(detectedSociete)) {
       // Get all sociétés linked to this client (from dossiers + user_societes)
       const { data: clientDossiers } = await supabase
         .from('dossiers').select('id, societe_id, societe:societes(nom)')

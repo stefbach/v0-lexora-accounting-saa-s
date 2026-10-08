@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateAndCleanExtraction } from '../bank-utils'
+import { validateAndCleanExtraction, canRerouteToDetectedSociete } from '../bank-utils'
 
 const societes = [
   { id: 'dds', nom: 'Digital Data Solutions Ltd' },
@@ -19,5 +19,17 @@ describe('validateAndCleanExtraction — société propriétaire d\'une facture'
 
   it('facture fournisseur → société destinataire', () => {
     expect(validateAndCleanExtraction(extraction(), 'facture_fournisseur', societes).societe_id).toBe('occ')
+  })
+})
+
+describe('canRerouteToDetectedSociete', () => {
+  it('upload fait dans un environnement société → jamais re-routé', () => {
+    expect(canRerouteToDetectedSociete({ societeId: 'occ', dossierId: null })).toBe(false)
+    expect(canRerouteToDetectedSociete({ societeId: null, dossierId: 'dossier-occ' })).toBe(false)
+  })
+
+  it('upload sans société choisie → re-routage autorisé', () => {
+    expect(canRerouteToDetectedSociete({ societeId: null, dossierId: null })).toBe(true)
+    expect(canRerouteToDetectedSociete({ societeId: '', dossierId: '' })).toBe(true)
   })
 })
