@@ -46,6 +46,17 @@ export function canRerouteToDetectedSociete(input: { societeId?: string | null; 
 }
 
 /**
+ * Deux numéros de facture lisibles et différents désignent deux factures
+ * distinctes. Un numéro absent ne permet pas de conclure (→ false).
+ */
+export function areDistinctInvoiceNumbers(a?: string | null, b?: string | null): boolean {
+  const norm = (n?: string | null) => (n || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+  const na = norm(a)
+  const nb = norm(b)
+  return na !== '' && nb !== '' && na !== nb
+}
+
+/**
  * Validates and cleans extraction data after OCR.
  * Fixes common misclassifications (bank name as société, etc.)
  */
