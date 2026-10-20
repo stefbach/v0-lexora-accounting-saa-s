@@ -3,7 +3,7 @@ import { apiError } from '@/lib/api-error'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getUserSocieteIds } from '@/lib/rh/access'
-import { recomputeSoldeCongesAll } from '@/lib/rh/soldes-conges'
+import { recomputeSoldeCongesAll, computePeriodJs } from '@/lib/rh/soldes-conges'
 import {
   calculateWorkingDays,
   getMauritiusPublicHolidays,
@@ -684,15 +684,19 @@ export async function POST(request: Request) {
       }
 
       // Fallback : resoudre la periode courante si non fournie.
+      // conges_mode-aware : calendaire (DDS) => cycle annee civile.
       if (!periode_debut) {
         const { data: emp } = await supabase
-          .from('employes').select('date_arrivee').eq('id', employe_id).maybeSingle()
+          .from('employes').select('date_arrivee, societe_id').eq('id', employe_id).maybeSingle()
         if (emp?.date_arrivee) {
           const today = new Date().toISOString().slice(0, 10)
-          const { data: pd } = await supabase.rpc('get_conges_period_start', {
-            date_arrivee: emp.date_arrivee, date_reference: today,
-          })
-          if (pd) periode_debut = String(pd).slice(0, 10)
+          let mode: 'anniversaire' | 'calendaire' = 'anniversaire'
+          if (emp.societe_id) {
+            const { data: soc } = await supabase
+              .from('societes').select('conges_mode').eq('id', emp.societe_id).maybeSingle()
+            if (soc?.conges_mode === 'calendaire') mode = 'calendaire'
+          }
+          periode_debut = computePeriodJs(emp.date_arrivee, today, mode).periode_debut
         }
       }
 

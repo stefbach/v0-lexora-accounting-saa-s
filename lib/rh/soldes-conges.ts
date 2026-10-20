@@ -31,6 +31,16 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AdminClient = any
 
+/**
+ * Mode de renouvellement des congés au niveau société.
+ *  - 'anniversaire' (défaut) : cycle de 12 mois ancré sur date_arrivee
+ *    (WRA 2019 "subsequent period of 12 months").
+ *  - 'calendaire' : cycle année civile, renouvellement au 1er janvier
+ *    (politique employeur, ex. DDS). Le premier cycle d'un nouvel
+ *    embauché est clampé à [date_arrivee, 31/12].
+ */
+export type CongesMode = 'anniversaire' | 'calendaire'
+
 interface DemandeConge {
   nb_jours: number | null
   impose_par_societe?: boolean | null
@@ -85,15 +95,21 @@ export async function recomputeSoldeCongesAll(
     }
 
     // G3 — Policy de la société pour les hors_wra (défaut applique_wra_etendu).
+    // + conges_mode : 'anniversaire' (défaut) ou 'calendaire' (renouvellement
+    //   au 1er janvier, ex. DDS). Le mode pilote le calcul du cycle 12 mois.
     let policyHorsWra: 'applique_wra_etendu' | 'contrat_uniquement' = 'applique_wra_etendu'
+    let congesMode: CongesMode = 'anniversaire'
     if (emp.societe_id) {
       const { data: soc } = await supabase
         .from('societes')
-        .select('policy_conges_hors_wra')
+        .select('policy_conges_hors_wra, conges_mode')
         .eq('id', emp.societe_id)
         .maybeSingle()
       if (soc?.policy_conges_hors_wra === 'contrat_uniquement') {
         policyHorsWra = 'contrat_uniquement'
+      }
+      if (soc?.conges_mode === 'calendaire') {
+        congesMode = 'calendaire'
       }
     }
 
@@ -101,8 +117,8 @@ export async function recomputeSoldeCongesAll(
       ? String(dateReference).slice(0, 10)
       : new Date().toISOString().slice(0, 10)
 
-    // ── 2. Calculer la période (JS, mirror mig 154) ──────────────────
-    const { periode_debut, periode_fin } = computePeriodJs(emp.date_arrivee, dateRef)
+    // ── 2. Calculer la période (JS, mirror mig 154 / conges_mode) ────
+    const { periode_debut, periode_fin } = computePeriodJs(emp.date_arrivee, dateRef, congesMode)
 
     // ── 2-bis. Droits via get_conges_droits (mig 157, accrual 6-12m) ─
     //    On applique LEAST(dateRef, periode_fin) : droits à aujourd'hui
@@ -355,12 +371,31 @@ function isoDate(d: Date): string {
 }
 
 /**
- * Fallback JS de la logique SQL (mig 154) — `get_conges_period_start/end`.
+ * Calcule le cycle de 12 mois courant.
+ *  - mode 'anniversaire' (défaut) : mirror de la logique SQL (mig 154)
+ *    `get_conges_period_start/end`, ancré sur date_arrivee.
+ *  - mode 'calendaire' : année civile contenant dateReference
+ *    (01/01 → 31/12). Le premier cycle d'un embauché en cours d'année
+ *    est clampé à [date_arrivee, 31/12] (pas de cycle avant l'arrivée).
  */
-function computePeriodJs(dateArrivee: string, dateReference: string): {
+export function computePeriodJs(
+  dateArrivee: string,
+  dateReference: string,
+  mode: CongesMode = 'anniversaire',
+): {
   periode_debut: string
   periode_fin: string
 } {
+  if (mode === 'calendaire') {
+    const refYear = Number(String(dateReference).slice(0, 4))
+    const arrivee = String(dateArrivee).slice(0, 10)
+    const janvier1 = `${refYear}-01-01`
+    // Clamp : si l'employé est arrivé après le 1er janvier de l'année de
+    // référence, son premier cycle démarre à la date d'arrivée.
+    const periode_debut = arrivee > janvier1 ? arrivee : janvier1
+    return { periode_debut, periode_fin: `${refYear}-12-31` }
+  }
+
   const arr = new Date(String(dateArrivee).slice(0, 10) + 'T12:00:00')
   const monthsElapsed = monthsBetween(dateArrivee, dateReference)
   const periodNumber = Math.max(0, Math.floor(monthsElapsed / 12))
