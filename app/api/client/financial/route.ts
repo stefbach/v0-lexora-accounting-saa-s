@@ -699,6 +699,19 @@ export async function GET(request: Request) {
       return new Date(b.date).getTime() - new Date(a.date).getTime()
     })
 
+    // L'OCR renvoie émetteur/destinataire soit en texte, soit (format récent)
+    // en objet { nom, adresse, vat_number… }. Les consommateurs attendent un
+    // texte : un objet faisait planter /client/tva (.toLowerCase sur objet).
+    const partyName = (v: unknown): string => {
+      if (typeof v === 'string') return v
+      if (v && typeof v === 'object') {
+        const o = v as Record<string, unknown>
+        const nom = o.nom ?? o.name
+        return typeof nom === 'string' ? nom : ''
+      }
+      return ''
+    }
+
     // Extract invoices from documents with currency conversion
     const extractedInvoices = allDocs
       .filter(d => d.type_document === 'facture_fournisseur' || d.type_document === 'facture_client')
@@ -710,7 +723,7 @@ export async function GET(request: Request) {
         const montant_tva = Number(ext.montant_tva) || 0
         return {
           id: d.id, type: d.type_document, nom_fichier: d.nom_fichier,
-          emetteur: ext.emetteur || '', destinataire: ext.destinataire || '',
+          emetteur: partyName(ext.emetteur), destinataire: partyName(ext.destinataire),
           date: ext.date_document || d.created_at, numero: ext.numero_reference || '',
           devise,
           montant_ht, montant_tva, montant_ttc,
