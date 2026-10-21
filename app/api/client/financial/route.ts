@@ -1,4 +1,5 @@
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { partyName } from '@/lib/documents/party-name'
 import { apiError } from '@/lib/api-error'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPaginated } from '@/lib/supabase/paginate'
@@ -698,19 +699,6 @@ export async function GET(request: Request) {
       if (!b.date) return -1
       return new Date(b.date).getTime() - new Date(a.date).getTime()
     })
-
-    // L'OCR renvoie émetteur/destinataire soit en texte, soit (format récent)
-    // en objet { nom, adresse, vat_number… }. Les consommateurs attendent un
-    // texte : un objet faisait planter /client/tva (.toLowerCase sur objet).
-    const partyName = (v: unknown): string => {
-      if (typeof v === 'string') return v
-      if (v && typeof v === 'object') {
-        const o = v as Record<string, unknown>
-        const nom = o.nom ?? o.name
-        return typeof nom === 'string' ? nom : ''
-      }
-      return ''
-    }
 
     // Extract invoices from documents with currency conversion
     const extractedInvoices = allDocs

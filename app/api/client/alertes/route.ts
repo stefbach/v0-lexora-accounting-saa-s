@@ -1,4 +1,5 @@
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { partyName } from '@/lib/documents/party-name'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { getTauxChange } from '@/lib/taux-change'
@@ -124,8 +125,8 @@ export async function GET(request: Request) {
           id: `alerte-${++alerteIdx}`,
           type: isOverdue ? 'urgent' : 'attention',
           titre: isOverdue
-            ? `Facture impayee en retard - ${ext.emetteur || ext.destinataire || doc.nom_fichier}`
-            : `Facture en attente de paiement - ${ext.emetteur || ext.destinataire || doc.nom_fichier}`,
+            ? `Facture impayee en retard - ${partyName(ext.emetteur) || partyName(ext.destinataire) || doc.nom_fichier}`
+            : `Facture en attente de paiement - ${partyName(ext.emetteur) || partyName(ext.destinataire) || doc.nom_fichier}`,
           description: `Facture ${ext.numero_reference || doc.nom_fichier}: ${montantRestant.toLocaleString('fr-FR')} ${devise} restant du${dateEcheance ? `, echeance ${dateEcheance}` : ''}`,
           montant: Math.round(montantMUR * 100) / 100,
           echeance: dateEcheance,
