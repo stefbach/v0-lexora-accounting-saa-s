@@ -263,8 +263,8 @@ export default function TVAPage() {
     }
     return true
   })
-  const tvaCollecteeFactures = facturesClientLocal.reduce((s: number, f: any) => s + (Number(f.montant_tva) || 0), 0)
-  const tvaDeductibleFactures = facturesFournisseurLocal.reduce((s: number, f: any) => s + (Number(f.montant_tva) || 0), 0)
+  const tvaCollecteeFactures = facturesClientLocal.reduce((s: number, f: any) => s + tvaMur(f), 0)
+  const tvaDeductibleFactures = facturesFournisseurLocal.reduce((s: number, f: any) => s + tvaMur(f), 0)
 
   // Factures non soumises à TVA (montant_tva = 0 but montant_ht > 0)
   // Exclude invoices already shown in Reverse Charge R5 (foreign fournisseurs with devise != MUR)
@@ -302,13 +302,6 @@ export default function TVAPage() {
       return true
     }
   )
-  const foreignSupplierInvoices = supplierInvoices.filter(
-    (inv: any) => {
-      if (!inv.devise || inv.devise === 'MUR') return false
-      const t = (inv.emetteur || '').toLowerCase()
-      return !t.includes('magellan')
-    }
-  )
 
   // Local valid: must have TVA amount, emetteur, and numero (implies MRA TVA number)
   const validLocalInvoices = localSupplierInvoices.filter(
@@ -333,7 +326,6 @@ export default function TVAPage() {
   // Group from factures table (correct names) — NOT from extractedInvoices/OCR
   const groupedClientInvoices = groupByTiers(facturesClientLocal, 'tiers', 'montant_tva')
   const groupedLocalInvoices = groupByTiers(facturesFournisseurLocal, 'tiers', 'montant_tva')
-  const groupedForeignInvoices = groupByTiers(reverseChargeFacts, 'tiers', 'montant_ht')
 
   // TVA collectee from client invoices
   const totalTvaCollecteeFromInvoices = clientInvoices.reduce(
@@ -346,8 +338,9 @@ export default function TVAPage() {
   )
 
   // Reverse charge on foreign invoices: output + input = net 0
+  // Factures par définition en devise étrangère : base convertie en MUR.
   const totalReverseChargeBase = reverseChargeFacts.reduce(
-    (s: number, f: any) => s + (Number(f.montant_ht) || 0), 0
+    (s: number, f: any) => s + htMur(f), 0
   )
   const reverseChargeTVA = totalReverseChargeBase * TVA_RATE
 
@@ -661,7 +654,7 @@ export default function TVAPage() {
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>3</td>
                 <td className="py-2">{t('mra.tva.box3', locale)}</td>
-                <td className="py-2 text-right font-medium">{formatMUR(facturesFournisseurLocal.filter((f: any) => (Number(f.montant_tva) || 0) > 0).reduce((s: number, f: any) => s + (Number(f.montant_ht) || 0), 0))}</td>
+                <td className="py-2 text-right font-medium">{formatMUR(facturesFournisseurLocal.filter((f: any) => (Number(f.montant_tva) || 0) > 0).reduce((s: number, f: any) => s + htMur(f), 0))}</td>
               </tr>
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>4</td>
@@ -834,11 +827,11 @@ export default function TVAPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(showAllForeign ? foreignSupplierInvoices : foreignSupplierInvoices.slice(0, 8)).map((inv: any) => {
-                      const ht = inv.montant_ht_mur ?? inv.montant_ht ?? 0
+                    {(showAllForeign ? reverseChargeFacts : reverseChargeFacts.slice(0, 8)).map((f: any) => {
+                      const ht = htMur(f)
                       return (
-                        <TableRow key={inv.id}>
-                          <TableCell className="font-medium text-xs"><TooltipProvider delayDuration={200}><Tooltip><TooltipTrigger asChild><span className="block max-w-[200px] truncate cursor-help">{inv.emetteur || "—"}</span></TooltipTrigger><TooltipContent className="max-w-[400px] break-words">{inv.emetteur || "—"}</TooltipContent></Tooltip></TooltipProvider></TableCell>
+                        <TableRow key={f.id}>
+                          <TableCell className="font-medium text-xs"><TooltipProvider delayDuration={200}><Tooltip><TooltipTrigger asChild><span className="block max-w-[200px] truncate cursor-help">{f.tiers || "—"}</span></TooltipTrigger><TooltipContent className="max-w-[400px] break-words">{f.tiers || "—"}</TooltipContent></Tooltip></TooltipProvider></TableCell>
                           <TableCell className="text-right text-xs">{formatMUR(ht)}</TableCell>
                           <TableCell className="text-right text-xs text-amber-600">{formatMUR(ht * TVA_RATE)}</TableCell>
                         </TableRow>
@@ -927,21 +920,26 @@ export default function TVAPage() {
               <TableHeader><TableRow><TableHead>{t('mra.tva.col_date', locale)}</TableHead><TableHead>{t('mra.tva.supplier', locale)}</TableHead><TableHead>{t('mra.tva.col_currency', locale)}</TableHead><TableHead className="text-right">{t('mra.tva.col_base_ht', locale)}</TableHead><TableHead className="text-right">{t('mra.tva.col_tva_auto', locale)}</TableHead></TableRow></TableHeader>
               <TableBody>
                 {reverseChargeFacts.map((f: any) => {
-                  const ht = Number(f.montant_ht) || Number(f.montant_ttc) || 0
-                  const tvaAuto = Math.round(ht * 0.15 * 100) / 100
+                  const ht = htMur(f)
+                  const tvaAuto = Math.round(ht * TVA_RATE * 100) / 100
                   return (
                     <TableRow key={f.id}>
                       <TableCell className="text-xs">{f.date_facture ? new Date(f.date_facture).toLocaleDateString('fr-FR') : '—'}</TableCell>
                       <TableCell className="text-xs font-medium">{f.tiers || '—'}</TableCell>
                       <TableCell className="text-xs"><Badge variant="outline">{f.devise}</Badge></TableCell>
-                      <TableCell className="text-right text-xs font-mono">{formatMUR(ht)} {f.devise}</TableCell>
-                      <TableCell className="text-right text-xs font-mono text-amber-600">{formatMUR(tvaAuto)} MUR</TableCell>
+                      <TableCell className="text-right text-xs font-mono">
+                        {formatMUR(ht)}
+                        <span className="block text-[10px] text-gray-400">
+                          ({(Number(f.montant_ht) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} {f.devise})
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right text-xs font-mono text-amber-600">{formatMUR(tvaAuto)}</TableCell>
                     </TableRow>
                   )
                 })}
                 <TableRow className="bg-amber-50/50 font-bold">
                   <TableCell colSpan={4} className="text-right text-xs">{t('mra.tva.total_reverse', locale)}</TableCell>
-                  <TableCell className="text-right text-xs font-mono text-amber-600">{formatMUR(reverseChargeFacts.reduce((s: number, f: any) => s + Math.round((Number(f.montant_ht) || Number(f.montant_ttc) || 0) * 0.15 * 100) / 100, 0))} MUR</TableCell>
+                  <TableCell className="text-right text-xs font-mono text-amber-600">{formatMUR(reverseChargeFacts.reduce((s: number, f: any) => s + Math.round(htMur(f) * TVA_RATE * 100) / 100, 0))}</TableCell>
                 </TableRow>
               </TableBody>
             </Table>
