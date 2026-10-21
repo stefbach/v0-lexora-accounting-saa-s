@@ -43,6 +43,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { RattrapageTab } from "@/components/tva/RattrapageTab"
 import { RegularisationsTab } from "@/components/tva/RegularisationsTab"
 import { t, getLocale } from "@/lib/i18n"
+import { htMur, tvaMur, ttcMur } from "@/lib/tva/montants-mur"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -200,42 +201,6 @@ export default function TVAPage() {
       (Number(prevTvaRecord.credit_reporte) || 0)
     return prevNet < 0 ? Math.round(Math.abs(prevNet) * 100) / 100 : 0
   })()
-
-  // Helper : convertit un montant HT en MUR. Préférence à `montant_mur` qui
-  // est déjà calculé à l'OCR (taux du jour). Sinon recalcule via taux_change.
-  // Sinon retourne tel quel (cas MUR direct).
-  const htMur = (f: any): number => {
-    const m = Number(f?.montant_mur)
-    if (Number.isFinite(m) && m > 0) {
-      // montant_mur est en TTC ; on prend HT / TTC × montant_mur
-      const ttc = Number(f?.montant_ttc) || (Number(f?.montant_ht) + Number(f?.montant_tva || 0)) || 0
-      const ht = Number(f?.montant_ht) || 0
-      if (ttc > 0 && ht > 0) return Math.round((ht / ttc) * m * 100) / 100
-    }
-    const taux = Number(f?.taux_change) || 1
-    return Math.round((Number(f?.montant_ht) || 0) * taux * 100) / 100
-  }
-
-  // Mêmes conversions que htMur, pour la TVA et le TTC — indispensables pour
-  // les exports Excel : ne jamais reporter un montant_tva/montant_ttc en
-  // devise étrangère (EUR/USD…) tel quel dans une colonne "(MUR)", sous peine
-  // de mélanger les devises dans une même colonne du fichier exporté.
-  const tvaMur = (f: any): number => {
-    const m = Number(f?.montant_mur)
-    if (Number.isFinite(m) && m > 0) {
-      const ttc = Number(f?.montant_ttc) || (Number(f?.montant_ht) + Number(f?.montant_tva || 0)) || 0
-      const tva = Number(f?.montant_tva) || 0
-      if (ttc > 0) return Math.round((tva / ttc) * m * 100) / 100
-    }
-    const taux = Number(f?.taux_change) || 1
-    return Math.round((Number(f?.montant_tva) || 0) * taux * 100) / 100
-  }
-  const ttcMur = (f: any): number => {
-    const m = Number(f?.montant_mur)
-    if (Number.isFinite(m) && m > 0) return Math.round(m * 100) / 100
-    const taux = Number(f?.taux_change) || 1
-    return Math.round((Number(f?.montant_ttc) || 0) * taux * 100) / 100
-  }
 
   // Une facture est "taxable Maurice" si :
   //  - son client n'est pas offshore (client_offshore = false/null)
