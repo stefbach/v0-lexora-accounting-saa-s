@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { partyName } from "@/lib/documents/party-name"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -306,8 +307,8 @@ export default function DocumentDetailClient({ docId, initialDocument, initialEr
           {/* Extraction summary */}
           {extraction.montant_ttc || extraction.montant_total ? (
             <div className="mt-4 p-3 rounded-lg bg-muted/40 grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-              {extraction.emetteur && <div><span className="text-xs text-muted-foreground">{t('core.docdetail.issuer', locale)}</span><p className="font-medium">{extraction.emetteur}</p></div>}
-              {extraction.destinataire && <div><span className="text-xs text-muted-foreground">{t('core.docdetail.recipient', locale)}</span><p className="font-medium">{extraction.destinataire}</p></div>}
+              {partyName(extraction.emetteur) && <div><span className="text-xs text-muted-foreground">{t('core.docdetail.issuer', locale)}</span><p className="font-medium">{partyName(extraction.emetteur)}</p></div>}
+              {partyName(extraction.destinataire) && <div><span className="text-xs text-muted-foreground">{t('core.docdetail.recipient', locale)}</span><p className="font-medium">{partyName(extraction.destinataire)}</p></div>}
               {extraction.date_document && <div><span className="text-xs text-muted-foreground">{t('core.docdetail.document_date', locale)}</span><p className="font-medium">{extraction.date_document}</p></div>}
               {extraction.numero_reference && <div><span className="text-xs text-muted-foreground">{t('core.docdetail.reference', locale)}</span><p className="font-medium">{extraction.numero_reference}</p></div>}
               {extraction.montant_ht != null && <div><span className="text-xs text-muted-foreground">{t('core.docdetail.amount_excl_vat', locale)}</span><p className="font-medium">{Number(extraction.montant_ht).toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR')} {extraction.devise || "MUR"}</p></div>}

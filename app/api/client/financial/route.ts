@@ -1,4 +1,5 @@
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { partyName } from '@/lib/documents/party-name'
 import { apiError } from '@/lib/api-error'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPaginated } from '@/lib/supabase/paginate'
@@ -710,7 +711,7 @@ export async function GET(request: Request) {
         const montant_tva = Number(ext.montant_tva) || 0
         return {
           id: d.id, type: d.type_document, nom_fichier: d.nom_fichier,
-          emetteur: ext.emetteur || '', destinataire: ext.destinataire || '',
+          emetteur: partyName(ext.emetteur), destinataire: partyName(ext.destinataire),
           date: ext.date_document || d.created_at, numero: ext.numero_reference || '',
           devise,
           montant_ht, montant_tva, montant_ttc,
