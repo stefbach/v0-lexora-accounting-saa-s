@@ -65,6 +65,7 @@ function getTypeLabels(locale: Locale): Record<string, string> {
     licenciement: t('rha.b.depart.type_licenciement', locale),
     licenciement_faute: t('rha.b.depart.type_licenciement_faute', locale),
     fin_contrat: t('rha.b.depart.type_fin_contrat', locale),
+    depart_negocie: t('rha.b.depart.type_depart_negocie', locale),
     retraite: t('rha.b.depart.type_retraite', locale),
     deces: t('rha.b.depart.type_deces', locale),
   }
@@ -82,6 +83,7 @@ function DepartureForm({ societes, onCalculated, locale }: {
   const [dateDepart, setDateDepart] = useState("")
   const [typeDepart, setTypeDepart] = useState("")
   const [raison, setRaison] = useState("")
+  const [indemniteNegociee, setIndemniteNegociee] = useState("")
   const [loading, setLoading] = useState(false)
   const [loadingEmps, setLoadingEmps] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -108,7 +110,10 @@ function DepartureForm({ societes, onCalculated, locale }: {
       const res = await fetch("/api/rh/depart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "calculer_solde", employe_id: employeId, date_depart: dateDepart, type_depart: typeDepart }),
+        body: JSON.stringify({
+          action: "calculer_solde", employe_id: employeId, date_depart: dateDepart, type_depart: typeDepart,
+          ...(typeDepart === "depart_negocie" ? { indemnite_negociee: r2(Number(indemniteNegociee) || 0) } : {}),
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || t('sarh.depart.err_generic', locale))
@@ -168,11 +173,27 @@ function DepartureForm({ societes, onCalculated, locale }: {
                 <SelectItem value="licenciement">{t('rha.b.depart.type_licenciement', locale)}</SelectItem>
                 <SelectItem value="licenciement_faute">{t('rha.b.depart.type_licenciement_faute', locale)}</SelectItem>
                 <SelectItem value="fin_contrat">{t('rha.b.depart.type_fin_contrat', locale)}</SelectItem>
+                <SelectItem value="depart_negocie">{t('rha.b.depart.type_depart_negocie', locale)}</SelectItem>
                 <SelectItem value="retraite">{t('rha.b.depart.type_retraite', locale)}</SelectItem>
                 <SelectItem value="deces">{t('rha.b.depart.type_deces', locale)}</SelectItem>
               </SelectContent>
             </Select>
           </div>
+          {typeDepart === "depart_negocie" && (
+            <div>
+              <Label htmlFor="indemnite-negociee">{t('rha.b.depart.lbl_negotiated_amount', locale)}</Label>
+              <Input
+                id="indemnite-negociee"
+                type="number"
+                min="0"
+                step="0.01"
+                value={indemniteNegociee}
+                onChange={e => setIndemniteNegociee(e.target.value)}
+                placeholder="0.00"
+              />
+              <p className="text-xs text-gray-500 mt-1">{t('rha.b.depart.negotiated_hint', locale)}</p>
+            </div>
+          )}
           <div className="md:col-span-2">
             <Label>{t('rha.b.depart.lbl_reason', locale)}</Label>
             <Textarea
@@ -235,6 +256,7 @@ function recomputeTotal(b: any): number {
     b?.allocations_prorata?.montant,
     b?.preavis?.applicable ? b?.preavis?.montant : 0,
     b?.indemnite_licenciement?.applicable ? b?.indemnite_licenciement?.montant : 0,
+    b?.indemnite_negociee?.applicable ? b?.indemnite_negociee?.montant : 0,
   ]
   const extras: Array<{ montant: number }> = Array.isArray(b?.lignes_extra) ? b.lignes_extra : []
   const sum = lines.reduce((s: number, v: any) => s + (Number(v) || 0), 0)
@@ -558,6 +580,23 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
                   {editMode
                     ? <MontantInput value={breakdown.indemnite_licenciement.montant} onChange={v => updateField(['indemnite_licenciement', 'montant'], v)} />
                     : fmt(breakdown.indemnite_licenciement.montant)}
+                </TableCell>
+              </TableRow>
+            )}
+
+            {/* Départ négocié — indemnité librement convenue (pas de barème) */}
+            {breakdown.indemnite_negociee?.applicable && (
+              <TableRow className="bg-indigo-50">
+                <TableCell className="font-medium text-indigo-900">
+                  {t('rha.b.depart.row_negotiated', locale)}
+                </TableCell>
+                <TableCell className="text-center text-sm text-indigo-700">
+                  {t('rha.b.depart.negotiated_detail', locale)}
+                </TableCell>
+                <TableCell className="text-right font-bold text-indigo-900">
+                  {editMode
+                    ? <MontantInput value={breakdown.indemnite_negociee.montant} onChange={v => updateField(['indemnite_negociee', 'montant'], v)} />
+                    : fmt(breakdown.indemnite_negociee.montant)}
                 </TableCell>
               </TableRow>
             )}
@@ -922,6 +961,7 @@ function RecentDepartures({ refreshKey, onReintegrated, locale }: { refreshKey: 
                         d.type_depart === "licenciement_faute" ? "border-red-500 text-red-800 bg-red-100" :
                         d.type_depart === "licenciement" ? "border-red-300 text-red-700 bg-red-50" :
                         d.type_depart === "demission" ? "border-orange-300 text-orange-700 bg-orange-50" :
+                        d.type_depart === "depart_negocie" ? "border-indigo-300 text-indigo-700 bg-indigo-50" :
                         d.type_depart === "retraite" ? "border-blue-300 text-blue-700 bg-blue-50" :
                         d.type_depart === "deces" ? "border-gray-400 text-gray-700 bg-gray-100" :
                         "border-gray-300 text-gray-600"

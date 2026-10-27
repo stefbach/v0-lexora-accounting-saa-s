@@ -26,6 +26,7 @@ export const TYPE_LABELS: Record<string, string> = {
   licenciement: 'Licenciement (motif économique)',
   licenciement_faute: 'Licenciement pour faute',
   fin_contrat: 'Fin de contrat à durée déterminée',
+  depart_negocie: 'Départ négocié (accord entre les parties)',
   retraite: 'Départ à la retraite',
   deces: 'Décès',
 }

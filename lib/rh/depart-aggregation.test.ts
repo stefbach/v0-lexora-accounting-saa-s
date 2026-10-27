@@ -155,3 +155,34 @@ describe('validateBreakdownCovered — sentinelle anti-composant orphelin', () =
     expect(validateBreakdownCovered(breakdown, r)).toBeNull()
   })
 })
+
+describe('aggregateBulletinFromBreakdown — départ négocié', () => {
+  it('indemnité négociée libre → special_allowance_3, 13e mois conservé', () => {
+    const breakdown: BreakdownDepart = {
+      salaire_prorata: { montant: 10000 },
+      allocations_prorata: { montant: 0 },
+      conges_al: { montant: 2000 },
+      conges_sl: { montant: 0 },
+      conges_vl: { montant: 0 },
+      treizieme_mois: { montant: 5000 },
+      preavis: { montant: 0 },
+      indemnite_licenciement: { montant: 0 },
+      indemnite_negociee: { montant: 150000, applicable: true },
+      total: 167000,
+    }
+    const r = aggregateBulletinFromBreakdown(breakdown)
+    expect(r.special_allowance_3).toBe(150000)
+    expect(r.special_allowance_2).toBe(5000)
+    expect(r.brut).toBeCloseTo(167000, 2)
+    expect(validateBreakdownCovered(breakdown, r)).toBeNull()
+  })
+
+  it('indemnité négociée non applicable → ignorée', () => {
+    const r = aggregateBulletinFromBreakdown({
+      treizieme_mois: { montant: 5000 },
+      indemnite_negociee: { montant: 999, applicable: false },
+    })
+    expect(r.special_allowance_3).toBe(0)
+    expect(r.brut).toBe(5000)
+  })
+})

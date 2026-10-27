@@ -9,7 +9,7 @@
  *   - conges_al + conges_sl + conges_vl → special_allowance_1
  *   - treizieme_mois (+ primesExtra - retenuesManuelles) → special_allowance_2
  *   - preavis                → departure_notice
- *   - indemnite_licenciement → special_allowance_3
+ *   - indemnite_licenciement + indemnite_negociee → special_allowance_3
  *
  * Si un futur dev ajoute un composant au breakdown (ex. `prime_anciennete`),
  * il DOIT être câblé ici ET ajouté au test `depart-aggregation.test.ts`.
@@ -29,6 +29,8 @@ export interface BreakdownDepart {
   treizieme_mois?: { montant: number } | null
   preavis?: { montant: number } | null
   indemnite_licenciement?: { montant: number } | null
+  /** Départ négocié : indemnité librement fixée entre les parties. */
+  indemnite_negociee?: { montant: number; applicable?: boolean } | null
   total?: number
 }
 
@@ -60,7 +62,10 @@ export function aggregateBulletinFromBreakdown(
   const congesPayoutTotal = alPayout + slPayout + vlPayout
   const treizBulletin = breakdown?.treizieme_mois?.montant || 0
   const preavisBulletin = breakdown?.preavis?.montant || 0
-  const severanceBulletin = breakdown?.indemnite_licenciement?.montant || 0
+  const negocie = breakdown?.indemnite_negociee
+  const severanceBulletin =
+    (breakdown?.indemnite_licenciement?.montant || 0) +
+    (negocie && negocie.applicable !== false ? negocie.montant || 0 : 0)
   const specialAlw2Adjusted = treizBulletin + primesExtra - retenuesManuelles
 
   const brut =
@@ -105,7 +110,7 @@ export function validateBreakdownCovered(
       `[breakdown coverage] breakdown.total=${breakdown.total} mais bulletin brut+retenues=${reconstructedTotal} ` +
       `(écart=${ecart.toFixed(2)} MUR). Un composant breakdown n'est pas câblé dans le bulletin. ` +
       `Composants connus : salaire_prorata, allocations_prorata, conges_al, conges_sl, conges_vl, ` +
-      `treizieme_mois, preavis, indemnite_licenciement. Ajouter le nouveau composant dans ` +
+      `treizieme_mois, preavis, indemnite_licenciement, indemnite_negociee. Ajouter le nouveau composant dans ` +
       `aggregateBulletinFromBreakdown() (lib/rh/depart-aggregation.ts).`
     )
   }

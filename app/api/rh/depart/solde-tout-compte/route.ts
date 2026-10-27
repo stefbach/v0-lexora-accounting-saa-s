@@ -187,6 +187,11 @@ function linesFromBreakdown(b: any): { lines: SoldeLine[]; total: number } {
     `${b.indemnite_licenciement.formule} — ${b.indemnite_licenciement.annees_service} an(s)`,
     Number(b.indemnite_licenciement.montant) || 0,
   )
+  if (b?.indemnite_negociee?.applicable) add(
+    'Indemnité de départ négociée',
+    'Montant convenu entre les parties (départ négocié)',
+    Number(b.indemnite_negociee.montant) || 0,
+  )
   const extras: Array<{ libelle: string; montant: number; note?: string }> = Array.isArray(b?.lignes_extra) ? b.lignes_extra : []
   for (const ex of extras) {
     add(ex.libelle, ex.note || 'Ajustement manuel', Number(ex.montant) || 0)
