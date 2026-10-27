@@ -838,6 +838,11 @@ const partB_fr: Record<string, string> = {
   'rha.b.depart.type_licenciement': 'Licenciement',
   'rha.b.depart.type_licenciement_faute': 'Licenciement pour faute',
   'rha.b.depart.type_fin_contrat': 'Fin de contrat',
+  'rha.b.depart.type_depart_negocie': 'Départ négocié',
+  'rha.b.depart.lbl_negotiated_amount': 'Indemnité de départ négociée (MUR)',
+  'rha.b.depart.negotiated_hint': 'Montant libre convenu entre les parties — pas de barème d\'ancienneté. Le 13ème mois prorata reste dû.',
+  'rha.b.depart.row_negotiated': 'Indemnité de départ négociée',
+  'rha.b.depart.negotiated_detail': 'Montant convenu entre les parties (sans barème)',
   'rha.b.depart.type_retraite': 'Retraite',
   'rha.b.depart.type_deces': 'Décès',
 
@@ -1828,6 +1833,11 @@ const partB_en: Record<string, string> = {
   'rha.b.depart.type_licenciement': 'Dismissal',
   'rha.b.depart.type_licenciement_faute': 'Dismissal for misconduct',
   'rha.b.depart.type_fin_contrat': 'End of contract',
+  'rha.b.depart.type_depart_negocie': 'Negotiated departure',
+  'rha.b.depart.lbl_negotiated_amount': 'Negotiated severance amount (MUR)',
+  'rha.b.depart.negotiated_hint': 'Free amount agreed between the parties — no seniority scale. The prorated 13th month remains due.',
+  'rha.b.depart.row_negotiated': 'Negotiated departure indemnity',
+  'rha.b.depart.negotiated_detail': 'Amount agreed between the parties (no scale)',
   'rha.b.depart.type_retraite': 'Retirement',
   'rha.b.depart.type_deces': 'Death',
 

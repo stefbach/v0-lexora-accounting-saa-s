@@ -104,7 +104,12 @@ function AttestationPDF({ emp, soc, dateDepart, typeDepart, draft }: {
               "Cette rupture étant fondée sur un motif disciplinaire, l'employé(e) reçoit l'indemnité de préavis " +
               "due (1 mois). Aucune indemnité de licenciement WRA S.70 n'est versée."
             )
-          : null,
+          : typeDepart === 'depart_negocie'
+            ? React.createElement(Text, { style: s.paragraph },
+                "Cette rupture résulte d'un accord négocié entre les parties. L'indemnité de départ a été " +
+                "librement convenue ; le 13ème mois proratisé a été versé."
+              )
+            : null,
       ),
 
       React.createElement(SigBlock as any, {

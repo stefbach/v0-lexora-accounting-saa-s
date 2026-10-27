@@ -184,7 +184,7 @@ export async function POST(request: Request) {
     // ACTION: calculer_solde — Compute final settlement
     // ═══════════════════════════════════════════════════════
     if (action === 'calculer_solde') {
-      const { employe_id, date_depart, type_depart } = body
+      const { employe_id, date_depart, type_depart, indemnite_negociee } = body
       if (!employe_id || !date_depart || !type_depart) {
         return NextResponse.json({ error: 'employe_id, date_depart et type_depart requis' }, { status: 400 })
       }
@@ -370,13 +370,19 @@ export async function POST(request: Request) {
         ? r2(3 * salaireBase * anciennete.totalYears)
         : 0
 
+      // 8-bis. Départ négocié (accord amiable) — indemnité librement fixée
+      //        entre les parties, sans barème d'ancienneté ni préavis imposé.
+      //        Seul le 13e mois prorata reste obligatoire (calculé ci-dessus).
+      const isNegocie = type_depart === 'depart_negocie'
+      const indemniteNegociee = isNegocie ? r2(Math.max(0, Number(indemnite_negociee) || 0)) : 0
+
       // 9. Transport/petrol allowances prorata
       const transportAllowance = parseFloat(emp.transport_allowance) || 0
       const petrolAllowance = parseFloat(emp.petrol_allowance) || 0
       const allowancesProrata = r2(((transportAllowance + petrolAllowance) / lastMonth.totalDaysInMonth) * lastMonth.days)
 
       // Total
-      const total = r2(salaryProrata + alPayout + slPayout + vlPayout + treizMois + noticePayout + severance + allowancesProrata)
+      const total = r2(salaryProrata + alPayout + slPayout + vlPayout + treizMois + noticePayout + severance + indemniteNegociee + allowancesProrata)
 
       const breakdown = {
         employe: {
@@ -445,6 +451,11 @@ export async function POST(request: Request) {
           formule: '3 × salaire mensuel × années de service',
           annees_service: anciennete.totalYears,
           montant: severance,
+        },
+        indemnite_negociee: {
+          applicable: isNegocie,
+          description: 'Indemnité de départ négociée (accord entre les parties)',
+          montant: indemniteNegociee,
         },
         allocations_prorata: {
           transport: transportAllowance,
@@ -589,12 +600,17 @@ export async function POST(request: Request) {
       const congesPayoutTotal = alPayout + slPayout + vlPayout
       const treizBulletin = breakdown?.treizieme_mois?.montant || 0
       const preavisBulletin = breakdown?.preavis?.montant || 0
-      const severanceBulletin = breakdown?.indemnite_licenciement?.montant || 0
+      // Indemnité de départ négociée → même slot que l'indemnité de licenciement
+      // (special_allowance_3 = indemnités de rupture). Les deux sont exclusives.
+      const severanceBulletin =
+        (Number(breakdown?.indemnite_licenciement?.montant) || 0) +
+        (breakdown?.indemnite_negociee?.applicable ? Number(breakdown?.indemnite_negociee?.montant) || 0 : 0)
 
       const typeLabel = type_depart === 'demission' ? 'Démission'
         : type_depart === 'licenciement' ? 'Licenciement'
         : type_depart === 'licenciement_faute' ? 'Licenciement pour faute'
         : type_depart === 'fin_contrat' ? 'Fin de contrat'
+        : type_depart === 'depart_negocie' ? 'Départ négocié'
         : type_depart === 'retraite' ? 'Retraite'
         : 'Décès'
 
@@ -610,6 +626,7 @@ export async function POST(request: Request) {
         allocations_prorata:    r2num(b?.allocations_prorata?.montant),
         preavis:                r2num(b?.preavis?.montant),
         indemnite_licenciement: r2num(b?.indemnite_licenciement?.montant),
+        indemnite_negociee:     r2num(b?.indemnite_negociee?.montant),
         total:                  r2num(b?.total),
       })
       const modifications: Record<string, { auto: number; edite: number }> = {}
@@ -769,7 +786,7 @@ export async function POST(request: Request) {
             `[confirmer_depart] WARN INVARIANT TOTAL : employé ${employe_id} `
             + `breakdown.total=${breakdownTotal} mais bulletin brut+retenues=${brutBulletin} `
             + `(écart=${ecartTotal} MUR). Un composant breakdown n'est pas câblé dans le bulletin. `
-            + `Composants câblés : salaire_prorata, allocations_prorata, AL+SL+VL, 13e, préavis, indemnité.`
+            + `Composants câblés : salaire_prorata, allocations_prorata, AL+SL+VL, 13e, préavis, indemnité licenciement/négociée.`
           )
         }
       }
