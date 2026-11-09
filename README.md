@@ -37,6 +37,12 @@ Documentation associée :
 - [`docs/ACCESS_CONTROL_MATRIX.md`](docs/ACCESS_CONTROL_MATRIX.md) — RBAC + ROLE_LEVEL
 - [`docs/INTERNAL_CONTROLS_DOCUMENTATION.md`](docs/INTERNAL_CONTROLS_DOCUMENTATION.md) — contrôles internes + Annexe A (migrations 413→420)
 - [`docs/AUDIT_QUICK_START.md`](docs/AUDIT_QUICK_START.md) — guide démarrage rapide audit
+- [`docs/benchmark/2026-08-benchmark-maurice.md`](docs/benchmark/2026-08-benchmark-maurice.md)
+  — benchmark marché Maurice : Lexora vs QuickBooks, Zoho, Xero, Sage, Odoo
+  et éditeurs locaux (matrice fonctionnelle, tarifs MUR, coût total de conformité)
+- [`docs/benchmark/2026-08-matrice-fonctionnelle-tarifs.md`](docs/benchmark/2026-08-matrice-fonctionnelle-tarifs.md)
+  — annexe : inventaire exhaustif des fonctionnalités Lexora vérifiées dans
+  le code, matrice complète × 8 produits, grilles tarifaires au plan près
 
 ## Learn More
 
