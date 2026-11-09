@@ -90,7 +90,7 @@ export async function POST(request: Request) {
     // ── Fetch all active employees for the société ──────────────────────────
     const { data: employes, error: empErr } = await supabase
       .from('employes')
-      .select('id, nom, prenom, poste, salaire_base, nic_number, bank_account, date_arrivee, date_depart')
+      .select('id, nom, prenom, poste, salaire_base, nic_number, bank_account, date_arrivee, date_depart, exclure_mra')
       .eq('societe_id', societe_id)
       .is('date_depart', null)
       .order('nom')
@@ -140,8 +140,14 @@ export async function POST(request: Request) {
     for (const emp of employes) {
       const nomComplet = `${emp.prenom || ''} ${emp.nom || ''}`.trim()
 
+      // Collaborateur hors paie — ex: consultant géré uniquement pour le
+      // planning, sans rémunération. Marqué exclure_mra=true (déjà utilisé
+      // pour l'exclure des déclarations MRA) ET salaire_base à 0/vide : pas
+      // de salaire à valider, ni de coordonnées bancaires/NIC à exiger.
+      const nonRemunere = emp.exclure_mra === true && (!emp.salaire_base || Number(emp.salaire_base) <= 0)
+
       // 1. salaire_base > 0
-      if (!emp.salaire_base || Number(emp.salaire_base) <= 0) {
+      if (!nonRemunere && (!emp.salaire_base || Number(emp.salaire_base) <= 0)) {
         anomalies.push({
           employe_id: emp.id,
           employe_nom: nomComplet,
@@ -180,11 +186,13 @@ export async function POST(request: Request) {
       }
 
       // 4. All mandatory fields filled (nom, prenom, nic_number, bank_account)
+      // — nic_number/bank_account non exigés pour un collaborateur hors paie
+      // (pas de virement ni de déclaration MRA à faire pour lui).
       const champsMissing: string[] = []
       if (!emp.nom) champsMissing.push('nom')
       if (!emp.prenom) champsMissing.push('prenom')
-      if (!emp.nic_number) champsMissing.push('nic_number')
-      if (!emp.bank_account) champsMissing.push('bank_account')
+      if (!nonRemunere && !emp.nic_number) champsMissing.push('nic_number')
+      if (!nonRemunere && !emp.bank_account) champsMissing.push('bank_account')
       if (champsMissing.length > 0) {
         anomalies.push({
           employe_id: emp.id,
