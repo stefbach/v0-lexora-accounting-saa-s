@@ -1155,7 +1155,30 @@ export async function POST(request: Request) {
           ? calculateALEntitlement(hireDate, currentYear)
           : calculateSLEntitlement(hireDate, currentYear)
 
-        const remaining = entitled - taken
+        // FIX bug congés (nov. 2026) — le solde disponible doit venir de
+        // soldes_conges (al_solde / sl_solde), qui inclut le REPORT de l'année
+        // précédente (al_reporte / sl_accumule). L'ancien calcul
+        // `entitled - taken` ne prenait que le droit annuel (max 22 / 15) et
+        // ignorait le report : un salarié avec report positif voyait ses
+        // congés basculés à tort en UL alors qu'il lui restait du solde
+        // (cas DDS calendaire avec gros report : Dooshila, Gavena, etc.).
+        // On lit la ligne de la période courante ; fallback sur l'ancien
+        // calcul si aucune ligne de solde n'existe.
+        const todayStrSolde = new Date().toISOString().slice(0, 10)
+        const { data: soldeRowsBascule } = await supabase
+          .from('soldes_conges')
+          .select('al_solde, sl_solde, periode_debut, periode_fin')
+          .eq('employe_id', body.employe_id)
+          .lte('periode_debut', todayStrSolde)
+          .order('periode_debut', { ascending: false })
+        const soldeRowBascule = (soldeRowsBascule || []).find(
+          (r: any) => !r.periode_fin || String(r.periode_fin).slice(0, 10) >= todayStrSolde,
+        ) || (soldeRowsBascule || [])[0]
+        const soldeReel = soldeRowBascule
+          ? Number(body.type_conge === 'AL' ? soldeRowBascule.al_solde : soldeRowBascule.sl_solde)
+          : null
+        const remaining = soldeReel != null ? soldeReel : (entitled - taken)
+
         // Sprint 7 FIX 3 — si déjà basculé UL pour carence, skip le check solde
         if (typeCongeFinal !== 'UL' && nb_jours > remaining) {
           // FIX 2 — bascule UL au lieu de bloquer. Si le solde restant est
@@ -1165,7 +1188,7 @@ export async function POST(request: Request) {
           // approuver/refuser à la main si nécessaire.
           const typeLabel = body.type_conge === 'AL' ? 'Local Leave' : 'Sick Leave'
           typeCongeFinal = 'UL'
-          bascule_ul_warning = `Solde ${typeLabel} insuffisant (${remaining}j restants sur ${entitled}j) — congé enregistré en Unpaid Leave et déduit du salaire ce mois.`
+          bascule_ul_warning = `Solde ${typeLabel} insuffisant (${remaining}j restants) — congé enregistré en Unpaid Leave et déduit du salaire ce mois.`
           console.warn(`[conges] BASCULE UL — employe=${body.employe_id} type=${body.type_conge} demande=${nb_jours}j solde=${remaining}j`)
         }
       }
